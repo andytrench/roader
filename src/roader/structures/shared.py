@@ -181,6 +181,36 @@ def _clear_of_deck(st: Structure, parent: Road, child: Road, s_seam: float, towa
     return hi
 
 
+def _inside_parent(parent: Road, child: Road, s_from: float, toward: float) -> float:
+    """Last station of ``child`` from ``s_from`` before either pavement edge leaves the parent's pavement."""
+    xs, pxs = child.cross_section, parent.cross_section
+
+    def inside(s: float) -> bool:
+        for u in (xs.width_left(s), -xs.width_right(s)):
+            ps, pu = parent.alignment.project(*child.alignment.offset_point(s, u))
+            if not (0.0 < ps < parent.length and -pxs.width_right(ps) - CLEAR_TOL_M <= pu <= pxs.width_left(ps) + CLEAR_TOL_M):
+                return False
+        return True
+
+    limit = child.length if toward > 0 else 0.0
+    if not inside(s_from):
+        return s_from
+    lo, s = s_from, s_from
+    while inside(s):
+        lo = s
+        s = s + toward * CLEAR_STEP_M
+        if (s - limit) * toward >= 0.0:
+            return limit
+    hi = s
+    for _ in range(40):
+        mid = 0.5 * (lo + hi)
+        if inside(mid):
+            lo = mid
+        else:
+            hi = mid
+    return lo
+
+
 def _clip_barriers(barriers: list[Barrier], a: float, b: float) -> list[Barrier]:
     out = []
     for bar in barriers:
@@ -204,7 +234,8 @@ def attach_shared(
     """Record on each parent structure the stretch of every road riding its deck (FR-CR-3).
 
     The stretch runs from the road's seam to where its section, barriers included,
-    has cleared the parent's deck end along the skewed end line (D-025). The road's
+    has cleared the parent's deck end along the skewed end line (D-025), and on
+    while both its pavement edges stay on the parent's pavement. The road's
     barriers are cut back to outside it and crossings it carries there take the
     parent's structure. A stretch whose pavement leaves the parent's deck sideways
     is flagged: the parent deck does not cover it.
@@ -221,6 +252,7 @@ def attach_shared(
             max([_width(child, side)(mid), *(b.offset_m + b.base_width_m for b in barriers.get(child.id, []) if b.side == side)]) for side in ("left", "right")
         )
         end = _clear_of_deck(st, parent, child, sh.s_seam, sh.toward, reach)
+        end = _inside_parent(parent, child, end, sh.toward)
         a, b = sorted((sh.s_seam, end))
         a, b = max(a, 0.0), min(b, child.length)
         st.shared.append(SharedSpan(child.id, a, b))
@@ -230,7 +262,7 @@ def attach_shared(
             if c.upper_road == child.id and a <= c.upper_s <= b:
                 c.structure_id = st.id
         outside = _outside_deck(st, parent, child, a, b)
-        flags.append(Flag("FR-CR-3:shares_deck", st.id, "FR-CR-3", f"{child.id} ({child.name}) rides this deck over s={a:.1f}-{b:.1f} from its seam at {sh.parent_road} s={sh.parent_s:.1f}"))
+        flags.append(Flag("FR-CR-3:shares_deck", st.id, "FR-CR-3", f"{child.id} ({child.name}) rides this deck and its road's pavement over s={a:.1f}-{b:.1f} from its seam at {sh.parent_road} s={sh.parent_s:.1f}"))
         if outside:
             flags.append(
                 Flag("FR-CR-3:shared_deck_too_narrow", st.id, "FR-CR-3", f"{child.id} pavement leaves the deck sideways by up to {outside:.2f} m on its shared stretch s={a:.1f}-{b:.1f}")

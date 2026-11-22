@@ -19,7 +19,7 @@ from roader.solids import generate
 from roader.structures.infer import observed_piers
 from roader.structures.shared import attach_shared, twin_joints
 from roader.validate.gates import check_solids, check_voids
-from tests.pipeline.twin_scene import CENTRE_GAP, HALF, OVERHANG, RAMP_HALF, twin_model
+from tests.pipeline.twin_scene import CENTRE_GAP, HALF, OVERHANG, RAMP_HALF, RAMP_TURN, RAMP_U0, twin_model
 
 
 def _plan(mesh) -> shapely.Geometry:
@@ -126,11 +126,28 @@ def test_fr_cr_3_shared_span_runs_to_where_the_ramp_clears_the_deck_end(diverge)
         x, y = ramp.alignment.offset_point(span.s_end, u)
         s, v = upper.alignment.project(x, y)
         assert s - t * v >= west.s_end - 1e-3  # past the skewed deck end
-    reach = RAMP_HALF + 0.45  # parapet outer face
-    q = [upper.alignment.project(*ramp.alignment.offset_point(span.s_end - 1.0, u)) for u in (reach, -reach)]
-    assert min(s - t * v for s, v in q) < west.s_end  # and not further than needed
     assert any(f.code == "FR-CR-3:shares_deck" and f.element_id == west.id for f in flags)
     assert all(b.s0 >= span.s_end - 1e-9 for b in ramp.cross_section.barriers)
+
+
+def _inside_parent(upper, ramp, s: float) -> bool:
+    for u in (RAMP_HALF, -RAMP_HALF):
+        ps, pu = upper.alignment.project(*ramp.alignment.offset_point(s, u))
+        if not -upper.cross_section.width_right(ps) - 1e-3 <= pu <= upper.cross_section.width_left(ps) + 1e-3:
+            return False
+    return True
+
+
+def test_fr_cr_3_shared_span_runs_on_while_the_ramp_is_inside_the_parent_pavement(diverge):
+    model, _kept, _shares, _flags = diverge
+    west, ramp = model.structures[0], model.roads[-1]
+    (span,) = west.shared
+    upper = model.road(west.carried_road)
+    # RAMP_U0 - RAMP_HALF reaches the parent's edge -HALF after (HALF + RAMP_U0 - RAMP_HALF) / |RAMP_TURN| m
+    leaves = (HALF + RAMP_U0 - RAMP_HALF) / abs(RAMP_TURN)
+    assert span.s_end == pytest.approx(leaves, abs=0.6)
+    assert all(_inside_parent(upper, ramp, s) for s in np.arange(span.s_start, span.s_end - 0.6, 1.0))
+    assert not _inside_parent(upper, ramp, span.s_end + 0.6)
 
 
 def test_fr_cr_3_ramp_renders_nothing_on_the_shared_deck(diverge):
