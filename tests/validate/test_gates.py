@@ -110,6 +110,14 @@ def test_ac_h3_curtain_under_deck_fails(model):
     assert any("curtain" in v.message for v in result.violations)
 
 
+def test_ac_h3_solid_enclosing_the_whole_ray_fails(model):
+    """A block from below the lower road to above the deck crosses no ray, but fills the void."""
+    c = model.crossings[0]
+    block = box("block", (c.x - 3.0, c.y - 3.0, 98.0), (c.x + 3.0, c.y + 3.0, 110.0), element_id="block")
+    result = check_voids(model, [block])
+    assert any("start inside block" in v.message for v in result.violations), result.violations
+
+
 def test_ac_h3_lower_road_body_and_low_terrain_are_ignored(model):
     eb = model.roads[0]
     c = model.crossings[0]
@@ -262,3 +270,25 @@ def test_run_gates_collects_every_hard_gate(model, tmp_path):
     assert not report.publishable  # no reference list, no second run, no val3dity
     by_gate = {r.gate: r for r in report.results}
     assert by_gate["AC-H3"].passed and by_gate["AC-H4"].passed and by_gate["AC-H6"].passed
+
+
+def test_run_gates_optional_gates(model, tmp_path):
+    exe = str(tmp_path / "none")
+    plain = {r.gate: r for r in run_gates(model, [box("b")], val3dity_exe=exe).results}
+    assert "FR-AS-1" not in plain and "AC-P4" not in plain  # no LOD chain, no uv0
+    assert not plain["AC-P2"].hard and plain["AC-P2"].passed
+    assert not plain["AC-P3"].hard
+
+    rt = {r.gate: r for r in run_gates(model, [box("b")], val3dity_exe=exe, profile="realtime").results}
+    assert "AC-H1:realtime" in rt and "AC-H1" not in rt
+
+    uv = box("b")
+    uv.uv0 = uv.vertices[:, :2].copy()
+    lods = {k: [box(f"b{k}")] for k in range(4)}
+    full = {r.gate: r for r in run_gates(model, [uv], val3dity_exe=exe, lods=lods).results}
+    assert full["FR-AS-1"].hard and not full["FR-AS-1"].passed  # these levels have no deck
+    assert any("deck-top samples hit no mesh" in v.message for v in full["FR-AS-1"].violations)
+    assert "AC-P4" not in full  # AC-P3 and AC-P4 run on LOD 0, which has no uv0
+
+    lods[0] = [uv]
+    assert "AC-P4" in {r.gate for r in run_gates(model, [uv], val3dity_exe=exe, lods=lods).results}

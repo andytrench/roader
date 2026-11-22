@@ -11,7 +11,7 @@ import hashlib
 import itertools
 import math
 import os
-from collections.abc import Iterable, Mapping, Sequence
+from collections.abc import Collection, Iterable, Mapping, Sequence
 from dataclasses import dataclass, fields, is_dataclass
 from enum import Enum
 from pathlib import Path
@@ -21,16 +21,20 @@ import numpy as np
 from roader.model.mesh import Mesh
 from roader.model.provenance import Provenance, Source
 from roader.model.schema import Road, RoadModel
+from roader.validate import lod
 from roader.validate._align import Projector
-from roader.validate._geom import vertical_hits, xy_tree
+from roader.validate._geom import points_strictly_inside, vertical_hits, xy_tree
 from roader.validate.accuracy import (
     crossing_dz_accuracy,
     horizontal_accuracy,
     structure_station_accuracy,
     surface_accuracy,
 )
+from roader.validate.assets import check_budgets, check_transitions, check_uv_stretch
 from roader.validate.profile import check_profile, check_seam
+from roader.validate.realtime import DEFAULT_MIN_EMBED_M, check_realtime
 from roader.validate.report import GateReport, GateResult, Violation
+from roader.validate.seams import LINK_SLOPE_TOL, curvature_violations, seam_violations
 from roader.validate.solid import check_solid
 from roader.validate.val3dity import run_val3dity
 
@@ -40,9 +44,10 @@ JOINT_HEADING_TOL = 1e-5  # rad
 JOINT_Z_TOL = 1e-3  # m
 JOINT_GRADE_TOL = 1e-5
 STATION_TOL = 1e-6  # m
-# AC-H4 across links between roads.
-LINK_Z_TOL = 0.01  # m
-LINK_GRADE_TOL = 0.001
+# AC-H4 across links and junction seams: LINK_Z_TOL and LINK_SLOPE_TOL in roader.validate.seams.
+LINK_GRADE_TOL = LINK_SLOPE_TOL
+# Export profile -> AC-H1 gate name (spec section 7 table).
+PROFILES = {"analytic": "AC-H1", "realtime": "AC-H1:realtime"}
 
 
 @dataclass
@@ -64,16 +69,28 @@ def check_solids(
     *,
     seams: Iterable[Seam] = (),
     val3dity_exe: str | None = None,
+    profile: str = "analytic",
+    min_embed_m: float = DEFAULT_MIN_EMBED_M,
 ) -> GateResult:
-    """AC-H1: FR-SV-1..6 per mesh, FR-SV-7 between meshes, FR-SV-8 on seams, plus val3dity."""
-    result = GateResult("AC-H1", passed=True, hard=True)
+    """AC-H1: FR-SV-1..6 per mesh, FR-SV-7 between meshes, FR-SV-8 on seams, plus val3dity.
+
+    ``profile`` selects the FR-SV-7 rule: "analytic" (AC-H1 proper) or "realtime"
+    (embed by at least ``min_embed_m``, no coplanar overlap), reported as gate
+    ``AC-H1:realtime``.
+    """
+    if profile not in PROFILES:
+        raise ValueError(f"unknown export profile {profile!r}; expected one of {sorted(PROFILES)}")
+    result = GateResult(PROFILES[profile], passed=True, hard=True)
     if not meshes:
         result.passed = False
         result.skipped_reason = "no meshes to validate"
         return result
     for mesh in meshes:
         result.violations.extend(check_solid(mesh))
-    result.violations.extend(check_profile(meshes))
+    if profile == "realtime":
+        result.violations.extend(check_realtime(meshes, min_embed_m))
+    else:
+        result.violations.extend(check_profile(meshes))
     for seam in seams:
         result.violations.extend(check_seam(seam.side_a, seam.side_b, origin=seam.origin, normal=seam.normal, seam_id=seam.id))
     native = len(result.violations)
@@ -148,6 +165,7 @@ def check_voids(
     lateral_step_m: float = 1.0,
     floor_m: float = 0.05,
     soffit_tol_m: float = 0.01,
+    skip_structures: Collection[str] = (),
 ) -> GateResult:
     """AC-H3: vertical rays from the lower road up to the deck soffit hit nothing.
 
@@ -157,7 +175,8 @@ def check_voids(
     within the pavement width plus overhang). Each ray runs from the lower
     surface + ``floor_m`` to the soffit (upper surface minus deck depth) less
     ``soffit_tol_m``. Meshes produced by the lower road itself (its id or its
-    barriers) are ignored.
+    barriers) are ignored. Crossings under a structure in ``skip_structures`` (one
+    replaced by its coarsest proxy, FR-AS-1) are not tested.
     """
     gate = "AC-H3"
     result = GateResult(gate, passed=True, hard=True)
@@ -171,7 +190,7 @@ def check_voids(
     n_rays = 0
     min_clear = math.inf
     for c in model.crossings:
-        if not c.structure_id:
+        if not c.structure_id or c.structure_id in skip_structures:
             continue
         st = model.structure(c.structure_id)
         upper, lower = model.road(c.upper_road), model.road(c.lower_road)
@@ -203,6 +222,18 @@ def check_voids(
             result.violations.append(
                 Violation(gate, c.id, f"{len(np.unique(pi[hit]))} rays under the deck hit {', '.join(ids[:5])}")
             )
+        # A solid enclosing a whole ray crosses none of it: test the ray starts for containment.
+        start = np.column_stack([xy, z_low + floor_m])
+        for mesh in meshes:
+            if not mesh.closed or mesh.element_id in own or not len(mesh.faces):
+                continue
+            lo, hi = mesh.vertices.min(axis=0), mesh.vertices.max(axis=0)
+            near = np.all((start > lo) & (start < hi), axis=1)
+            if not near.any():
+                continue
+            inside = points_strictly_inside(mesh.vertices, mesh.faces, start[near])
+            if inside.any():
+                result.violations.append(Violation(gate, c.id, f"{int(inside.sum())} rays under the deck start inside {mesh.id}"))
     result.metrics = {"n_rays": float(n_rays), "min_clearance_m": min_clear if n_rays else math.nan}
     result.passed = not result.violations
     return result
@@ -231,7 +262,9 @@ def _max_knot(piece) -> float:
 
 
 def check_continuity(model: RoadModel) -> GateResult:
-    """AC-H4: elevation, grade, position and heading continuous along roads and across links."""
+    """AC-H4: elevation, grade, position and heading continuous along roads; curvature
+    continuous along mainlines; elevation, grade and cross slope matching across every
+    link and junction-area seam (``roader.validate.seams``)."""
     gate = "AC-H4"
     result = GateResult(gate, passed=True, hard=True)
     add = result.violations.append
@@ -262,25 +295,11 @@ def check_continuity(model: RoadModel) -> GateResult:
             dg = b.g0 - a.g1
             if abs(dg) > JOINT_GRADE_TOL:
                 add(Violation(gate, road.id, f"{where}: grade step {dg:.6f}"))
-    roads = {r.id: r for r in model.roads}
-    for link in model.links:
-        n_joints += 1
-        if link.from_road not in roads or link.to_road not in roads:
-            add(Violation(gate, link.id, "link refers to a missing road"))
-            continue
-        src, dst = roads[link.from_road], roads[link.to_road]
-        s_from = src.length if link.from_end == "end" else 0.0
-        dir_from = 1.0 if link.from_end == "end" else -1.0
-        x, y, _h, _k = src.alignment.evaluate(s_from)
-        s_to, u_to = dst.alignment.project(x, y)
-        dir_to = 1.0 if link.to_end == "start" else -1.0
-        dz = dst.surface_z(s_to, u_to) - src.surface_z(s_from, 0.0)
-        dg = dir_to * dst.profile.grade(s_to) - dir_from * src.profile.grade(s_from)
-        if abs(dz) > LINK_Z_TOL:
-            add(Violation(gate, link.id, f"elevation mismatch {dz:.4f} m between {src.id}:{link.from_end} and {dst.id}:{link.to_end}"))
-        if abs(dg) > LINK_GRADE_TOL:
-            add(Violation(gate, link.id, f"grade mismatch {dg:.5f} between {src.id}:{link.from_end} and {dst.id}:{link.to_end}"))
-    result.metrics = {"n_joints": float(n_joints)}
+        result.violations.extend(curvature_violations(road))
+    seam_v, n_seam = seam_violations(model)
+    result.violations.extend(seam_v)
+    n_joints += len(model.links)
+    result.metrics = {"n_joints": float(n_joints), "n_seam_samples": float(n_seam), "n_junctions": float(len(model.junctions))}
     result.passed = not result.violations
     return result
 
@@ -359,7 +378,7 @@ def check_provenance(model: RoadModel, meshes: Sequence[Mesh]) -> GateResult:
             continue
         prov = obj.prov
         if prov is None and prov_field.default is None:
-            continue  # optional whole-element record (D-034); its parameters carry their own tags
+            continue  # optional provenance, derived from the element's parameters (D-034)
         n_prov += 1
         label = getattr(obj, "id", "") or path
         problem = ""
@@ -399,6 +418,9 @@ def run_gates(
     export_runs: tuple[str | os.PathLike, str | os.PathLike] | None = None,
     seams: Iterable[Seam] = (),
     val3dity_exe: str | None = None,
+    profile: str = "analytic",
+    lods: Mapping[int, Sequence[Mesh]] | None = None,
+    min_embed_m: float = DEFAULT_MIN_EMBED_M,
 ) -> GateReport:
     """All section 9 gates that apply to one unit.
 
@@ -406,9 +428,12 @@ def run_gates(
     ``measured``: optional ``edges`` (AC-A3), ``crossing_dz`` (AC-A4) and
     ``structure_stations`` (AC-A5) as produced by the pipeline.
     ``export_runs``: two export directories from identical runs (AC-H5).
+    ``profile``: export profile of ``meshes`` ("analytic" or "realtime", FR-SV-7).
+    ``lods``: the LOD chain, level -> meshes (FR-AS-1, hard when given). AC-P3 and
+    AC-P4 then run on level 0, otherwise on ``meshes``.
     """
     report = GateReport(unit_id=model.unit.unit_id)
-    report.results.append(check_solids(meshes, seams=seams, val3dity_exe=val3dity_exe))
+    report.results.append(check_solids(meshes, seams=seams, val3dity_exe=val3dity_exe, profile=profile, min_embed_m=min_embed_m))
     report.results.append(check_crossing_order(model, crossings_ref))
     report.results.append(check_voids(model, meshes))
     report.results.append(check_continuity(model))
@@ -426,4 +451,12 @@ def run_gates(
         report.results.append(crossing_dz_accuracy(model, measured["crossing_dz"]))
     if measured.get("structure_stations"):
         report.results.append(structure_station_accuracy(model, measured["structure_stations"]))
+    if lods is not None:
+        report.results.append(lod.check_lods(model, lods))
+    report.results.append(check_transitions(model))
+    finest = list(lods[0]) if lods is not None and 0 in lods else list(meshes)
+    if finest:
+        report.results.append(check_budgets(model, finest))
+        if any(getattr(m, "uv0", None) is not None for m in finest):
+            report.results.append(check_uv_stretch(finest))
     return report
