@@ -19,6 +19,7 @@ from roader.model.mesh import Mesh
 from roader.model.schema import TerrainPatch
 
 SNAP_M = 1e-7
+GRID_SNAP_M = 1e-4  # footprint vertices this close to a grid line (or the patch border) sit on it
 
 
 class TerrainSampler:
@@ -55,6 +56,20 @@ def _snap(x: float, y: float) -> tuple[float, float]:
     return kx * SNAP_M, ky * SNAP_M
 
 
+def _overlay(lines: np.ndarray, v: float) -> float:
+    """Overlay coordinate: the nearest grid line within GRID_SNAP_M, else the lattice point.
+
+    Model values round-tripped through canonical JSON (D-011) move by micrometres; this
+    keeps a footprint that ends on the patch border, or on a grid node, from leaving a
+    sliver or a stray intersection vertex.
+    """
+    k = int(np.clip(np.searchsorted(lines, v), 1, len(lines) - 1))
+    near = lines[k - 1] if abs(v - lines[k - 1]) <= abs(lines[k] - v) else lines[k]
+    if abs(v - near) <= GRID_SNAP_M:
+        return float(near)
+    return round(v / SNAP_M) * SNAP_M
+
+
 def terrain_meshes(
     sampler: TerrainSampler,
     footprints: list[list[tuple[float, float]]],
@@ -72,12 +87,16 @@ def terrain_meshes(
     xs, ys, zg = sampler.xs, sampler.ys, sampler.z
     band = np.zeros((ny - 1, nx - 1), dtype=bool)
     region = None
+    sx = np.array([_snap(float(x), 0.0)[0] for x in xs])
+    sy = np.array([_snap(0.0, float(y))[1] for y in ys])
+
+    def overlay(x: float, y: float) -> tuple[float, float]:
+        return _overlay(sx, x), _overlay(sy, y)
+
     if footprints:
-        fp = shapely.union_all([Polygon([_snap(x, y) for x, y in loop]) for loop in footprints])
+        fp = shapely.union_all([Polygon([overlay(x, y) for x, y in loop]) for loop in footprints])
         buf = fp.buffer(p.cell_m)
         shapely.prepare(buf)
-        sx = np.array([_snap(float(x), 0.0)[0] for x in xs])
-        sy = np.array([_snap(0.0, float(y))[1] for y in ys])
         x0, y0 = np.meshgrid(sx[:-1], sy[:-1])
         x1, y1 = np.meshgrid(sx[1:], sy[1:])
         boxes = shapely.box(x0, y0, x1, y1)
@@ -87,7 +106,7 @@ def terrain_meshes(
 
     ring_index: dict[tuple[int, int], int] = {}
     for n, (x, y, _z) in enumerate(ring):
-        ring_index.setdefault(_key(x, y), n)
+        ring_index.setdefault(_key(*overlay(x, y)), n)
     n_grid = nx * ny
 
     def gref(j: int, i: int) -> int:
@@ -139,10 +158,10 @@ def terrain_meshes(
     flip = area2 < 0.0
     refs[flip] = refs[flip][:, [0, 2, 1]]
 
-    x_lo, x_hi = xs[0] + 1e-6, xs[-1] - 1e-6
-    y_lo, y_hi = ys[0] + 1e-6, ys[-1] - 1e-6
+    x_lo, x_hi = xs[0] + GRID_SNAP_M, xs[-1] - GRID_SNAP_M
+    y_lo, y_hi = ys[0] + GRID_SNAP_M, ys[-1] - GRID_SNAP_M
     for n, (x, y, _z) in enumerate(ring):
-        if x_lo < x < x_hi and y_lo < y < y_hi and ring_index[_key(x, y)] == n and n not in ring_used:
+        if x_lo < x < x_hi and y_lo < y < y_hi and ring_index[_key(*overlay(x, y))] == n and n not in ring_used:
             raise ValueError(f"FR-SG-6: footprint vertex ({x:.3f}, {y:.3f}) is not on the terrain boundary")
 
     labels = _face_components(refs)
@@ -151,7 +170,8 @@ def terrain_meshes(
         f = refs[labels == c]
         keep, local = np.unique(f, return_inverse=True)
         verts = allv[keep]
-        parts.append((float(verts[:, 0].min()), float(verts[:, 1].min()), verts, local.reshape(-1, 3)))
+        # Millimetre keys: ids must not flip when the model moves by micrometres (D-011 round trip).
+        parts.append((round(float(verts[:, 0].min()), 3), round(float(verts[:, 1].min()), 3), verts, local.reshape(-1, 3)))
     parts.sort(key=lambda item: (item[0], item[1]))
     return [
         Mesh(
@@ -235,6 +255,6 @@ def _lookup(x: float, y: float, ring_index: dict[tuple[int, int], int], sampler:
     p = sampler.patch
     i = round((x - p.origin_x) / p.cell_m)
     j = round((y - p.origin_y) / p.cell_m)
-    if 0 <= i < p.nx and 0 <= j < p.ny and abs(sampler.xs[i] - x) < 1e-6 and abs(sampler.ys[j] - y) < 1e-6:
+    if 0 <= i < p.nx and 0 <= j < p.ny and abs(sampler.xs[i] - x) <= SNAP_M and abs(sampler.ys[j] - y) <= SNAP_M:
         return ("g", i, j)
     raise ValueError(f"FR-SG-6: terrain re-triangulation produced a vertex ({x:.4f}, {y:.4f}) that is neither grid nor solid")

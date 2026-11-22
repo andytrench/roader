@@ -16,6 +16,7 @@ from shapely.ops import unary_union
 from roader.model import Mesh
 from roader.model.synthetic import overpass_model
 from roader.solids import generate
+from roader.solids.terrain import GRID_SNAP_M
 
 from . import meshcheck as mc
 
@@ -209,9 +210,8 @@ def check_terrain(model, meshes: list[Mesh], tol: float) -> list[Mesh]:
     assert terrain and meshes[-len(terrain):] == terrain
     ids = [m.id for m in terrain]
     assert ids == (["terrain:terrain"] if len(terrain) == 1 else [f"terrain:terrain:{k}" for k in range(len(terrain))])
-    assert [(m.vertices[:, 0].min(), m.vertices[:, 1].min()) for m in terrain] == sorted(
-        (m.vertices[:, 0].min(), m.vertices[:, 1].min()) for m in terrain
-    )
+    keys = [(round(float(m.vertices[:, 0].min()), 3), round(float(m.vertices[:, 1].min()), 3)) for m in terrain]
+    assert keys == sorted(keys)
     t = model.terrain
     x0, y0 = t.origin_x, t.origin_y
     x1, y1 = x0 + (t.nx - 1) * t.cell_m, y0 + (t.ny - 1) * t.cell_m
@@ -233,7 +233,7 @@ def check_terrain(model, meshes: list[Mesh], tol: float) -> list[Mesh]:
         for a, b in keys[counts == 1].tolist():
             pa, pb = piece.vertices[a], piece.vertices[b]
             border = any(
-                abs(pa[k] - v) < 1e-6 and abs(pb[k] - v) < 1e-6 for k, v in ((0, x0), (0, x1), (1, y0), (1, y1))
+                abs(pa[k] - v) <= GRID_SNAP_M and abs(pb[k] - v) <= GRID_SNAP_M for k, v in ((0, x0), (0, x1), (1, y0), (1, y1))
             )
             if border:
                 on_border += 1
@@ -261,7 +261,7 @@ def check_terrain(model, meshes: list[Mesh], tol: float) -> list[Mesh]:
         w = m.vertices[m.faces[:, 2], :2] - m.vertices[m.faces[:, 0], :2]
         area += 0.5 * float(np.sum(u[:, 0] * w[:, 1] - u[:, 1] * w[:, 0]))
     domain = Polygon([(x0, y0), (x1, y0), (x1, y1), (x0, y1)])
-    assert math.isclose(area + fp.intersection(domain).area, domain.area, rel_tol=1e-9)
+    assert math.isclose(area + fp.intersection(domain).area, domain.area, rel_tol=1e-8)
     # Merged far-field blocks stay within tol of the bilinear grid surface.
     zgrid = np.asarray(t.z, dtype=float).reshape(t.ny, t.nx)
     twist = 0.25 * np.abs(zgrid[:-1, :-1] - zgrid[:-1, 1:] - zgrid[1:, :-1] + zgrid[1:, 1:]).max()
