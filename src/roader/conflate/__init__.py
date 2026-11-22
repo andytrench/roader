@@ -7,7 +7,9 @@ Public API:
     track_line(line, evidence) -> Track                    FR-VC-2 sheet assignment, observed/occluded/unsupported
     cross_profiles, register_line                          FR-VC-3 lateral registration, FR-XS-1 edges
     find_extents(fit, evidence, skews) -> [StructureExtent] FR-VC-4 structure ends from data
-    find_crossings(fits) -> (crossings, measures, flags)   FR-CR-1, FR-CR-2
+    find_crossings(fits) -> (crossings, measures, flags)   FR-CR-1, FR-CR-2 (input crossings, not shared nodes)
+    chain_extents(extents, drops, lengths)                 FR-CR-3 one structure per run off the ground
+    unmatched_sheets(evidence, fits) -> [SheetCandidate]   FR-VC-5 paved surfaces with no vector
     Polyline                                               vectorized station/offset geometry
 """
 

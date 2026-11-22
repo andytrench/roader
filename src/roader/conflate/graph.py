@@ -49,6 +49,7 @@ class RoadSeed:
     line: Polyline  # input centerline in the direction of travel, clipped to the unit
     vector_refs: list[VectorRef]
     spans: list[EdgeSpan] = field(default_factory=list)
+    nodes: np.ndarray | None = None  # (N, 2) source vertices of the chained edges (FR-CR-1 shared nodes)
 
     def tags_at(self, s: float) -> dict[str, str]:
         for span in self.spans:
@@ -221,6 +222,7 @@ def select_roads(edges: list[VectorEdge], extent: shapely.Geometry | None = None
                 line=poly,
                 vector_refs=refs,
                 spans=sorted(spans, key=lambda sp: sp.s0),
+                nodes=np.unique(np.round(coords, 3), axis=0),
             )
         )
     return sorted(seeds, key=lambda r: r.id)

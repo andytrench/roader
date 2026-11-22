@@ -14,7 +14,7 @@ vendor classes are untrusted evidence on their own (FR-IN-3).
 from __future__ import annotations
 
 import math
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 import numpy as np
 
@@ -33,6 +33,7 @@ DECK_CLASS = 17
 DECK_CLASS_MIN_POINTS = 3
 DECK_SURFACE_TOL_M = 0.5
 CLASS17_AGREE_M = 5.0
+ABOVE_SURFACE_M = 1.5  # returns higher than this above the road are something over it (parapets stay in)
 
 
 @dataclass
@@ -44,10 +45,102 @@ class StructureExtent:
     geom: tuple[float, float] | None
     class17: tuple[float, float] | None
     one_sided: bool = False
+    # FR-CR-3: the (s_start, s_end, method) runs chained into this extent; empty when it is one run.
+    chained: list[tuple[float, float, str]] = field(default_factory=list)
+    clipped: bool = False  # an end was clamped to the end of the road
 
     @property
     def length(self) -> float:
         return self.s_end - self.s_start
+
+
+METHOD_TRUST = {"class17": 3, "sheet_break": 2, "class17_only": 1, "rule": 0}
+REJOIN_M = 5.0  # the carrying sheet is back on the ground over at least this length
+
+
+def rejoins_ground(drop: tuple[np.ndarray, np.ndarray, np.ndarray], s0: float, s1: float) -> bool:
+    """True when, somewhere in (s0, s1), the road is back on the ground for ``REJOIN_M``.
+
+    A station is on the ground when at least one side was seen and no side
+    drops by more than ``SEPARATION_M`` (the inverse of the elevated test in
+    ``find_extents``; an embankment between two bridges reads as ground, a twin
+    carriageway's deck beside one side does not hide the void beyond the other).
+    Unseen stations (both sides NaN, e.g. under a higher deck) are not evidence
+    of rejoining.
+    """
+    st, dl, dr = drop
+    m = (st > s0) & (st < s1)
+    if not m.any():
+        return False
+    left, right = dl[m], dr[m]
+    seen = np.isfinite(left) | np.isfinite(right)
+    deep = (np.nan_to_num(left, nan=0.0) < -SEPARATION_M) | (np.nan_to_num(right, nan=0.0) < -SEPARATION_M)
+    ground = seen & ~deep
+    run = best = 0
+    for g in ground.tolist():
+        run = run + 1 if g else 0
+        best = max(best, run)
+    return best * STEP_M >= REJOIN_M
+
+
+def chain_extents(
+    extents: list[StructureExtent],
+    drops: dict[str, tuple[np.ndarray, np.ndarray, np.ndarray]],
+    lengths: dict[str, float] | None = None,
+) -> list[StructureExtent]:
+    """FR-CR-3: one candidate structure per run of a road that never rejoins the ground.
+
+    Extents on one road that overlap, or whose gap never shows the carrying
+    sheet back on the ground (``rejoins_ground``), become one extent: a viaduct
+    over several roads is one structure, not one per crossing. Each end keeps the
+    station and method of the run it came from; the merged method is the less
+    trusted of the two end methods, and ``chained`` lists the runs. With
+    ``lengths`` (road id to length), ends are clamped to the road and the
+    extent is marked ``clipped`` (a deck running past where the road was cut).
+    """
+    out: list[StructureExtent] = []
+    if lengths:
+        extents = [c for c in (_clamped(e, lengths[e.road_id]) for e in extents) if c.length >= STEP_M]
+    for road_id in sorted({e.road_id for e in extents}):
+        runs = sorted((e for e in extents if e.road_id == road_id), key=lambda e: (e.s_start, e.s_end))
+        groups: list[list[StructureExtent]] = []
+        for e in runs:
+            if groups:
+                last_end = max(g.s_end for g in groups[-1])
+                if e.s_start <= last_end + GAP_BRIDGE_M or not rejoins_ground(drops[road_id], last_end, e.s_start):
+                    groups[-1].append(e)
+                    continue
+            groups.append([e])
+        for g in groups:
+            if len(g) == 1:
+                out.append(g[0])
+                continue
+            first = min(g, key=lambda e: (e.s_start, -METHOD_TRUST[e.method]))
+            last = max(g, key=lambda e: (e.s_end, METHOD_TRUST[e.method]))
+            method = min((first.method, last.method), key=lambda m: METHOD_TRUST[m])
+            geom = [e.geom for e in g if e.geom]
+            c17 = [e.class17 for e in g if e.class17]
+            out.append(
+                StructureExtent(
+                    road_id,
+                    first.s_start,
+                    last.s_end,
+                    method,
+                    (min(a for a, _ in geom), max(b for _, b in geom)) if geom else None,
+                    (min(a for a, _ in c17), max(b for _, b in c17)) if c17 else None,
+                    first.one_sided or last.one_sided,
+                    [(e.s_start, e.s_end, e.method) for e in g],
+                    first.clipped or last.clipped,
+                )
+            )
+    return sorted(out, key=lambda e: (e.road_id, e.s_start))
+
+
+def _clamped(e: StructureExtent, length: float) -> StructureExtent:
+    a, b = max(e.s_start, 0.0), min(e.s_end, length)
+    if a == e.s_start and b == e.s_end:
+        return e
+    return StructureExtent(e.road_id, a, b, e.method, e.geom, e.class17, e.one_sided, list(e.chained), True)
 
 
 def _runs(mask: np.ndarray, s: np.ndarray, bridge: float, min_len: float, unknown: np.ndarray | None = None) -> list[tuple[float, float]]:
@@ -67,7 +160,12 @@ def _runs(mask: np.ndarray, s: np.ndarray, bridge: float, min_len: float, unknow
 
 
 def side_drop(fit: RoadFit, ev: Evidence) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
-    """Stations and the ground drop beyond the left and right edges (negative = below), NaN if empty."""
+    """Stations and the ground drop beyond the left and right edges (negative = below), NaN if empty.
+
+    Returns above the road surface are a higher deck or canopy, not what the road
+    stands on (FR-RS-2), so they never count: beside a stacked deck where only
+    the decks above were seen, the drop is unknown, not zero.
+    """
     road = fit.road
     lp = fit.points
     length = road.length
@@ -77,10 +175,11 @@ def side_drop(fit: RoadFit, ev: Evidence) -> tuple[np.ndarray, np.ndarray, np.nd
     wl = np.interp(lp.s, [kn.s for kn in xs.width_left.knots], [kn.value for kn in xs.width_left.knots])
     wr = np.interp(lp.s, [kn.s for kn in xs.width_right.knots], [kn.value for kn in xs.width_right.knots])
     zc = np.array([road.profile.z(float(v)) for v in st])
+    below = lp.z <= zc[k] + ABOVE_SURFACE_M
     out = []
     for sign, w in ((1.0, wl), (-1.0, wr)):
         d = sign * lp.u - w
-        band = (d >= BAND_INNER_M) & (d <= BAND_OUTER_M)
+        band = (d >= BAND_INNER_M) & (d <= BAND_OUTER_M) & below
         kb, zb = k[band], lp.z[band]
         drop = np.full(len(st), np.nan)
         if kb.size:
@@ -111,7 +210,10 @@ def deck_class_runs(fit: RoadFit, ev: Evidence) -> list[tuple[float, float]]:
         return []
     st = np.arange(0.0, road.length + 1e-9, STEP_M)
     counts = np.bincount(np.clip(np.rint(lp.s[idx] / STEP_M).astype(np.int64), 0, len(st) - 1), minlength=len(st))
-    on_road = (lp.u <= wl) & (lp.u >= -wr)
+    # Only returns at this road's height say whether its surface was seen; a deck
+    # above it (FR-RS-2) leaves the stations unobserved, so the run is not ended there.
+    pz = np.interp(lp.s, st, [road.profile.z(float(v)) for v in st])
+    on_road = (lp.u <= wl) & (lp.u >= -wr) & (np.abs(lp.z - pz) <= ABOVE_SURFACE_M)
     any_pts = np.bincount(np.clip(np.rint(lp.s[on_road] / STEP_M).astype(np.int64), 0, len(st) - 1), minlength=len(st))
     sparse = any_pts < 0.2 * max(float(np.median(any_pts[any_pts > 0])) if (any_pts > 0).any() else 0.0, 1.0)
     runs = _runs(counts >= DECK_CLASS_MIN_POINTS, st, GAP_BRIDGE_M + 1.0, MIN_STRUCTURE_M * 0.5, sparse)

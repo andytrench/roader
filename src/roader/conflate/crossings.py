@@ -17,7 +17,9 @@ from dataclasses import dataclass
 
 import numpy as np
 import shapely
+from scipy.spatial import cKDTree
 
+from roader.conflate.graph import RoadSeed
 from roader.fit.road import RoadFit
 from roader.model.provenance import Provenance, Source
 from roader.model.schema import Crossing, Flag
@@ -27,6 +29,9 @@ UPPER_RADIUS_M = 3.0
 LOWER_OFFSET_M = 15.0
 LOWER_RADIUS_M = 1.5
 SURFACE_TOL_M = 0.3
+SHARED_NODE_M = 0.05  # vertices of two inputs this close are one node
+NODE_REACH_M = 1.0  # an input intersection this close to a shared node is that node
+MATCH_M = 30.0  # a fitted intersection this close to an input crossing locates it
 
 
 @dataclass
@@ -35,6 +40,29 @@ class CrossingMeasure:
     dz_data_m: float | None
     upper_z_data: float | None
     lower_z_data: float | None
+
+
+def input_crossings(a: RoadSeed, b: RoadSeed) -> list[shapely.Point]:
+    """Plan intersections of two input centerlines that are not a shared vector node (D-037).
+
+    Roads joined at a node (a ramp merging into a mainline, a ramp terminal on a
+    street) meet; they do not cross. After registration their fitted lines often
+    cross near such a node, so crossings are decided on the inputs and only
+    located on the fitted lines.
+    """
+    inter = shapely.LineString(a.line.xy).intersection(shapely.LineString(b.line.xy))
+    pts = [g for g in getattr(inter, "geoms", [inter]) if isinstance(g, shapely.Point)]
+    if a.nodes is None or b.nodes is None or not pts:
+        return sorted(pts, key=lambda q: (q.x, q.y))
+    tree = cKDTree(b.nodes)
+    d, _ = tree.query(a.nodes, distance_upper_bound=SHARED_NODE_M)
+    shared = a.nodes[np.isfinite(d)]
+    out = []
+    for p in pts:
+        if shared.size and float(np.min(np.hypot(shared[:, 0] - p.x, shared[:, 1] - p.y))) <= SHARED_NODE_M + NODE_REACH_M:
+            continue
+        out.append(p)
+    return sorted(out, key=lambda q: (q.x, q.y))
 
 
 def _tag_text(tags: dict[str, str]) -> str:
@@ -80,8 +108,17 @@ def find_crossings(fits: list[RoadFit]) -> tuple[list[Crossing], list[CrossingMe
     for i, a in enumerate(fits):
         for b in fits[i + 1 :]:
             inter = lines[a.road.id].intersection(lines[b.road.id])
-            pts = [g for g in getattr(inter, "geoms", [inter]) if isinstance(g, shapely.Point)]
-            for p in sorted(pts, key=lambda q: (q.x, q.y)):
+            fitted = [g for g in getattr(inter, "geoms", [inter]) if isinstance(g, shapely.Point)]
+            pts = []
+            for q in input_crossings(a.seed, b.seed):
+                near = [p for p in fitted if p.distance(q) <= MATCH_M]
+                if near:
+                    pts.append(min(near, key=lambda p: (p.distance(q), p.x, p.y)))
+                else:
+                    flags.append(
+                        Flag("FR-CR-1:not_located", f"{a.road.id}|{b.road.id}", "FR-CR-1", f"input centerlines of {a.road.name} and {b.road.name} cross at ({q.x:.1f}, {q.y:.1f}); fitted lines do not")
+                    )
+            for p in sorted({(q.x, q.y): q for q in pts}.values(), key=lambda q: (q.x, q.y)):
                 xy = np.array([[p.x, p.y]])
                 sa, ua, _ = a.line.project(xy)
                 sb, ub, _ = b.line.project(xy)

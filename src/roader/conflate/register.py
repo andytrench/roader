@@ -333,4 +333,11 @@ def register_line(line: Polyline, prof: Profiles) -> tuple[Polyline, np.ndarray,
     blend = np.clip(1.0 - (dist - 3.0 * XY_SIGMA_M) / XY_SIGMA_M, 0.0, 1.0)[:, None]
     fallback = line.offset_point(prof.s, offsets)
     pts = blend * pts + (1.0 - blend) * fallback
+    # Away from measured centers the plan fit is an extrapolation: there each point
+    # keeps its profile station and only moves sideways, so the line cannot
+    # stretch along itself where edges are sparse (decks and ramps in a stack).
+    _s, u_p, ok = line.project(pts)
+    sideways = line.offset_point(prof.s, np.where(ok & np.isfinite(u_p), u_p, offsets))
+    far = np.clip((dist - XY_SIGMA_M) / XY_SIGMA_M, 0.0, 1.0)[:, None]
+    pts = (1.0 - far) * pts + far * sideways
     return Polyline(pts), prof.s, mid, weight
