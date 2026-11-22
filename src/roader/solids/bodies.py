@@ -127,10 +127,13 @@ def _toe(road: Road, sign: float, ratio: float, sampler: TerrainSampler, ss_id: 
     def toe(s: float) -> float:
         w = width(s)
         z_edge = pavement_bottom(road, s, sign * w)
+        # Same arithmetic as Alignment.offset_point, with the station evaluated once.
+        px, py, heading, _k = road.alignment.evaluate(s)
+        nx_, ny_ = -math.sin(heading), math.cos(heading)
 
         def g(d: float) -> float:
-            x, y = road.alignment.offset_point(s, sign * (w + d))
-            return z_edge - d / ratio - sampler(x, y)
+            u = sign * (w + d)
+            return z_edge - d / ratio - sampler(px + u * nx_, py + u * ny_)
 
         if g(0.0) <= MIN_FILL_M:
             raise ValueError(f"FR-SG: embankment {ss_id}: pavement underside is not above terrain at s={s:.2f}")

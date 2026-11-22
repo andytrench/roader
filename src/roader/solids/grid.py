@@ -81,11 +81,26 @@ def _solve(func: Callable[[float], float], line: StationLine) -> float:
     u = func(line.s)
     if line.t == 0.0:
         return u
+    u0 = u
     for _ in range(200):
         nu = func(line.at(u))
         if abs(nu - u) <= 1e-12:
             return nu
         u = nu
+    # Fixed point oscillates when |du/ds| * |t| >= 1 (a toe over rough terrain): bisect instead.
+    def h(v: float) -> float:
+        return func(line.at(v)) - v
+
+    for reach in (1.0, 4.0, 16.0, 64.0):
+        lo, hi = u0 - reach, u0 + reach
+        if h(lo) * h(hi) <= 0.0:
+            for _ in range(100):
+                mid = 0.5 * (lo + hi)
+                if h(lo) * h(mid) <= 0.0:
+                    hi = mid
+                else:
+                    lo = mid
+            return func(line.at(0.5 * (lo + hi)))
     raise ValueError(f"u-line does not converge on the skewed station line at s={line.s:.3f}")
 
 
