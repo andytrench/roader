@@ -101,6 +101,10 @@ class Link:
     to_road: str
     to_end: str
     kind: str  # continue | diverge | merge
+    # Seam stations where the two roads meet (AC-H4, FR-AF-3); None: the named road end.
+    from_s: float | None = None
+    to_s: float | None = None
+    prov: Provenance | None = None
 
 
 @dataclass
@@ -278,13 +282,30 @@ class Structure:
 
 
 @dataclass
+class JunctionSeam:
+    """Where a junction area meets a road sweep: station s, offsets u0 < u1 on that road (FR-SG-3, AC-H4)."""
+
+    road_id: str
+    s: float
+    u0: float
+    u1: float
+
+
+@dataclass
 class JunctionArea:
-    """L6 gore / merge / intersection. Built by planar partition in milestone 2."""
+    """L6 gore / merge / intersection, built from a planar partition of lane and edge lines (FR-SG-3).
+
+    ``outline`` is the plan polygon (counter-clockwise, unit frame). Its surface is
+    lifted from the adjoining roads, so elevation and slope match at every seam.
+    """
 
     id: str
     road_ids: list[str]
     outline: list[tuple[float, float]]
     prov: Provenance
+    kind: str = "gore"  # gore | merge | diverge | intersection
+    seams: list[JunctionSeam] = field(default_factory=list)
+    holes: list[list[tuple[float, float]]] = field(default_factory=list)
 
 
 @dataclass

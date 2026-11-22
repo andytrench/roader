@@ -133,3 +133,26 @@ def test_abutment_thickness_overrides_cap_width():
     assert s1 - s0 == pytest.approx(abut.cap_width_m)
     s0, s1 = support_block(st, dataclasses.replace(abut, thickness_m=2.5))
     assert s1 - s0 == pytest.approx(2.5)
+
+
+def test_junction_and_link_seams_round_trip():
+    """L6 junction seams and link seam stations serialize losslessly (FR-SG-3, AC-H4, AC-H5)."""
+    from roader.model import JunctionArea, JunctionSeam, Link, dumps, loads
+    from roader.model.provenance import by_rule
+
+    model = overpass_model()
+    model.links.append(Link("lk_1", model.roads[0].id, "end", model.roads[1].id, "start", "diverge", from_s=420.0, to_s=0.0))
+    model.junctions.append(
+        JunctionArea(
+            "ja_1",
+            [model.roads[0].id, model.roads[1].id],
+            [(0.0, 0.0), (30.0, 0.0), (30.0, 4.0)],
+            by_rule("junction.gore"),
+            kind="gore",
+            seams=[JunctionSeam(model.roads[0].id, 420.0, 3.0, 5.5)],
+        )
+    )
+    again = loads(dumps(model))
+    assert again.junctions[0].seams[0] == JunctionSeam(model.roads[0].id, 420.0, 3.0, 5.5)
+    assert again.links[-1].from_s == 420.0
+    assert dumps(again) == dumps(model)
