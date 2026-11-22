@@ -251,15 +251,16 @@ def attach_shared(
         reach = tuple(
             max([_width(child, side)(mid), *(b.offset_m + b.base_width_m for b in barriers.get(child.id, []) if b.side == side)]) for side in ("left", "right")
         )
-        end = _clear_of_deck(st, parent, child, sh.s_seam, sh.toward, reach)
-        end = _inside_parent(parent, child, end, sh.toward)
+        deck_end = _clear_of_deck(st, parent, child, sh.s_seam, sh.toward, reach)
+        end = _inside_parent(parent, child, deck_end, sh.toward)
         a, b = sorted((sh.s_seam, end))
         a, b = max(a, 0.0), min(b, child.length)
         st.shared.append(SharedSpan(child.id, a, b))
         st.shared.sort(key=lambda x: (x.road_id, x.s_start))
         barriers[child.id] = _clip_barriers(barriers.get(child.id, []), a, b)
+        da, db = sorted((sh.s_seam, deck_end))
         for c in crossings:
-            if c.upper_road == child.id and a <= c.upper_s <= b:
+            if c.upper_road == child.id and da <= c.upper_s <= db:
                 c.structure_id = st.id
         outside = _outside_deck(st, parent, child, a, b)
         flags.append(Flag("FR-CR-3:shares_deck", st.id, "FR-CR-3", f"{child.id} ({child.name}) rides this deck and its road's pavement over s={a:.1f}-{b:.1f} from its seam at {sh.parent_road} s={sh.parent_s:.1f}"))
