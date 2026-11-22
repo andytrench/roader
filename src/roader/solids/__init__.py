@@ -11,7 +11,7 @@ from roader.model.schema import RoadModel
 from roader.solids.assemble import assemble
 from roader.solids.bodies import road_bodies
 from roader.solids.grid import PlanVertices
-from roader.solids.terrain import TerrainSampler, terrain_mesh
+from roader.solids.terrain import TerrainSampler, terrain_meshes
 
 TERRAIN_ELEMENT_ID = "terrain"
 
@@ -22,7 +22,8 @@ def generate(model: RoadModel, chord_tol_m: float = 0.01) -> list[Mesh]:
     """Analytic export profile at the finest LOD (FR-SG-1..6, FR-SV-7).
 
     One closed Mesh per body, ids f"{element_id}:{part}" with an index suffix when an
-    element yields several, then the open L7 terrain surface last.
+    element yields several, then the open L7 terrain surface last, one Mesh per
+    connected piece.
     """
     if not chord_tol_m > 0.0:
         raise ValueError("chord_tol_m must be positive")
@@ -34,5 +35,7 @@ def generate(model: RoadModel, chord_tol_m: float = 0.01) -> list[Mesh]:
     result = assemble(bodies, pv, sampler)
     meshes = result.meshes
     if sampler is not None and model.terrain is not None:
-        meshes.append(terrain_mesh(sampler, result.footprints, result.ring, TERRAIN_ELEMENT_ID, model.terrain.prov.source))
+        meshes += terrain_meshes(
+            sampler, result.footprints, result.ring, TERRAIN_ELEMENT_ID, model.terrain.prov.source, chord_tol_m
+        )
     return meshes

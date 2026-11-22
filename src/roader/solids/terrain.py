@@ -1,6 +1,6 @@
 """L7 terrain: bilinear sampling and re-triangulation around solid footprints (FR-SG-6).
 
-Grid cells away from any footprint keep their two grid triangles. A band of cells
+Grid cells away from any footprint are merged into planar quadtree blocks. A band of cells
 around the footprints is re-triangulated by constrained Delaunay with the footprint
 outlines as constraint edges, so terrain boundary vertices are exactly the solid
 vertices where the solids meet the ground. Nothing is generated inside a footprint;
@@ -55,15 +55,18 @@ def _snap(x: float, y: float) -> tuple[float, float]:
     return kx * SNAP_M, ky * SNAP_M
 
 
-def terrain_mesh(
+def terrain_meshes(
     sampler: TerrainSampler,
     footprints: list[list[tuple[float, float]]],
     ring: list[tuple[float, float, float]],
     element_id: str,
     source: str,
-) -> Mesh:
-    """Open L7 surface. footprints: plan loops of every ground-contact cell; ring: exact
-    xyz of every footprint boundary vertex (the solid vertices at ground level)."""
+    tol: float,
+) -> list[Mesh]:
+    """Open L7 surface, one Mesh per edge-connected component (a CompositeSurface must be
+    connected). footprints: plan loops of every ground-contact cell; ring: exact xyz of
+    every footprint boundary vertex (the solid vertices at ground level). Away from the
+    footprints, grid blocks that are planar within tol / 2 merge into fans (quadtree)."""
     p = sampler.patch
     nx, ny = p.nx, p.ny
     xs, ys, zg = sampler.xs, sampler.ys, sampler.z
@@ -85,57 +88,56 @@ def terrain_mesh(
     ring_index: dict[tuple[int, int], int] = {}
     for n, (x, y, _z) in enumerate(ring):
         ring_index.setdefault(_key(x, y), n)
+    n_grid = nx * ny
 
-    used = np.zeros((ny, nx), dtype=bool)
-    kept = ~band
-    used[:-1, :-1] |= kept
-    used[:-1, 1:] |= kept
-    used[1:, :-1] |= kept
-    used[1:, 1:] |= kept
+    def gref(j: int, i: int) -> int:
+        return j * nx + i
 
-    band_tris: list[tuple[tuple[str, int, int], ...]] = []
+    faces: list[tuple[int, int, int]] = []
+    ring_used: set[int] = set()
     if region is not None and not region.is_empty:
         for part in shapely.get_parts(region):
             for tri in shapely.get_parts(shapely.constrained_delaunay_triangles(part)):
                 refs = []
                 for x, y in shapely.get_coordinates(tri)[:3]:
-                    refs.append(_lookup(float(x), float(y), ring_index, sampler))
-                band_tris.append(tuple(refs))
-                for kind, a, b in refs:
-                    if kind == "g":
-                        used[b, a] = True
+                    kind, a, b = _lookup(float(x), float(y), ring_index, sampler)
+                    if kind == "r":
+                        ring_used.add(a)
+                        refs.append(n_grid + a)
+                    else:
+                        refs.append(gref(b, a))
+                faces.append((refs[0], refs[1], refs[2]))
 
-    grid_id = np.full((ny, nx), -1, dtype=np.int64)
-    n_grid = int(used.sum())
-    grid_id[used] = np.arange(n_grid)
-    gj, gi = np.nonzero(used)
-    verts = [np.column_stack([xs[gi], ys[gj], zg[gj, gi]])]
+    leaves = _leaves(band, zg, tol)
+    used = np.zeros((ny, nx), dtype=bool)
+    bj, bi = np.nonzero(band)
+    for dj, di in ((0, 0), (0, 1), (1, 0), (1, 1)):
+        used[bj + dj, bi + di] = True
+    for j0, i0, size in leaves:
+        used[[j0, j0, j0 + size, j0 + size], [i0, i0 + size, i0, i0 + size]] = True
+    for j0, i0, size in leaves:
+        if size == 1:
+            a, b, c, d = gref(j0, i0), gref(j0, i0 + 1), gref(j0 + 1, i0 + 1), gref(j0 + 1, i0)
+            faces += [(a, b, c), (a, c, d)]
+            continue
+        loop = [(j0, i) for i in range(i0, i0 + size)]
+        loop += [(j, i0 + size) for j in range(j0, j0 + size)]
+        loop += [(j0 + size, i) for i in range(i0 + size, i0, -1)]
+        loop += [(j, i0) for j in range(j0 + size, j0, -1)]
+        loop = [gref(j, i) for j, i in loop if used[j, i]]
+        centre = gref(j0 + size // 2, i0 + size // 2)
+        faces += [(centre, loop[k], loop[(k + 1) % len(loop)]) for k in range(len(loop))]
 
-    ring_used: dict[int, int] = {}
-    for tri in band_tris:
-        for kind, a, _b in tri:
-            if kind == "r" and a not in ring_used:
-                ring_used[a] = n_grid + len(ring_used)
-    if ring_used:
-        verts.append(np.array([ring[n] for n in ring_used], dtype=np.float64))
-    vertices = np.vstack(verts)
-
-    kj, ki = np.nonzero(kept)
-    v00, v10 = grid_id[kj, ki], grid_id[kj, ki + 1]
-    v11, v01 = grid_id[kj + 1, ki + 1], grid_id[kj + 1, ki]
-    faces = [np.column_stack([v00, v10, v11]), np.column_stack([v00, v11, v01])]
-    if band_tris:
-        bt = np.array(
-            [[grid_id[b, a] if kind == "g" else ring_used[a] for kind, a, b in tri] for tri in band_tris],
-            dtype=np.int64,
-        )
-        pa, pb, pc = vertices[bt[:, 0]], vertices[bt[:, 1]], vertices[bt[:, 2]]
-        area2 = (pb[:, 0] - pa[:, 0]) * (pc[:, 1] - pa[:, 1]) - (pb[:, 1] - pa[:, 1]) * (pc[:, 0] - pa[:, 0])
-        if np.any(np.abs(area2) <= 1e-12):
-            raise ValueError("FR-SG-6: degenerate terrain triangle at a footprint")
-        flip = area2 < 0.0
-        bt[flip] = bt[flip][:, [0, 2, 1]]
-        faces.append(bt)
+    refs = np.array(faces, dtype=np.int64).reshape(-1, 3)
+    ring_arr = np.array(ring, dtype=np.float64).reshape(-1, 3)
+    gj, gi = np.divmod(np.arange(n_grid), nx)
+    allv = np.vstack([np.column_stack([xs[gi], ys[gj], zg[gj, gi]]), ring_arr])
+    pa, pb, pc = allv[refs[:, 0]], allv[refs[:, 1]], allv[refs[:, 2]]
+    area2 = (pb[:, 0] - pa[:, 0]) * (pc[:, 1] - pa[:, 1]) - (pb[:, 1] - pa[:, 1]) * (pc[:, 0] - pa[:, 0])
+    if np.any(np.abs(area2) <= 1e-12):
+        raise ValueError("FR-SG-6: degenerate terrain triangle")
+    flip = area2 < 0.0
+    refs[flip] = refs[flip][:, [0, 2, 1]]
 
     x_lo, x_hi = xs[0] + 1e-6, xs[-1] - 1e-6
     y_lo, y_hi = ys[0] + 1e-6, ys[-1] - 1e-6
@@ -143,17 +145,87 @@ def terrain_mesh(
         if x_lo < x < x_hi and y_lo < y < y_hi and ring_index[_key(x, y)] == n and n not in ring_used:
             raise ValueError(f"FR-SG-6: footprint vertex ({x:.3f}, {y:.3f}) is not on the terrain boundary")
 
-    return Mesh(
-        id=f"{element_id}:terrain",
-        element_id=element_id,
-        layer="L7",
-        part="terrain",
-        material="terrain",
-        source=source,
-        vertices=vertices,
-        faces=np.vstack(faces),
-        closed=False,
-    )
+    labels = _face_components(refs)
+    parts = []
+    for c in range(int(labels.max()) + 1 if len(labels) else 0):
+        f = refs[labels == c]
+        keep, local = np.unique(f, return_inverse=True)
+        verts = allv[keep]
+        parts.append((float(verts[:, 0].min()), float(verts[:, 1].min()), verts, local.reshape(-1, 3)))
+    parts.sort(key=lambda item: (item[0], item[1]))
+    return [
+        Mesh(
+            id=f"{element_id}:terrain" if len(parts) == 1 else f"{element_id}:terrain:{k}",
+            element_id=element_id,
+            layer="L7",
+            part="terrain",
+            material="terrain",
+            source=source,
+            vertices=verts,
+            faces=f,
+            closed=False,
+        )
+        for k, (_x, _y, verts, f) in enumerate(parts)
+    ]
+
+
+def _leaves(band: np.ndarray, zg: np.ndarray, tol: float) -> list[tuple[int, int, int]]:
+    """Quadtree over grid cells: blocks free of the band and planar within tol / 2, else cells."""
+    ncy, ncx = band.shape
+    csum = np.zeros((ncy + 1, ncx + 1), dtype=np.int64)
+    csum[1:, 1:] = np.cumsum(np.cumsum(band, axis=0), axis=1)
+    size = 1
+    while size < max(ncx, ncy):
+        size *= 2
+    leaves: list[tuple[int, int, int]] = []
+
+    def planar(j0: int, i0: int, s: int) -> bool:
+        z = zg[j0 : j0 + s + 1, i0 : i0 + s + 1]
+        jj, ii = np.mgrid[0 : s + 1, 0 : s + 1]
+        a = np.column_stack([np.ones(z.size), ii.ravel(), jj.ravel()])
+        coef = np.linalg.lstsq(a, z.ravel(), rcond=None)[0]
+        return bool(np.abs(a @ coef - z.ravel()).max() <= 0.5 * tol)
+
+    stack = [(0, 0, size)]
+    while stack:
+        j0, i0, s = stack.pop()
+        if j0 >= ncy or i0 >= ncx:
+            continue
+        if s == 1:
+            if not band[j0, i0]:
+                leaves.append((j0, i0, 1))
+            continue
+        if j0 + s <= ncy and i0 + s <= ncx:
+            n_band = csum[j0 + s, i0 + s] - csum[j0, i0 + s] - csum[j0 + s, i0] + csum[j0, i0]
+            if n_band == 0 and planar(j0, i0, s):
+                leaves.append((j0, i0, s))
+                continue
+        h = s // 2
+        stack += [(j0 + h, i0 + h, h), (j0 + h, i0, h), (j0, i0 + h, h), (j0, i0, h)]
+    return leaves
+
+
+def _face_components(faces: np.ndarray) -> np.ndarray:
+    """Component label per face; faces connect through shared edges."""
+    from scipy.sparse import coo_matrix
+    from scipy.sparse.csgraph import connected_components
+
+    n = len(faces)
+    if n == 0:
+        return np.zeros(0, dtype=np.int64)
+    e = np.sort(np.concatenate([faces[:, [0, 1]], faces[:, [1, 2]], faces[:, [2, 0]]]), axis=1)
+    fid = np.tile(np.arange(n), 3)
+    order = np.lexsort((e[:, 1], e[:, 0]))
+    e, fid = e[order], fid[order]
+    same = np.all(e[1:] == e[:-1], axis=1)
+    a, b = fid[:-1][same], fid[1:][same]
+    graph = coo_matrix((np.ones(len(a)), (a, b)), shape=(n, n))
+    _count, labels = connected_components(graph, directed=False)
+    # Relabel by first face so labels follow face order (deterministic).
+    _, first = np.unique(labels, return_index=True)
+    rank = np.empty_like(first)
+    rank[np.argsort(first)] = np.arange(len(first))
+    return rank[labels]
 
 
 def _lookup(x: float, y: float, ring_index: dict[tuple[int, int], int], sampler: TerrainSampler) -> tuple[str, int, int]:

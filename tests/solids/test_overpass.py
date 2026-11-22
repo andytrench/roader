@@ -67,6 +67,7 @@ def test_body_list_and_provenance_ac_h6_fr_dm_3(model, meshes):
         assert m.id.startswith(f"{m.element_id}:{m.part}")
         assert m.closed == (m.part != "terrain")
     assert meshes[-1].part == "terrain"
+    assert all(m.element_id == "terrain" for m in meshes if m.layer == "L7")
 
 
 @pytest.mark.parametrize("index", range(20))
@@ -200,9 +201,17 @@ def test_void_under_deck_is_open_ac_h3_g3(model, meshes):
     assert checked > 100
 
 
-def test_terrain_conforms_fr_sg_6(model, meshes):
-    terrain = meshes[-1]
-    assert not terrain.closed and terrain.layer == "L7"
+def check_terrain(model, meshes: list[Mesh], tol: float) -> list[Mesh]:
+    """FR-SG-6 on any scene: one open, connected L7 mesh per piece; every open edge is on
+    the patch border or is a solid edge; no terrain inside a ground-contact footprint;
+    terrain plus footprints cover the patch with no gap; surface within tol of the grid."""
+    terrain = [m for m in meshes if m.part == "terrain"]
+    assert terrain and meshes[-len(terrain):] == terrain
+    ids = [m.id for m in terrain]
+    assert ids == (["terrain:terrain"] if len(terrain) == 1 else [f"terrain:terrain:{k}" for k in range(len(terrain))])
+    assert [(m.vertices[:, 0].min(), m.vertices[:, 1].min()) for m in terrain] == sorted(
+        (m.vertices[:, 0].min(), m.vertices[:, 1].min()) for m in terrain
+    )
     t = model.terrain
     x0, y0 = t.origin_x, t.origin_y
     x1, y1 = x0 + (t.nx - 1) * t.cell_m, y0 + (t.ny - 1) * t.cell_m
@@ -212,35 +221,73 @@ def test_terrain_conforms_fr_sg_6(model, meshes):
             pa, pb = tuple(m.vertices[a]), tuple(m.vertices[b])
             solid_edges.add((pa, pb))
             solid_edges.add((pb, pa))
-    e = mc.edges(terrain.faces)
-    keys, counts = np.unique(np.sort(e, axis=1), axis=0, return_counts=True)
-    assert counts.max() <= 2
     on_border = 0
-    for a, b in keys[counts == 1].tolist():
-        pa, pb = terrain.vertices[a], terrain.vertices[b]
-        border = any(
-            abs(pa[k] - v) < 1e-6 and abs(pb[k] - v) < 1e-6 for k, v in ((0, x0), (0, x1), (1, y0), (1, y1))
-        )
-        if border:
-            on_border += 1
-            continue
-        assert (tuple(pa), tuple(pb)) in solid_edges
+    for piece in terrain:
+        assert not piece.closed and piece.layer == "L7" and piece.element_id == "terrain"
+        assert mc.components(piece) == 1 and mc.vertex_fans(piece) == 0
+        assert mc.degeneracy(piece) == []
+        keys, counts = np.unique(np.sort(mc.edges(piece.faces), axis=1), axis=0, return_counts=True)
+        assert counts.max() <= 2
+        _, dcounts = np.unique(mc.edges(piece.faces), axis=0, return_counts=True)
+        assert dcounts.max() == 1  # consistent winding
+        for a, b in keys[counts == 1].tolist():
+            pa, pb = piece.vertices[a], piece.vertices[b]
+            border = any(
+                abs(pa[k] - v) < 1e-6 and abs(pb[k] - v) < 1e-6 for k, v in ((0, x0), (0, x1), (1, y0), (1, y1))
+            )
+            if border:
+                on_border += 1
+                continue
+            assert (tuple(pa), tuple(pb)) in solid_edges
+        v = piece.vertices
+        n = np.cross(v[piece.faces[:, 1]] - v[piece.faces[:, 0]], v[piece.faces[:, 2]] - v[piece.faces[:, 0]])
+        assert np.all(n[:, 2] > 0.0)
     assert on_border > 0
-    # No terrain inside a ground-contact footprint; the ground under the span stays.
-    tv = {tuple(r) for r in terrain.vertices.tolist()}
+    # No terrain inside a ground-contact footprint; the ground under a span stays.
+    tv = {tuple(r) for m in terrain for r in m.vertices.tolist()}
     footprints = []
     for m in _closed(meshes):
         if any(tuple(r) in tv for r in m.vertices.tolist()):
             footprints.append(unary_union([Polygon(tri[:, :2]) for tri in m.vertices[m.faces] if Polygon(tri[:, :2]).area > 1e-9]))
-    assert len(footprints) >= 10
-    fp = unary_union(footprints).buffer(-1e-6)
-    cent = terrain.vertices[terrain.faces].mean(axis=1)
-    lo, hi = np.array(fp.bounds[:2]), np.array(fp.bounds[2:])
+    fp = unary_union(footprints)
+    inner = fp.buffer(-1e-6)
+    cent = np.vstack([m.vertices[m.faces].mean(axis=1) for m in terrain])
+    lo, hi = np.array(inner.bounds[:2]), np.array(inner.bounds[2:])
     sel = np.all((cent[:, :2] >= lo) & (cent[:, :2] <= hi), axis=1)
-    assert not any(fp.contains(Point(p)) for p in cent[sel, :2])
+    assert not any(inner.contains(Point(p)) for p in cent[sel, :2])
+    area = 0.0
+    for m in terrain:
+        u = m.vertices[m.faces[:, 1], :2] - m.vertices[m.faces[:, 0], :2]
+        w = m.vertices[m.faces[:, 2], :2] - m.vertices[m.faces[:, 0], :2]
+        area += 0.5 * float(np.sum(u[:, 0] * w[:, 1] - u[:, 1] * w[:, 0]))
+    domain = Polygon([(x0, y0), (x1, y0), (x1, y1), (x0, y1)])
+    assert math.isclose(area + fp.intersection(domain).area, domain.area, rel_tol=1e-9)
+    # Merged far-field blocks stay within tol of the bilinear grid surface.
+    zgrid = np.asarray(t.z, dtype=float).reshape(t.ny, t.nx)
+    twist = 0.25 * np.abs(zgrid[:-1, :-1] - zgrid[:-1, 1:] - zgrid[1:, :-1] + zgrid[1:, 1:]).max()
+    for m in terrain:
+        gx, gy = (m.vertices[:, 0] - x0) / t.cell_m, (m.vertices[:, 1] - y0) / t.cell_m
+        on_grid = (np.abs(gx - np.round(gx)) < 1e-9) & (np.abs(gy - np.round(gy)) < 1e-9)
+        c = m.vertices[m.faces[on_grid[m.faces].all(axis=1)]].mean(axis=1)  # band triangles at footprints excluded
+        if len(c) == 0:
+            continue
+        fx, fy = (c[:, 0] - x0) / t.cell_m, (c[:, 1] - y0) / t.cell_m
+        i = np.clip(np.floor(fx).astype(int), 0, t.nx - 2)
+        j = np.clip(np.floor(fy).astype(int), 0, t.ny - 2)
+        tx, ty = fx - i, fy - j
+        zb = (zgrid[j, i] * (1 - tx) + zgrid[j, i + 1] * tx) * (1 - ty) + (zgrid[j + 1, i] * (1 - tx) + zgrid[j + 1, i + 1] * tx) * ty
+        assert np.abs(c[:, 2] - zb).max() <= tol + twist  # twist: error of splitting one grid cell
+    return terrain
+
+
+def test_terrain_conforms_fr_sg_6(model, meshes):
+    terrain = check_terrain(model, meshes, 0.01)
+    assert len(terrain) == 3  # the freeway embankments cross the whole patch
+    assert sum(len(m.faces) for m in terrain) < 20_000
     over = model.road(model.structures[0].carried_road)
     under_span = np.array([over.alignment.offset_point(250.9, 0.0), over.alignment.offset_point(230.0, 0.0)])
-    assert [len(h) for h in _surface_hits(terrain, under_span)] == [1, 1]
+    hits = [sum(len(h) for h in hs) for hs in zip(*[_surface_hits(m, under_span) for m in terrain], strict=True)]
+    assert hits == [1, 1]
 
 
 def test_determinism_ac_h5(model, meshes):

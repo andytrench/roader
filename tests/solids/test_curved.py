@@ -34,7 +34,7 @@ from roader.model import (
 from roader.solids import generate
 
 from . import meshcheck as mc
-from .test_overpass import _surface_hits
+from .test_overpass import _surface_hits, check_terrain
 
 TOL = 0.01
 OBS = Provenance(Source.MEASURED, 0.9)
@@ -45,7 +45,15 @@ def _pw(*pairs: tuple[float, float]) -> Piecewise:
     return Piecewise([Knot(s, v, OBS) for s, v in pairs])
 
 
-def curved_model() -> RoadModel:
+def _tilted(x: float, y: float) -> float:
+    return 98.0 + 0.004 * x - 0.003 * y
+
+
+def _rolling(x: float, y: float) -> float:
+    return 97.5 + 0.6 * math.sin(x / 17.0) * math.cos(y / 23.0) + 0.002 * x
+
+
+def curved_model(ground=_tilted) -> RoadModel:
     k = 1.0 / 120.0
     spec = [("line", 40.0, 0.0, 0.0), ("spiral", 50.0, 0.0, k), ("arc", 70.0, k, k), ("spiral", 50.0, k, 0.0), ("line", 40.0, 0.0, 0.0)]
     elements, s, x, y, h = [], 0.0, 0.0, 0.0, 0.3
@@ -93,7 +101,7 @@ def curved_model() -> RoadModel:
     ]
     cell = 2.0
     ox, oy, nx, ny = -60.0, -60.0, 141, 141
-    z = [98.0 + 0.004 * (ox + i * cell) - 0.003 * (oy + j * cell) for j in range(ny) for i in range(nx)]
+    z = [ground(ox + i * cell, oy + j * cell) for j in range(ny) for i in range(nx)]
     terrain = TerrainPatch(ox, oy, cell, nx, ny, z, OBS)
     unit = UnitRecord("curved", (0.0, 0.0, 0.0, 0.0), "test")
     frame = Frame("+proj=tmerc +lat_0=42 +lon_0=-72 +ellps=GRS80 +units=m", -72.0, 42.0)
@@ -173,6 +181,28 @@ def test_chord_tolerance_fr_sg_2(model, meshes):
                 continue  # the deck is wider than the pavement
             x, y = road.alignment.offset_point(v, sign * width(v))
             assert outline.distance(Point(x, y)) <= TOL
+
+
+def test_curved_terrain_fr_sg_6(model, meshes):
+    terrain = check_terrain(model, meshes, TOL)
+    assert len(terrain) == 1  # fills end inside the patch
+
+
+def test_rolling_terrain_fr_sg_6():
+    model = curved_model(_rolling)
+    meshes = generate(model, chord_tol_m=TOL)
+    for m in meshes:
+        if m.closed:
+            assert mc.solid_problems(m) == [], m.id
+    terrain = check_terrain(model, meshes, TOL)
+    for a in terrain:
+        for b in meshes:
+            if b.closed and mc.boxes_overlap(a, b):
+                assert mc.t_junctions(a, b) == 0 and mc.t_junctions(b, a) == 0, b.id
+    # Relief keeps fine cells; planar blocks still merge where the surface is flat enough.
+    n = sum(len(m.faces) for m in terrain)
+    t = model.terrain
+    assert 0 < n < 2 * (t.nx - 1) * (t.ny - 1)
 
 
 def test_curved_determinism_ac_h5(model, meshes):
