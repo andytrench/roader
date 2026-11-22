@@ -32,12 +32,16 @@ from roader.model.schema import Barrier, Crossing, DeckSpec, Flag, Structure, Su
 from roader.model.serialize import stable_id
 from roader.rules import RuleBook, era_of
 
-# Pending a rule (requested): pier cap width beyond the column width.
-CAP_WIDTH_EXTRA_M = 0.3
 OVERHANG_BAND_M = 3.0
 DECK_LEVEL_BELOW_M = 0.3
 DECK_LEVEL_ABOVE_M = 1.6
 GROUND_INSIDE_M = 3.0
+# FR-ST-5 / FR-RD-4: a deck face seen by the scanner beats the depth rule.
+FASCIA_BAND_M = 0.4
+FASCIA_TOP_M = 0.3
+FASCIA_BOTTOM_M = 4.0
+FASCIA_MIN_POINTS = 50
+FASCIA_COVERAGE = 0.3
 METHOD_CONFIDENCE = {"class17": 0.9, "sheet_break": 0.7, "class17_only": 0.5}
 
 
@@ -106,6 +110,38 @@ def _ground(drop: tuple[np.ndarray, np.ndarray, np.ndarray], road, s: float) -> 
     if vals.size == 0:
         return None
     return road.profile.z(s) + float(np.median(vals))
+
+
+def measured_depth(upper: RoadFit, ev: Evidence, s0: float, s1: float, overhang: float) -> tuple[float | None, int, float]:
+    """Deck depth from fascia returns: points in a thin band at the deck edge, below the deck surface.
+
+    Returns (depth or None, number of fascia returns, fraction of the span they cover).
+    Depth is the 95th percentile drop below the surface; None unless the returns cover
+    at least FASCIA_COVERAGE of the span in 2 m bins with FASCIA_MIN_POINTS in all.
+    """
+    road = upper.road
+    s, u, ok = upper.line.project(ev.xyz[:, :2], max_dist=30.0)
+    idx = np.flatnonzero(ok & (s >= s0 + 2.0) & (s <= s1 - 2.0))
+    if idx.size == 0:
+        return None, 0, 0.0
+    s, u, z = s[idx], u[idx], ev.xyz[idx, 2]
+    drops, stations = [], []
+    for sign, piece in ((1.0, road.cross_section.width_left), (-1.0, road.cross_section.width_right)):
+        edge = np.array([piece(float(v)) for v in s]) + overhang
+        band = np.abs(sign * u - edge) <= FASCIA_BAND_M
+        dz = np.array([road.profile.z(float(v)) for v in s[band]]) - z[band]
+        keep = (dz >= FASCIA_TOP_M) & (dz <= FASCIA_BOTTOM_M)
+        drops.append(dz[keep])
+        stations.append(s[band][keep])
+    d = np.concatenate(drops)
+    st = np.concatenate(stations)
+    if d.size == 0:
+        return None, 0, 0.0
+    bins = np.unique(np.floor(st / 2.0))
+    coverage = float(len(bins) * 2.0 / max(s1 - s0 - 4.0, 1.0))
+    if d.size < FASCIA_MIN_POINTS or coverage < FASCIA_COVERAGE:
+        return None, int(d.size), coverage
+    return float(np.percentile(d, 95.0)), int(d.size), coverage
 
 
 def parapet_fill(road, structure: Structure, existing: list[Barrier], rules: RuleBook) -> list[Barrier]:
@@ -205,9 +241,20 @@ def infer_structure(
     else:
         overhang, _ = rules.fill("deck.overhang", era=era)
         deck_flags.append("FR-XS-5:overhang_by_rule")
-    deck = DeckSpec(depth, slab_t, overhang, Provenance(Source.RULE, ratio_prov.confidence, rule_id=ratio_prov.rule_id, flags=deck_flags + ratio_prov.flags))
+    m_depth, n_fascia, coverage = measured_depth(upper, ev, extent.s_start, extent.s_end, overhang)
+    if m_depth is not None:
+        depth = m_depth
+        deck_prov = Provenance(Source.MEASURED, 0.6, n_points=n_fascia, observed_fraction=min(coverage, 1.0), flags=[*deck_flags, "FR-ST-5:depth_measured_from_fascia"])
+        ok, rule = rules.evaluate(f"superstructure.depth_ratio.{family}", depth / max_span, era=era)
+        if not ok:
+            deck_prov.flags.append(f"FR-RL-3:out_of_range:{rule.id}")
+    else:
+        deck_flags.append(f"FR-ST-5:fascia_returns:{n_fascia}:coverage:{coverage:.2f}")
+        deck_prov = Provenance(Source.RULE, ratio_prov.confidence, rule_id=ratio_prov.rule_id, flags=deck_flags + ratio_prov.flags)
+    deck = DeckSpec(depth, slab_t, overhang, deck_prov)
 
     cap_d, cap_prov = rules.fill("cap.depth", era=era)
+    cap_over, _ = rules.fill("cap.overhang", era=era)
     foot, foot_prov = rules.fill("footing.depth", era=era)
     per_col, _ = rules.fill("bent.width_per_column", era=era)
     deck_width = float(
@@ -233,7 +280,7 @@ def infer_structure(
                 n_columns=0 if kind == "abutment" else max(1, math.ceil(deck_width / per_col)),
                 column_width_m=0.0 if kind == "abutment" else col_w,
                 cap_depth_m=cap_d,
-                cap_width_m=col_w + CAP_WIDTH_EXTRA_M,
+                cap_width_m=col_w + 2.0 * cap_over,
                 footing_z=float(ground - foot),
                 prov=prov,
             )

@@ -174,6 +174,7 @@ Origin key:
 | `column.width` | * | * | 1.2 | 1 to 2 | m | yes | spec scale |
 | `bent.width_per_column` | * | * | 6 | 4 to 12 | m | yes | judgement |
 | `cap.depth` | * | * | 1.2 | 0.9 to 2 | m | yes | judgement |
+| `cap.overhang` | * | * | 0.15 | 0.1 to 0.6 | m | yes | judgement |
 | `abutment.backwall_height` | * | * | 1.8 | 1.2 to 3.5 | m | yes | judgement |
 | `footing.depth` | * | * | 1.5 | 1 to 3 | m | yes | judgement |
 | `parapet.height` | * | pre1970 | 0.8 | 0.6 to 1 | m | yes | judgement |
@@ -196,6 +197,9 @@ Meaning of the less obvious ids:
   that requires 16 ft. `clearance.vertical.urban` applies on all other urban routes.
 - `bent.width_per_column` is the deck width carried by each column, so the number
   of columns per bent is `ceil(deck_width / typical)`.
+- `cap.overhang` is how far a pier cap or abutment seat extends beyond the column
+  face on each side, along the carried road, so the cap width is
+  `column.width + 2 * cap.overhang`.
 - `structure.slab_max_span`: when no inventory record matches, a span below this
   defaults to the slab family, and a longer one to `multi_girder` (FR-ST-2).
 - `structure.review_span`: a maximum span at or above this sends the structure to

@@ -30,6 +30,16 @@ origin = "placeholder: engineering judgement, unverified"
 placeholder = true
 
 [[rule]]
+id = "cap.overhang"
+typical = 0.15
+low = 0.1
+high = 0.6
+unit = "m"
+origin = "placeholder: engineering judgement, unverified"
+placeholder = true
+note = "Pier cap and abutment seat beyond the column face on each side, along the carried road; cap width = column width + 2 x overhang."
+
+[[rule]]
 id = "abutment.backwall_height"
 typical = 1.8
 low = 1.2
