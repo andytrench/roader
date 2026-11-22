@@ -211,7 +211,8 @@ Meaning of the less obvious ids:
 
 ## Legacy constant map
 
-The pre-spec code in `src/roader/legacy/` has 36 tuning constants:
+The pre-spec code (formerly `src/roader/legacy/`, deleted after milestone 1) had
+36 tuning constants:
 
 - 27 module constants in `surface.py`
 - 6 module constants in `assign.py`
@@ -224,7 +225,7 @@ Each one is classified below:
 - **Tolerance** means an algorithm setting. It stays in code as a named constant of
   the new stage that needs it.
 
-Legacy code is not edited; it is deleted when milestone 1 passes (D-004).
+The legacy code was deleted when milestone 1 passed its gates (D-004).
 
 | Legacy constant | Value | Kind | Rule id, or new home |
 |---|---|---|---|

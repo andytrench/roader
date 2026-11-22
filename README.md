@@ -13,8 +13,10 @@ conventions are in [AGENTS.md](AGENTS.md).
 
 ## Status
 
-Milestone 1 (one rural freeway overpass, end to end) is in progress. See
-[docs/RND_PILOT.md](docs/RND_PILOT.md).
+Milestone 1 (one rural freeway overpass, end to end) passes every hard gate and
+accuracy target on real lidar at Laurel Street over I-190, West Boylston MA; its
+reference crossing list awaits human review. Milestone 2 (one full interchange)
+is in progress. See [docs/RND_PILOT.md](docs/RND_PILOT.md).
 
 ## Quick start
 
@@ -31,10 +33,15 @@ Roader ships no credentials or data. Each user supplies their own:
 
 - **Python and PDAL.** Python 3.11 or later and `pip install -e ".[dev]"`.
   PDAL is installed separately (conda-forge or a system package).
-- **Config.** Copy `configs/pilot.toml.example` to `configs/pilot.toml` and set
-  the bbox, CRS and paths for your area. `configs/*.toml` is not committed.
-- **USGS 3DEP lidar.** Public EPT, no account needed:
-  `pdal pipeline data/pilot/fetch_lidar.json` (edit `bounds` for your area).
+- **Unit config.** One file per site in `configs/units/` (bbox, frame, inputs).
+  Personal configs in `configs/*.toml` are not committed.
+- **USGS 3DEP lidar and OSM extracts.** Public, no account needed:
+  `python scripts/fetch_fixtures.py` fetches and pins the sites in
+  `tests/sites.yaml` into `data/fixtures/`.
+- **Build a unit.** `roader build --unit configs/units/<site>.toml --out DIR`
+  runs lidar and vectors through to gated exports in `DIR/published/<site>/`
+  (or `DIR/held/` if a hard gate fails). `tools/viewer/index.html` shows the
+  meshes with an optional lidar overlay (`points_sample.glb`).
 - **NAIP imagery (optional).** Requester-pays S3. You need your own AWS
   credentials (`aws configure` or the standard `AWS_*` environment variables)
   and you pay the transfer costs: `python scripts/fetch_naip.py`.
@@ -62,7 +69,7 @@ Data and outputs under `data/` and `cache/` are not committed.
 | `roader.assets` | LOD, UVs, materials, instancing, collision (stage 11) |
 | `roader.validate` | Solid checks, accuracy metrics, reports (stage 12) |
 | `roader.export` | glTF, USD, OpenDRIVE, CityJSON, native model (stage 12) |
-| `roader.legacy` | Frozen pre-spec pilot, removed after milestone 1 |
+| `roader.build` | `roader build`: one unit config to a published unit |
 
 ## Docs
 

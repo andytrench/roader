@@ -37,7 +37,7 @@ respect their terms (e.g. ODbL share-alike for OSM-derived *data* products).
 
 - `src/roader/` — library and CLI, one sub-package per spec area (`io`,
   `evidence`, `conflate`, `fit`, `complete`, `structures`, `rules`, `model`,
-  `solids`, `assets`, `validate`, `export`); `legacy` is the frozen pre-spec pilot
+  `solids`, `assets`, `validate`, `export`); `build` chains them for one unit
 - `configs/` — `*.example` config templates (local copies are not committed)
 - `data/` — local inputs/outputs (not committed)
 - `docs/` — model, pilot, licenses

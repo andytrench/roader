@@ -2,40 +2,17 @@
 
 from __future__ import annotations
 
-import json
 from pathlib import Path
 
 import click
 
 from roader import __version__
-from roader.legacy.config import load_pilot_config
-from roader.legacy.pipeline import run_pilot, scene_summary
 
 
 @click.group()
 @click.version_option(__version__, prog_name="roader")
 def main() -> None:
     """Road object reconstruction from LiDAR and NAIP (R&D)."""
-
-
-@main.command("pilot")
-@click.option(
-    "--config",
-    "config_path",
-    type=click.Path(path_type=Path, exists=True),
-    required=True,
-    help="Path to pilot TOML config",
-)
-def pilot_cmd(config_path: Path) -> None:
-    """Legacy pre-spec pilot (roader.legacy). Replaced in milestone 1."""
-    cfg = load_pilot_config(config_path)
-    click.echo(f"Roader pilot {cfg.name}")
-    click.echo(f"  lidar:  {cfg.lidar_path}")
-    click.echo(f"  output: {cfg.output_gpkg}")
-    scene = run_pilot(cfg)
-    summary = scene_summary(scene)
-    click.echo(json.dumps(summary, indent=2))
-    click.echo(f"Wrote {cfg.output_gpkg}")
 
 
 def _echo_gates(report) -> None:
