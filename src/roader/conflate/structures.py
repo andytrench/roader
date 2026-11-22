@@ -1,0 +1,211 @@
+"""Structure ends from data (FR-VC-4, FR-CR-3).
+
+Tagged bridge extents are ignored. Along each fitted road the ground just beyond
+both pavement edges is compared with the road surface: where the lowest returns
+in a band 1.5 to 4 m outside the edge are more than ``SEPARATION_M`` below the
+surface, the carrying sheet has left the ground and a void or a lower sheet is
+beside it. Each side gives a run; on a skewed bridge the two sides' runs are
+shifted by +-offset * tan(skew), so the centerline ends are their means.
+Returns classified as bridge deck (ASPRS 17) on the road surface give a second,
+sharper estimate; it is used when it agrees with the geometric run, since
+vendor classes are untrusted evidence on their own (FR-IN-3).
+"""
+
+from __future__ import annotations
+
+import math
+from dataclasses import dataclass
+
+import numpy as np
+
+from roader.evidence import Evidence
+from roader.fit.road import RoadFit
+
+STEP_M = 1.0
+BAND_INNER_M = 1.5
+BAND_OUTER_M = 4.0
+SEPARATION_M = 2.5
+BAND_PERCENTILE = 10.0
+BAND_MIN_POINTS = 4
+GAP_BRIDGE_M = 4.0  # elevated runs separated by less than this are one run
+MIN_STRUCTURE_M = 18.0
+DECK_CLASS = 17
+DECK_CLASS_MIN_POINTS = 3
+DECK_SURFACE_TOL_M = 0.5
+CLASS17_AGREE_M = 5.0
+
+
+@dataclass
+class StructureExtent:
+    road_id: str
+    s_start: float
+    s_end: float
+    method: str  # "class17" | "sheet_break" | "class17_only" | "rule"
+    geom: tuple[float, float] | None
+    class17: tuple[float, float] | None
+    one_sided: bool = False
+
+    @property
+    def length(self) -> float:
+        return self.s_end - self.s_start
+
+
+def _runs(mask: np.ndarray, s: np.ndarray, bridge: float, min_len: float, unknown: np.ndarray | None = None) -> list[tuple[float, float]]:
+    """Runs of True stations. Gaps up to ``bridge`` m, or gaps with no data at all
+    (``unknown``, e.g. a held-out block), do not end a run."""
+    out: list[list[float]] = []
+    idx = np.flatnonzero(mask)
+    for i in idx:
+        if out:
+            j = int(np.searchsorted(s, out[-1][1]))
+            gap_unknown = unknown is not None and bool(np.all(unknown[j + 1 : i]))
+            if s[i] - out[-1][1] <= bridge or gap_unknown:
+                out[-1][1] = s[i]
+                continue
+        out.append([s[i], s[i]])
+    return [(a, b) for a, b in out if b - a >= min_len]
+
+
+def side_drop(fit: RoadFit, ev: Evidence) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Stations and the ground drop beyond the left and right edges (negative = below), NaN if empty."""
+    road = fit.road
+    lp = fit.points
+    length = road.length
+    st = np.arange(0.0, length + 1e-9, STEP_M)
+    k = np.clip(np.rint(lp.s / STEP_M).astype(np.int64), 0, len(st) - 1)
+    xs = road.cross_section
+    wl = np.interp(lp.s, [kn.s for kn in xs.width_left.knots], [kn.value for kn in xs.width_left.knots])
+    wr = np.interp(lp.s, [kn.s for kn in xs.width_right.knots], [kn.value for kn in xs.width_right.knots])
+    zc = np.array([road.profile.z(float(v)) for v in st])
+    out = []
+    for sign, w in ((1.0, wl), (-1.0, wr)):
+        d = sign * lp.u - w
+        band = (d >= BAND_INNER_M) & (d <= BAND_OUTER_M)
+        kb, zb = k[band], lp.z[band]
+        drop = np.full(len(st), np.nan)
+        if kb.size:
+            order = np.lexsort((zb, kb))
+            kb, zb = kb[order], zb[order]
+            uk, start, cnt = np.unique(kb, return_index=True, return_counts=True)
+            q = zb[start + np.floor(BAND_PERCENTILE / 100.0 * (cnt - 1)).astype(np.int64)]
+            good = cnt >= BAND_MIN_POINTS
+            drop[uk[good]] = q[good] - zc[uk[good]]
+        out.append(drop)
+    return st, out[0], out[1]
+
+
+def deck_class_runs(fit: RoadFit, ev: Evidence) -> list[tuple[float, float]]:
+    road = fit.road
+    lp = fit.points
+    cls = ev.classification[lp.index]
+    xs = road.cross_section
+    wl = np.interp(lp.s, [kn.s for kn in xs.width_left.knots], [kn.value for kn in xs.width_left.knots])
+    wr = np.interp(lp.s, [kn.s for kn in xs.width_right.knots], [kn.value for kn in xs.width_right.knots])
+    on = (cls == DECK_CLASS) & (lp.u <= wl) & (lp.u >= -wr)
+    if on.sum() < DECK_CLASS_MIN_POINTS:
+        return []
+    idx = np.flatnonzero(on)
+    surf = np.array([road.surface_z(float(a), float(b)) for a, b in zip(lp.s[idx], lp.u[idx], strict=True)])
+    idx = idx[np.abs(lp.z[idx] - surf) <= DECK_SURFACE_TOL_M]
+    if idx.size < DECK_CLASS_MIN_POINTS:
+        return []
+    st = np.arange(0.0, road.length + 1e-9, STEP_M)
+    counts = np.bincount(np.clip(np.rint(lp.s[idx] / STEP_M).astype(np.int64), 0, len(st) - 1), minlength=len(st))
+    on_road = (lp.u <= wl) & (lp.u >= -wr)
+    any_pts = np.bincount(np.clip(np.rint(lp.s[on_road] / STEP_M).astype(np.int64), 0, len(st) - 1), minlength=len(st))
+    sparse = any_pts < 0.2 * max(float(np.median(any_pts[any_pts > 0])) if (any_pts > 0).any() else 0.0, 1.0)
+    runs = _runs(counts >= DECK_CLASS_MIN_POINTS, st, GAP_BRIDGE_M + 1.0, MIN_STRUCTURE_M * 0.5, sparse)
+    # Run ends at the outermost deck-class returns, not at the station grid.
+    out = []
+    for a, b in runs:
+        m = (lp.s[idx] >= a - STEP_M) & (lp.s[idx] <= b + STEP_M)
+        out.append((float(np.percentile(lp.s[idx][m], 0.5)), float(np.percentile(lp.s[idx][m], 99.5))))
+    return out
+
+
+def _side_runs(mask: np.ndarray, unknown: np.ndarray, st: np.ndarray) -> list[tuple[float, float, bool, bool]]:
+    """Elevated runs on one side with flags telling whether each end touches missing data."""
+    out = []
+    for a, b in _runs(mask, st, GAP_BRIDGE_M, 0.5 * MIN_STRUCTURE_M, unknown):
+        ia, ib = int(np.searchsorted(st, a)), int(np.searchsorted(st, b))
+        cen_a = ia == 0 or bool(unknown[max(ia - 1, 0)])
+        cen_b = ib >= len(st) - 1 or bool(unknown[min(ib + 1, len(st) - 1)])
+        out.append((a, b, cen_a, cen_b))
+    return out
+
+
+def _combine(left, right, offset: float, skew: float) -> tuple[float, float, bool]:
+    """Centerline ends from the two sides' runs.
+
+    A side run at lateral offset u sees the abutment line at s_c + u tan(skew)
+    (abutments parallel to the crossed road), so each uncensored side end gives
+    an estimate of the centerline end; censored ends (touching missing data) are
+    used only when nothing else is available.
+    """
+    shift = offset * math.tan(skew)
+    ends = []
+    for k in (0, 1):
+        good, poor = [], []
+        for run, sign in ((left, 1.0), (right, -1.0)):
+            if run is None:
+                continue
+            value = run[k] - sign * shift
+            (poor if run[2 + k] else good).append(value)
+        pick = good or poor
+        ends.append(float(np.mean(pick)))
+    return ends[0], ends[1], left is None or right is None
+
+
+def find_extents(fit: RoadFit, ev: Evidence, skews: list[tuple[float, float]] | None = None) -> list[StructureExtent]:
+    """Structure runs along one road. ``skews``: (station, skew) of crossings this road carries."""
+    st, drop_l, drop_r = side_drop(fit, ev)
+    elev_l = np.nan_to_num(drop_l, nan=0.0) < -SEPARATION_M
+    elev_r = np.nan_to_num(drop_r, nan=0.0) < -SEPARATION_M
+    runs_l = _side_runs(elev_l, np.isnan(drop_l), st)
+    runs_r = _side_runs(elev_r, np.isnan(drop_r), st)
+    xs = fit.road.cross_section
+    geom: list[tuple[float, float, bool]] = []
+    used_r: set[int] = set()
+    pairs = []
+    for run in runs_l:
+        partners = [j for j, other in enumerate(runs_r) if other[0] <= run[1] + GAP_BRIDGE_M and other[1] >= run[0] - GAP_BRIDGE_M]
+        used_r.update(partners)
+        if partners:
+            c = min(runs_r[j][0] for j in partners)
+            d = max(runs_r[j][1] for j in partners)
+            cen_c = runs_r[min(partners, key=lambda j: runs_r[j][0])][2]
+            cen_d = runs_r[max(partners, key=lambda j: runs_r[j][1])][3]
+            pairs.append((run, (c, d, cen_c, cen_d)))
+        else:
+            pairs.append((run, None))
+    for j, run in enumerate(runs_r):
+        if j not in used_r:
+            pairs.append((None, run))
+    for left, right in pairs:
+        a0 = min(r[0] for r in (left, right) if r is not None)
+        b0 = max(r[1] for r in (left, right) if r is not None)
+        mid = 0.5 * (a0 + b0)
+        skew = 0.0
+        if skews:
+            inside = [k for s, k in skews if a0 - 5.0 <= s <= b0 + 5.0]
+            skew = float(np.mean(inside)) if inside else 0.0
+        offset = 0.5 * (xs.width_left(mid) + xs.width_right(mid)) + 0.5 * (BAND_INNER_M + BAND_OUTER_M)
+        a, b, one = _combine(left, right, offset, skew)
+        if b - a >= MIN_STRUCTURE_M:
+            geom.append((a, b, one))
+    geom.sort()
+    deck = deck_class_runs(fit, ev)
+    out = []
+    used_deck: set[int] = set()
+    for a, b, one in geom:
+        match = [i for i, (c, d) in enumerate(deck) if c <= b and d >= a]
+        c17 = (min(deck[i][0] for i in match), max(deck[i][1] for i in match)) if match else None
+        used_deck.update(match)
+        if c17 and abs(c17[0] - a) <= CLASS17_AGREE_M and abs(c17[1] - b) <= CLASS17_AGREE_M:
+            out.append(StructureExtent(fit.road.id, c17[0], c17[1], "class17", (a, b), c17, one))
+        else:
+            out.append(StructureExtent(fit.road.id, a, b, "sheet_break", (a, b), c17, one))
+    for i, (c, d) in enumerate(deck):
+        if i not in used_deck and d - c >= MIN_STRUCTURE_M:
+            out.append(StructureExtent(fit.road.id, c, d, "class17_only", None, (c, d)))
+    return sorted(out, key=lambda e: e.s_start)
