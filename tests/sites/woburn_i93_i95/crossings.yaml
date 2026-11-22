@@ -1,0 +1,146 @@
+# AC-H2 hand-labeled crossing list for woburn_i93_i95 (I-93 / I-95 cloverleaf, plus
+# Washington Street over I-95 at the west edge of the AOI).
+#
+# status: draft, needs human review. Drafted 2026-11-22 from the pinned fixture
+# (lidar_sha256 16245328..., vector_sha256 7aaa5a26...), not from a site visit or
+# plans. Crossings are every plan intersection, without a shared node, between in-scope
+# OSM edges (roader.io.in_scope) where at least one edge is limited-access. A cloverleaf
+# has no ramp-over-ramp crossings; the only grade separations are the I-93 deck over
+# I-95 and the Washington Street deck over I-95.
+#
+# Method (unit frame, heights NAVD88 assumed, meters): upper surface = median z of
+# class 17 returns within 1.5 m of the crossing point. Lower surface = median z of
+# class 2 returns within 1.5 m of the lower centerline at the first stations on either
+# side clear of class 17 (no class 17 within 4 m) plus 3 m, linearly interpolated to the
+# crossing. No lidar returns reach the pavement under any deck, so every lower value is
+# interpolated: across about 75 m under the skewed I-93 deck, about 31 m under
+# Washington Street. dz is upper minus lower (FR-CR-1), to 0.1 m. skew_deg is from
+# perpendicular, between the OSM centerlines. I-95 is signed north = east here.
+#
+# Review checklist: confirm the vertical order; confirm the I-93 deck is one structure
+# (or twin superstructures with a closed median joint); decide whether the NE loop's
+# merge taper (way 9522025, drawn about 1 m from the I-95 southbound centerline under
+# the deck) is a separate crossing or part of I-95 southbound; confirm deck ends.
+
+site_id: woburn_i93_i95
+status: draft, needs human review
+crossings:
+  - id: i93_sb_over_i95_nb
+    upper: {osm_way: 48847133, name: I-93 southbound, highway: motorway}
+    lower: {osm_way: 932920636, name: I-95 northbound, highway: motorway}
+    lonlat: [-71.119012, 42.502165]
+    upper_z_m: 37.8
+    lower_z_m: 31.6
+    dz_m: 6.2
+    skew_deg: 29
+    structure: i93_over_i95
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+  - id: i93_sb_over_i95_sb
+    upper: {osm_way: 48847133, name: I-93 southbound, highway: motorway}
+    lower: {osm_way: 1090762636, name: I-95 southbound, highway: motorway}
+    lonlat: [-71.119075, 42.502336]
+    upper_z_m: 38.0
+    lower_z_m: 31.5
+    dz_m: 6.5
+    skew_deg: 30
+    structure: i93_over_i95
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+  - id: i93_nb_over_i95_nb
+    upper: {osm_way: 48847135, name: I-93 northbound, highway: motorway}
+    lower: {osm_way: 932920636, name: I-95 northbound, highway: motorway}
+    lonlat: [-71.118645, 42.502097]
+    upper_z_m: 37.6
+    lower_z_m: 31.7
+    dz_m: 5.9
+    skew_deg: 28
+    structure: i93_over_i95
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+  - id: i93_nb_over_i95_sb
+    upper: {osm_way: 48847135, name: I-93 northbound, highway: motorway}
+    lower: {osm_way: 1099001790, name: I-95 southbound, highway: motorway}
+    lonlat: [-71.118704, 42.502266]
+    upper_z_m: 37.8
+    lower_z_m: 31.7
+    dz_m: 6.1
+    skew_deg: 29
+    structure: i93_over_i95
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+  - id: i93_nb_over_ne_loop
+    upper: {osm_way: 48847135, name: I-93 northbound, highway: motorway}
+    lower: {osm_way: 9522025, name: NE loop (I-93 NB to I-95 SB, merge taper), highway: motorway_link}
+    lonlat: [-71.118707, 42.502275]
+    upper_z_m: 37.8
+    lower_z_m: 31.6
+    dz_m: 6.2
+    skew_deg: 21
+    structure: i93_over_i95
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+  - id: washington_over_i95_nb
+    upper: {osm_way: 74585246, name: Washington Street, highway: secondary}
+    lower: {osm_way: 74585199, name: I-95 northbound, highway: motorway}
+    lonlat: [-71.126453, 42.502792]
+    upper_z_m: 36.2
+    lower_z_m: 30.2
+    dz_m: 6.0
+    skew_deg: 2
+    structure: washington_over_i95
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+  - id: washington_over_i95_sb
+    upper: {osm_way: 74585246, name: Washington Street, highway: secondary}
+    lower: {osm_way: 1090778611, name: I-95 southbound, highway: motorway}
+    lonlat: [-71.126468, 42.502992]
+    upper_z_m: 36.4
+    lower_z_m: 30.5
+    dz_m: 5.9
+    skew_deg: 2
+    structure: washington_over_i95
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+  - id: washington_over_i95_nb_onramp
+    upper: {osm_way: 74585246, name: Washington Street, highway: secondary}
+    lower: {osm_way: 9589509, name: Washington Street on-ramp to I-95 northbound, highway: motorway_link}
+    lonlat: [-71.126449, 42.502739]
+    upper_z_m: 36.2
+    lower_z_m: 30.0
+    dz_m: 6.1
+    skew_deg: 7
+    structure: washington_over_i95
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+
+# Draft AC-A5 reference: deck start and end along each carried centerline, in the
+# direction of the OSM way. Method: class 17 returns within 1.0 m of the centerline
+# (OSM way extended through same-road neighbors) projected to stations; the deck is the
+# run of stations containing the crossing with no gap over 3 m. osm_bridge_length_m is
+# the length of the OSM bridge=yes ways along the same centerline, for comparison.
+structure_ends:
+  status: draft, needs human review
+  structures:
+    - id: i93_over_i95
+      carries: [48847133, 1481276626, 1481276627, 48847135]
+      over: [932920636, 1090762636, 1099001790, 9522025]
+      note: >-
+        One class 17 sheet spans both I-93 carriageways (continuous across the median,
+        no gap); a parallelogram whose end lines run parallel to I-95, skew about 29 deg.
+        The I-93 southbound to Peabody ramp diverges on the deck (ways 1481276626, 1481276627).
+      ends:
+        - along: 48847133
+          start_lonlat: [-71.119178, 42.502612]
+          end_lonlat: [-71.118914, 42.501891]
+          length_m: 82.9
+          osm_bridge_length_m: 73.7
+        - along: 48847135
+          start_lonlat: [-71.118557, 42.501830]
+          end_lonlat: [-71.118805, 42.502534]
+          length_m: 80.8
+          osm_bridge_length_m: 67.3
+    - id: washington_over_i95
+      carries: [74585246]
+      over: [74585199, 1090778611, 9589509]
+      note: >-
+        Class 17 deck about 57 m long; the OSM bridge way (88.7 m) overruns it by about
+        12 m at the south end and 20 m at the north end.
+      ends:
+        - along: 74585246
+          start_lonlat: [-71.126440, 42.502622]
+          end_lonlat: [-71.126479, 42.503131]
+          length_m: 56.7
+          osm_bridge_length_m: 88.7

@@ -1,0 +1,20 @@
+# Milestone 2 unit: I-93 / I-95 (MA 128) cloverleaf, Woburn, MA (tests/sites.yaml).
+# Hashes are the pins written by scripts/fetch_fixtures.py (FR-PL-3, D-008).
+
+[unit]
+site_id = "woburn_i93_i95"
+aoi_lonlat = [-71.1278, 42.4974, -71.1093, 42.5079]
+imagery_enabled = false
+
+[lidar]
+path = "data/fixtures/woburn_i93_i95/lidar.laz"
+name = "MA_CentralEastern_1_2021"
+year = 2021
+quality_level = "QL1"
+sha256 = "16245328445268f77ddc7709374fd43c51b653ada2d43cfce5dfc9e471eff886"
+
+[vectors.osm]
+enabled = true
+path = "data/fixtures/woburn_i93_i95/osm.json"
+license = "ODbL-1.0"
+sha256 = "7aaa5a2626be67728e6836493150edd6ca952b5e68d2f643d6bc208235d4b127"

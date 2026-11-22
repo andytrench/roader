@@ -11,6 +11,7 @@ from roader.model.schema import LidarCollection
 
 ROOT = Path(__file__).resolve().parents[2]
 M1 = "wboylston_laurel_i190"
+M2 = "woburn_i93_i95"
 
 CONFIG = """
 [unit]
@@ -63,13 +64,19 @@ def test_fr_pl_3_pin_mismatch_raises(tmp_path):
         build_unit_record(cfg, [])
 
 
-def test_m1_unit_config_matches_sites_yaml():
-    cfg = load_unit_config(ROOT / "configs" / "units" / f"{M1}.toml")
-    sites = {s["id"]: s for s in yaml.safe_load((ROOT / "tests" / "sites.yaml").read_text())["sites"]}
-    site = sites[M1]
-    assert cfg.site_id == M1
+def _sites():
+    return {s["id"]: s for s in yaml.safe_load((ROOT / "tests" / "sites.yaml").read_text())["sites"]}
+
+
+@pytest.mark.parametrize("site_id", [M1, M2])
+def test_unit_config_matches_sites_yaml(site_id):
+    cfg = load_unit_config(ROOT / "configs" / "units" / f"{site_id}.toml")
+    site = _sites()[site_id]
+    assert cfg.site_id == site_id
     assert list(cfg.aoi_lonlat) == site["aoi_lonlat"]
     assert cfg.lidar[0].sha256 == site["lidar_sha256"]
+    assert cfg.lidar[0].name == site["lidar"]["project"]
+    assert cfg.lidar[0].quality_level == site["lidar"]["quality_level"]
     assert cfg.vectors["osm"].sha256 == site["vector_sha256"]
     assert cfg.vectors["osm"].enabled and not cfg.imagery_enabled
     assert cfg.lidar[0].path == ROOT / site["lidar_path"]
@@ -79,27 +86,61 @@ def test_sites_yaml_lists_all_spec_classes():
     doc = yaml.safe_load((ROOT / "tests" / "sites.yaml").read_text())
     classes = {c["class"]: c for c in doc["classes"]}
     assert len(classes) == 12
-    site_ids = {s["id"] for s in doc["sites"]}
+    sites = {s["id"]: s for s in doc["sites"]}
     for c in classes.values():
-        assert c["status"] in ("assigned", "unassigned")
-        assert (c["status"] == "assigned") == bool(c.get("sites"))
-        assert set(c.get("sites", [])) <= site_ids
+        assert c["status"] in ("assigned", "shortlisted", "unassigned")
+        assert (c["status"] == "unassigned") == (not c.get("sites"))
+        assert set(c.get("sites", [])) <= set(sites)
+        for sid in c.get("sites", []):
+            assert sites[sid]["class"] == c["class"]
+            assert (sites[sid].get("status") == "shortlisted") == (c["status"] == "shortlisted")
     for site in doc["sites"]:
         assert site["class"] in classes
-        assert len(site["aoi_lonlat"]) == 4
-        for key in ("project", "ept", "year", "quality_level", "horizontal_crs", "vertical_crs"):
+        w, s, e, n = site["aoi_lonlat"]
+        assert w < e and s < n
+        if "crossing_lonlat" in site:
+            lon, lat = site["crossing_lonlat"]
+            assert w < lon < e and s < lat < n
+        for key in ("project", "ept", "year", "quality_level", "horizontal_crs", "vertical_crs", "density_pts_m2"):
             assert key in site["lidar"]
         assert site["vectors"]["license"]
-    m1 = [s for s in doc["sites"] if s["milestone"] == 1]
-    assert [s["class"] for s in m1] == ["simple_overpass_rural_freeway"]
-    assert len(m1[0]["lidar_sha256"]) == 64 and len(m1[0]["vector_sha256"]) == 64
+        if site.get("status") == "shortlisted":
+            assert site["lidar_sha256"] == "" and site["vector_sha256"] == "" and "crossings" not in site
+            assert site["lidar"]["density_pts_m2"] > 0 and 17 in site["lidar"]["classes_seen"]
+        else:
+            assert len(site["lidar_sha256"]) == 64 and len(site["vector_sha256"]) == 64
+            assert (ROOT / site["crossings"]).exists()
+    by_milestone = {m: [s["class"] for s in doc["sites"] if s["milestone"] == m] for m in (1, 2)}
+    assert by_milestone[1] == ["simple_overpass_rural_freeway"]
+    assert by_milestone[2] == ["cloverleaf_interchange", "four_or_five_level_stack"]
 
 
-def test_ac_h2_crossing_list_present():
-    doc = yaml.safe_load((ROOT / "tests" / "sites" / M1 / "crossings.yaml").read_text())
-    assert doc["site_id"] == M1
+@pytest.mark.parametrize("site_id", [M1, M2])
+def test_ac_h2_crossing_list_present(site_id):
+    site = _sites()[site_id]
+    doc = yaml.safe_load((ROOT / site["crossings"]).read_text())
+    assert doc["site_id"] == site_id
     assert doc["status"].startswith("draft")
     assert doc["crossings"]
+    w, s, e, n = site["aoi_lonlat"]
+    structures = {st["id"]: st for st in doc.get("structure_ends", {}).get("structures", [])}
+    if structures:
+        assert doc["structure_ends"]["status"].startswith("draft")
+    ids = [c["id"] for c in doc["crossings"]]
+    assert len(ids) == len(set(ids))
     for c in doc["crossings"]:
         assert c["upper"] and c["lower"] and c["dz_m"] > 0
-        assert len(c["lonlat"]) == 2
+        assert isinstance(c["upper"]["osm_way"], int) and isinstance(c["lower"]["osm_way"], int)
+        assert c["dz_m"] == pytest.approx(c["upper_z_m"] - c["lower_z_m"], abs=0.11)
+        assert 0 <= c["skew_deg"] <= 90
+        lon, lat = c["lonlat"]
+        assert w < lon < e and s < lat < n
+        if structures:
+            st = structures[c["structure"]]
+            assert c["upper"]["osm_way"] in st["carries"] and c["lower"]["osm_way"] in st["over"]
+    for st in structures.values():
+        assert st["ends"]
+        for end in st["ends"]:
+            assert end["along"] in st["carries"] and end["length_m"] > 0
+            for lon, lat in (end["start_lonlat"], end["end_lonlat"]):
+                assert w < lon < e and s < lat < n

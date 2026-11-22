@@ -6,6 +6,10 @@
 #
 # aoi_lonlat is [west, south, east, north] in WGS84 degrees.
 # lidar.density_pts_m2 is all returns in the AOI after noise/withheld removal.
+#
+# A class or site with status: shortlisted has its location and lidar coverage
+# confirmed from the EPT metadata and a point count over a sample window, but no
+# fixture yet: empty hashes, and fetch_fixtures.py skips it unless named with --site.
 
 classes:
   - class: simple_overpass_rural_freeway
@@ -15,7 +19,8 @@ classes:
     status: assigned
     sites: [woburn_i93_i95]
   - class: four_or_five_level_stack
-    status: unassigned
+    status: shortlisted
+    sites: [dallas_high_five_i635_us75]
   - class: long_urban_viaduct
     status: unassigned
   - class: twin_carriageways_different_elevations
@@ -73,8 +78,16 @@ sites:
     class: cloverleaf_interchange
     milestone: 2
     description: >-
-      I-93 / I-95 (MA 128) cloverleaf interchange in Woburn, MA. The pre-spec pilot AOI.
-    aoi_lonlat: [-71.150, 42.503, -71.125, 42.517]
+      I-93 / I-95 (MA 128) full cloverleaf where Woburn, Reading and Stoneham MA meet;
+      I-93 crosses over I-95 at about (-71.1189, 42.5022). Four loops, four outer ramps,
+      no collector-distributor roads. The AOI is the extent of every ramp of the
+      interchange (gores at lon -71.1250 / -71.1105, lat 42.4983 / 42.5065) plus
+      Washington Street over I-95 (about 140 m west of the westernmost gore, part of
+      the next interchange), with about 100 m margin. West Street under I-93 (about
+      300 m north of the north gore) is outside. The pre-spec pilot AOI
+      [-71.150, 42.503, -71.125, 42.517] missed the interchange and is not used.
+    aoi_lonlat: [-71.1278, 42.4974, -71.1093, 42.5079]
+    crossing_lonlat: [-71.1189, 42.5022]
     lidar:
       project: MA_CentralEastern_1_2021
       ept: https://s3-us-west-2.amazonaws.com/usgs-lidar-public/MA_CentralEastern_1_2021/ept.json
@@ -82,11 +95,55 @@ sites:
       quality_level: QL1
       horizontal_crs: EPSG:3857
       vertical_crs: NAVD88 (assumed; not declared in the EPT/LAS header)
-      density_pts_m2: null
+      collected: 2021-03-20 to 2021-04-24 (USGS WESM, MA_CentralEastern_2021_B21)
+      density_pts_m2: 15.9
+      classes_seen: [1, 2, 3, 4, 5, 6, 7, 17, 18]
+      class_17_points: 84323
+      point_count: 28265339
+      laz_bytes: 149027034
+      older_vintage: >-
+        EPT MA_NE_CMGP_Sandy_Z19_A1_2015 also covers the AOI (WESM
+        New_England_CMGP_SANDY_LiDAR, QL2, collected 2013-11-16 to 2014-12-31); not fetched
     vectors:
       source: osm
       license: ODbL-1.0
       path: data/fixtures/woburn_i93_i95/osm.json
     lidar_path: data/fixtures/woburn_i93_i95/lidar.laz
+    crossings: tests/sites/woburn_i93_i95/crossings.yaml
+    lidar_sha256: "16245328445268f77ddc7709374fd43c51b653ada2d43cfce5dfc9e471eff886"
+    vector_sha256: "7aaa5a2626be67728e6836493150edd6ca952b5e68d2f643d6bc208235d4b127"
+
+  - id: dallas_high_five_i635_us75
+    class: four_or_five_level_stack
+    milestone: 2
+    status: shortlisted
+    description: >-
+      The High Five: I-635 (LBJ Freeway, with TEXpress managed lanes) / US 75 (Central
+      Expressway) five-level stack in Dallas, TX. OSM tags direct connectors at layers 3
+      to 5 over the two mainlines and the frontage roads. The AOI is the extent of the
+      elevated connectors (layer >= 3) of this interchange plus margin; the TEXpress
+      connectors running further southeast along I-635 are outside.
+      Runner-up: Judge Harry Pregerson Interchange, I-105 / I-110, Los Angeles CA
+      (-118.2806, 33.9288), EPT CA_LosAngeles_1_B23 (WESM CA_LosAngeles_B23, QL1,
+      collected 2023-01-08 to 2024-01-07), 15.9 pts/m2 over a 300 m window, class 17 present.
+    aoi_lonlat: [-96.7740, 32.9180, -96.7550, 32.9300]
+    crossing_lonlat: [-96.7655, 32.9240]
+    lidar:
+      project: TX_Pecos_Dallas_B3_2018
+      ept: https://s3-us-west-2.amazonaws.com/usgs-lidar-public/TX_Pecos_Dallas_B3_2018/ept.json
+      year: 2019
+      quality_level: QL2
+      horizontal_crs: EPSG:3857
+      vertical_crs: NAVD88 (assumed; not declared in the EPT metadata)
+      collected: 2019-03-16 to 2019-07-12 (USGS WESM, TX_Pecos_Dallas_2018_D19)
+      ept_points: 42113131074
+      density_pts_m2: 8.9  # 300 m x 300 m window at crossing_lonlat, classes 7 and 18 removed
+      classes_seen: [1, 2, 7, 17, 18]  # same window
+      class_17_points: 216548  # same window
+    vectors:
+      source: osm
+      license: ODbL-1.0
+      path: data/fixtures/dallas_high_five_i635_us75/osm.json
+    lidar_path: data/fixtures/dallas_high_five_i635_us75/lidar.laz
     lidar_sha256: ""
     vector_sha256: ""

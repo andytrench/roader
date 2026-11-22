@@ -1,6 +1,6 @@
 """Download pinned test-site inputs into data/fixtures/<site_id>/ (FR-PL-3, D-008).
 
-For each site in tests/sites.yaml (or one given by --site):
+For each site in tests/sites.yaml that is not shortlisted (or one given by --site):
 
 - lidar.laz: the site AOI cropped from the 3DEP EPT at full resolution, all
   dimensions forwarded, via the PDAL CLI.
@@ -170,6 +170,8 @@ def main(argv: list[str] | None = None) -> int:
         sites = [s for s in sites if s["id"] == args.site]
         if not sites:
             parser.error(f"unknown site {args.site}")
+    else:
+        sites = [s for s in sites if s.get("status") != "shortlisted"]
     for site in sites:
         fetch_site(site, args.force)
     return 0
