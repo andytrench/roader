@@ -47,7 +47,7 @@ GPL CLIs).
 | Source | Terms | Role |
 |---|---|---|
 | OpenStreetMap | ODbL; attribute "© OpenStreetMap contributors" | Centerlines, tags (pinned extracts in `data/fixtures/`; the M1 site's ways are a MassGIS import) |
-| USGS 3DEP LiDAR | Public domain; credit "USGS 3D Elevation Program" | Point evidence (M1 and M2 Woburn: MA_CentralEastern_1_2021; M2 stack shortlist: TX_Pecos_Dallas_B3_2018) |
+| USGS 3DEP LiDAR | Public domain; credit "USGS 3D Elevation Program" | Point evidence (M1 and M2 Woburn: MA_CentralEastern_1_2021; M2 stack: TX_Pecos_Dallas_B3_2018) |
 | USGS WESM index | Public domain | Lookup of lidar quality level and collection dates for site selection |
 | usgs-lidar EPT coverage index (`resources.geojson`, public AWS bucket) | Public data | Lookup of EPT project coverage; nothing vendored |
 | NAIP | USDA — check current redistribution rules | Imagery cues |

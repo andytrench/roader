@@ -1,4 +1,4 @@
-"""L6 junction areas from a planar partition of the road edge lines (FR-SG-3, AC-H4, D-045).
+"""L6 junction areas from a planar partition of the road edge lines (FR-SG-3, AC-H4, D-046).
 
 Where a ramp leaves or joins another road, or a road ends on another road's
 pavement, independently swept roads overlap. Each such place becomes one
@@ -15,7 +15,7 @@ junction area that replaces the overlapping sweeps:
    neighbouring seams closed by a straight line across it.
 4. Lifting: each seam stores a patch of its road's surface, and lifted sections
    of every participant sit inside the area; ``JunctionArea.surface_z`` blends
-   them (D-045), so elevation and slope match each road at its seam.
+   them (D-046), so elevation and slope match each road at its seam.
 
 Junction areas never touch a structure: a node whose intervals reach a deck or a
 support footprint is flagged and left to the road sweeps.
@@ -428,7 +428,7 @@ def _gore_closed(path, start, end, union: Polygon) -> list[tuple[float, float]]:
 
 
 def _patch(road: Road, s: float, side: int) -> JunctionSeam:
-    """Road surface at s lifted into a seam patch; derivatives taken on the junction side (D-045)."""
+    """Road surface at s lifted into a seam patch; derivatives taken on the junction side (D-046)."""
     xs = road.cross_section
     toward = 1.0 if side >= 0 else -1.0
     h = DERIV_STEP_M

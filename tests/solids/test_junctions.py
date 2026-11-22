@@ -1,4 +1,4 @@
-"""L6 junction areas on the synthetic diverge (FR-SG-3, AC-H4, FR-SV-1..7, AC-H1, AC-H5, AC-H6, D-045)."""
+"""L6 junction areas on the synthetic diverge (FR-SG-3, AC-H4, FR-SV-1..7, AC-H1, AC-H5, AC-H6, D-046)."""
 
 from __future__ import annotations
 
@@ -84,7 +84,7 @@ def test_fr_sg_3_no_junction_where_roads_only_cross():
     assert areas == [] and flags == []
 
 
-# ---------------------------------------------------------------- lifted surface (AC-H4, D-045)
+# ---------------------------------------------------------------- lifted surface (AC-H4, D-046)
 
 
 def test_ac_h4_junction_seams_match_elevation_and_slope(model):
@@ -131,7 +131,7 @@ def test_ac_h5_junctions_round_trip_canonically(model):
 
 
 def test_old_model_without_patches_loads():
-    """Models written before D-045: seams without patch fields load; the surface says it is missing."""
+    """Models written before D-046: seams without patch fields load; the surface says it is missing."""
     plain = json.loads(dumps(diverge_model()))
     for jn in plain["junctions"]:
         jn.pop("sections")

@@ -107,6 +107,7 @@ def build_unit(
     val3dity_exe: str | None = None,
     points_overlay: bool = True,
     profile: str = "analytic",
+    lods: bool = True,
 ) -> tuple[RoadModel, GateReport, dict[str, Path]]:
     """Build, gate and publish one unit. Returns the model, the gate report and export paths.
 
@@ -154,6 +155,7 @@ def build_unit(
         measured=measured,
         val3dity_exe=val3dity_exe,
         profile=profile,
+        lods=lods,
     )
     if points_overlay:
         paths["points"] = write_points_glb(

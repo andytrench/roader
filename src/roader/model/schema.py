@@ -287,7 +287,7 @@ class JunctionSeam:
     """Where a junction area meets a road sweep: station s, offsets u0 < u1 on that road (FR-SG-3, AC-H4).
 
     The remaining fields lift the road's surface at the seam into a local patch
-    (D-045), so the area's surface is a function of the stored model alone: plan
+    (D-046), so the area's surface is a function of the stored model alone: plan
     reference point and heading of the road at s, its curvature, elevation, grade
     and grade rate, cross slopes and their rates along s, pavement thickness, all
     taken on the junction side of s. ``z`` None: written before the patch existed.
@@ -339,13 +339,13 @@ class JunctionSeam:
 
     def distance(self, x: float, y: float) -> float:
         """Blend distance to the section line from u0 to u1: along the road, plus lateral overshoot
-        weighted by JUNCTION_LATERAL_WEIGHT, so a patch speaks mainly for its own pavement (D-045)."""
+        weighted by JUNCTION_LATERAL_WEIGHT, so a patch speaks mainly for its own pavement (D-046)."""
         t, u = self.local(x, y)
         excess = max(self.u0 - u, 0.0, u - self.u1)
         return math.hypot(t, JUNCTION_LATERAL_WEIGHT * excess)
 
 
-JUNCTION_IDW_POWER = 3.0  # D-045: weights 1/d^3 give each seam its own value and slope
+JUNCTION_IDW_POWER = 3.0  # D-046: weights 1/d^3 give each seam its own value and slope
 JUNCTION_LATERAL_WEIGHT = 4.0
 JUNCTION_EDGE_TOL_M = 0.01  # surface_z answers this far outside the outline
 
@@ -379,7 +379,7 @@ class JunctionArea:
     ``outline`` is the plan polygon (counter-clockwise, unit frame). Its surface is
     lifted from the adjoining roads, so elevation and slope match at every seam:
     an inverse-distance blend of the seam patches and of lifted interior
-    ``sections`` of the roads it covers (D-045).
+    ``sections`` of the roads it covers (D-046).
     """
 
     id: str
@@ -389,7 +389,7 @@ class JunctionArea:
     kind: str = "gore"  # gore | merge | diverge | intersection
     seams: list[JunctionSeam] = field(default_factory=list)
     holes: list[list[tuple[float, float]]] = field(default_factory=list)
-    sections: list[JunctionSeam] = field(default_factory=list)  # lifted road sections inside the area (D-045)
+    sections: list[JunctionSeam] = field(default_factory=list)  # lifted road sections inside the area (D-046)
 
     def contains(self, x: float, y: float, tol: float = JUNCTION_EDGE_TOL_M) -> bool:
         rings = [list(self.outline), *[list(h) for h in self.holes]]
@@ -401,7 +401,7 @@ class JunctionArea:
     def _blend(self, x: float, y: float, value) -> float:
         patches = [*self.seams, *self.sections]
         if not patches or any(p.z is None for p in patches):
-            raise ValueError(f"junction {self.id}: no lifted surface (L6 patches, D-045)")
+            raise ValueError(f"junction {self.id}: no lifted surface (L6 patches, D-046)")
         num = den = 0.0
         for p in patches:
             d = p.distance(x, y)

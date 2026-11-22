@@ -211,7 +211,7 @@ def run_pipeline(
     # Stage 8 terrain after the clearance refit, so caps and soffits are final (FR-OC-3).
     model.terrain = complete_terrain(fit_points, model, rules)
     seat_supports(model, rules)
-    # L6 areas lifted from the canonical roads, so they match the sweeps of the saved model (FR-SG-3, D-043, D-045).
+    # L6 areas lifted from the canonical roads, so they match the sweeps of the saved model (FR-SG-3, D-043, D-046).
     model.junctions, junction_flags = build_junctions(loads(dumps(dataclasses.replace(model, terrain=None))))
     flags.extend(junction_flags)
     candidates = unmatched_sheets(ev, fits)

@@ -2,7 +2,7 @@
 
 Links with seam stations and junction areas with a surface are milestone 2
 contracts. Most checks run on test-local stand-ins with the same fields; the
-contract tests at the end run on the schema and the synthetic diverge (D-045).
+contract tests at the end run on the schema and the synthetic diverge (D-046).
 """
 
 from __future__ import annotations
@@ -236,7 +236,7 @@ def test_junction_side_from_outline_at_road_start(model):
 
 
 def test_junction_without_lifted_surface_fails(model):
-    """A JunctionArea from before the D-045 patches has seams but no surface: its seams fail."""
+    """A JunctionArea from before the D-046 patches has seams but no surface: its seams fail."""
     eb, x, y, _h = _eb_end(model)
     outline = [(x - 20.0, y - 6.0), (x, y - 6.0), (x, y + 6.0), (x - 20.0, y + 6.0)]
     seam = JunctionSeam(eb.id, eb.length - 20.0, -5.5, 5.5, side=1)

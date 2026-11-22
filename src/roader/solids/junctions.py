@@ -1,4 +1,4 @@
-"""L6 junction solids conforming with the road sweeps (FR-SG-3, FR-SV-7, D-045).
+"""L6 junction solids conforming with the road sweeps (FR-SG-3, FR-SV-7, D-046).
 
 A junction area replaces the road bodies over each participant's station interval:
 pavement, embankment and barrier cells of the road grid inside the interval are
@@ -50,7 +50,7 @@ def zones(model: RoadModel) -> dict[str, list[tuple[float, float]]]:
             lo = [sm.s for sm in jn.seams if sm.road_id == rid and sm.side > 0]
             hi = [sm.s for sm in jn.seams if sm.road_id == rid and sm.side < 0]
             if any(sm.side == 0 for sm in jn.seams if sm.road_id == rid):
-                raise ValueError(f"junction {jn.id}: seam on {rid} has no side (D-045)")
+                raise ValueError(f"junction {jn.id}: seam on {rid} has no side (D-046)")
             a = min(lo) if lo else 0.0
             b = max(hi) if hi else lengths[rid]
             if b - a <= STATION_MERGE_M:

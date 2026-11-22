@@ -121,12 +121,12 @@ def test_ac_h2_crossing_list_present(site_id):
     site = _sites()[site_id]
     doc = yaml.safe_load((ROOT / site["crossings"]).read_text())
     assert doc["site_id"] == site_id
-    assert doc["status"].startswith("draft")
+    assert doc["status"].startswith(("draft", "reviewed"))
     assert doc["crossings"]
     w, s, e, n = site["aoi_lonlat"]
     structures = {st["id"]: st for st in doc.get("structure_ends", {}).get("structures", [])}
     if structures:
-        assert doc["structure_ends"]["status"].startswith("draft")
+        assert doc["structure_ends"]["status"].startswith(("draft", "reviewed"))
     ids = [c["id"] for c in doc["crossings"]]
     assert len(ids) == len(set(ids))
     for c in doc["crossings"]:
