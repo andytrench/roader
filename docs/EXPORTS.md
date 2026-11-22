@@ -1,6 +1,6 @@
 # Roader exports (spec stage 12)
 
-`roader.export.write_unit(model, meshes, report, out_dir, *, points=None)` writes
+`roader.export.write_unit(model, meshes, report, out_dir, *, points=None, lods=None)` writes
 every export of one unit with shared ids (FR-EX-3) and routes the unit through the
 publish gate (FR-EX-1). Writers use the standard library plus numpy; the report
 figures use matplotlib's Agg canvas. No timestamps, sorted iteration and fixed float
@@ -13,15 +13,21 @@ A unit whose hard gates all pass (`GateReport.publishable`) is written to
 `HELD.json` listing the failed hard gates and their first violations. Each call
 rebuilds the destination and deletes the unit's copy in the other state, so a unit
 that starts failing withdraws its published copy. Reduced-LOD publication of a
-failing unit (the spec's alternative to holding) arrives with the LOD chain in
-milestone 2.
+failing unit (the spec's alternative to holding) is not implemented yet; the LOD
+chain itself is published (below).
+
+`roader.export.run.export_model(..., profile="analytic", lods=True)` renders the
+solids in one export profile (section 7: `analytic` or `realtime`), renders LOD
+levels 1 to 3 (FR-AS-1) in both AC-H5 runs, gates them (`FR-AS-1`, hard) together
+with the profile's `AC-H1` (`AC-H1:realtime` for the real-time profile), and writes
+them into the glTF and USD files with the main rendering as level 0.
 
 | File | Format | Content | Requirements |
 |---|---|---|---|
 | `model.json` | canonical JSON (`roader.model.dumps`) | the native parametric model | FR-EX-3, D-011 |
-| `meshes.glb` | glTF 2.0 binary | one node per mesh, PBR material per semantic slot | FR-EX-3, FR-DM-3, FR-AS-6, FR-AS-10 |
+| `meshes.glb` | glTF 2.0 binary | one node per mesh, PBR material per semantic slot; NORMAL, TEXCOORD_0/1; coarser LODs through `MSFT_lod` | FR-EX-3, FR-DM-3, FR-AS-1, FR-AS-3..6, FR-AS-10 |
 | `meshes_provenance.glb` | glTF 2.0 binary | same geometry, materials colored by provenance source | FR-RH-1 |
-| `meshes.usda` | USD text | one Mesh prim per mesh, UsdPreviewSurface per slot | FR-EX-3, FR-DM-3 |
+| `meshes.usda` | USD text | one Mesh prim per mesh, UsdPreviewSurface per slot; primvars `normals`, `st`, `st1`; LODs as a `lod` variant set | FR-EX-3, FR-DM-3, FR-AS-1, FR-AS-3..5 |
 | `model.city.json` | CityJSON 2.0 | solids and semantics, Transportation, Bridge, Relief | FR-DM-2, FR-RH-2 |
 | `roads.xodr` | ASAM OpenDRIVE 1.8 | L0 to L3 and L6 road description | FR-DM-1 |
 | `report.json`, `report.md` | JSON, Markdown | inputs and versions, coverage, flags, gate table, triangle counts, residuals | FR-EX-4, FR-AS-2 |
@@ -48,6 +54,27 @@ format records the PROJ string and the anchor.
 | USD | `upAxis = "Z"`, `metersPerUnit = 1`, the unit frame unchanged | text with 6 decimals | `customLayerData.roader.frame` |
 | CityJSON | the unit frame; integer vertices, `transform.scale` 0.001, integer-meter `translate` | 1 mm | `metadata.roaderFrame` |
 | OpenDRIVE | the unit frame (OpenDRIVE inertial x/y/z, heading counter-clockwise from x) | text with 10 decimals | `header/geoReference` (PROJ string), header `userData` |
+
+## Normals, UVs and LODs
+
+Generated solids carry three per-face-corner attributes (`Mesh.normals`, `uv0`,
+`uv1`; see `roader.solids.attributes`). A closed solid keeps one vertex where a
+crease or UV seam passes, so the attributes are stored per corner and the glTF
+writer unwelds them (one glTF vertex per distinct position, normal and UV pair, in
+first-use order).
+
+| Attribute | Content | glTF | USD |
+|---|---|---|---|
+| normals (FR-AS-3) | smooth across model-continuous edges, hard at slab edges, barrier arrises, embankment slope breaks and end-wall corners | `NORMAL`, rotated to Y-up | `primvars:normals`, faceVarying |
+| uv0 (FR-AS-4) | metres: road and deck tops (distance along the offset line, arc length across); walls (distance along the outline, elevation); other faces an isometric face projection | `TEXCOORD_0` | `primvars:st` |
+| uv1 (FR-AS-5) | non-overlapping atlas in [0, 1], 1024 px with 2 px padding, one texel density per mesh | `TEXCOORD_1`; density in node `extras.uv1_texel_px_per_m`, atlas in `asset.extras.uv1_atlas` | `primvars:st1`; same keys in customData / customLayerData |
+
+UVs are written as stored (v is not flipped to image space). The terrain carries
+normals and uv1 but no uv0: it is not a road surface and engines texture it in world
+space. LOD levels (chord 1 cm, 5 cm, 25 cm, 1 m) keep the mesh ids of level 0; glTF
+coarser nodes are named `<mesh id>#lod<k>` and sit outside the scene roots, as
+`MSFT_lod` requires. CityJSON and the native model carry level 0 only: the coarser
+levels are tessellations of the same semantic LOD, not different CityGML LODs.
 
 ## Model to OpenDRIVE
 
@@ -105,8 +132,10 @@ the lowest confidence among the road's alignment and profile elements.
   surface types. cjio or the official JSON-schema validator could be added later as
   a test oracle (it would need a THIRD_PARTY entry). USD is written as text and is
   not opened with usd-core; usd-core (`pxr`) could be added as a test-only oracle.
-- **glTF.** No normals (viewers compute flat normals, so all creases look hard) and
-  no UVs (FR-AS-4/5, milestone 2). One primitive per mesh. No instancing yet (FR-AS-8).
+- **glTF.** One primitive per mesh. No instancing yet (FR-AS-8). No textures: UV
+  sets are written, materials are still flat colors.
+- **USD size.** Per-corner primvars and four LOD levels make `meshes.usda` large
+  (about 55 MB for the M1 site); a binary `.usdc` would need usd-core.
   The tile-local origin is the unit origin, which keeps float32 error under about 1 mm
   within roughly 8 km of the anchor.
 - **OpenDRIVE.** Lateral profile is approximate (see above). The median (`Median`) is

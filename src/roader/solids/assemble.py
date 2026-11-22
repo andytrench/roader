@@ -6,6 +6,11 @@ stand on the plan edges of a body's outline; every wall edge is cut into strips 
 the top and bottom levels of all bodies meeting on that edge, plus the terrain, so
 bodies side by side share identical wall faces too (FR-SV-7). Each vertical edge
 carries every level present at its plan vertex, so no wall has a T-junction.
+
+In the real-time profile (``conforming=False``) bodies overlap by design, so each
+is closed on its own levels only; the terrain still cuts ground-contact walls.
+Faces are tagged TOP, BOTTOM or WALL (walls with their outline edge) so normals and
+UVs can follow the model (``roader.solids.attributes``).
 """
 
 from __future__ import annotations
