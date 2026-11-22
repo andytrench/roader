@@ -57,10 +57,17 @@ def candidate_pairs(
 # ---------------------------------------------------------------- triangle tests
 
 
+def _cross3(a: np.ndarray, b: np.ndarray) -> np.ndarray:
+    """np.cross for two 3-vectors, same arithmetic, without np.cross's per-call overhead."""
+    a0, a1, a2 = float(a[0]), float(a[1]), float(a[2])
+    b0, b1, b2 = float(b[0]), float(b[1]), float(b[2])
+    return np.array([a1 * b2 - a2 * b1, a2 * b0 - a0 * b2, a0 * b1 - a1 * b0])
+
+
 def _seg_tri(p: np.ndarray, q: np.ndarray, tri: np.ndarray, eps: float) -> tuple[float, float] | None:
     """Parameter interval [t0, t1] of segment p->q inside the closed triangle, or None."""
     a = tri[0]
-    n = np.cross(tri[1] - a, tri[2] - a)
+    n = _cross3(tri[1] - a, tri[2] - a)
     nn = float(np.linalg.norm(n))
     if nn == 0.0:
         return None
@@ -75,7 +82,7 @@ def _seg_tri(p: np.ndarray, q: np.ndarray, tri: np.ndarray, eps: float) -> tuple
         d = q - p
         for k in range(3):
             e0, e1 = tri[k], tri[(k + 1) % 3]
-            m = np.cross(n, e1 - e0)
+            m = _cross3(n, e1 - e0)
             mm = float(np.linalg.norm(m))
             f0 = float(m @ (p - e0)) + eps * mm
             df = float(m @ d)
@@ -96,7 +103,7 @@ def _seg_tri(p: np.ndarray, q: np.ndarray, tri: np.ndarray, eps: float) -> tuple
     for k in range(3):
         e0, e1 = tri[k], tri[(k + 1) % 3]
         edge = e1 - e0
-        if float(np.cross(edge, x - e0) @ n) < -eps * float(np.linalg.norm(edge)):
+        if float(_cross3(edge, x - e0) @ n) < -eps * float(np.linalg.norm(edge)):
             return None
     return t, t
 
@@ -182,13 +189,13 @@ def edge_fold(tri_a: np.ndarray, tri_b: np.ndarray, free_a: int, free_b: int, ep
     """Faces sharing an edge overlap only if coplanar and folded onto the same side."""
     p = tri_a[(free_a + 1) % 3]
     q = tri_a[(free_a + 2) % 3]
-    n = np.cross(tri_a[1] - tri_a[0], tri_a[2] - tri_a[0])
+    n = _cross3(tri_a[1] - tri_a[0], tri_a[2] - tri_a[0])
     n /= np.linalg.norm(n)
     if abs(float(n @ (tri_b[free_b] - p))) > eps:
         return False
     edge = q - p
-    side_a = float(np.cross(edge, tri_a[free_a] - p) @ n)
-    side_b = float(np.cross(edge, tri_b[free_b] - p) @ n)
+    side_a = float(_cross3(edge, tri_a[free_a] - p) @ n)
+    side_b = float(_cross3(edge, tri_b[free_b] - p) @ n)
     return side_a * side_b > 0.0
 
 
@@ -202,13 +209,13 @@ def vertex_overlap(tri_a: np.ndarray, tri_b: np.ndarray, ca: int, cb: int, eps: 
     v = tri_a[ca]
     da_dirs = [tri_a[(ca + 1) % 3] - v, tri_a[(ca + 2) % 3] - v]
     db_dirs = [tri_b[(cb + 1) % 3] - v, tri_b[(cb + 2) % 3] - v]
-    na = np.cross(da_dirs[0], da_dirs[1])
-    nb = np.cross(db_dirs[0], db_dirs[1])
+    na = _cross3(da_dirs[0], da_dirs[1])
+    nb = _cross3(db_dirs[0], db_dirs[1])
     na /= np.linalg.norm(na)
     nb /= np.linalg.norm(nb)
     off_b = [float(na @ d) for d in db_dirs]
     off_a = [float(nb @ d) for d in da_dirs]
-    near_parallel = float(np.linalg.norm(np.cross(na, nb))) < PARALLEL_EPS
+    near_parallel = float(np.linalg.norm(_cross3(na, nb))) < PARALLEL_EPS
     if near_parallel or (max(abs(x) for x in off_b) <= eps and max(abs(x) for x in off_a) <= eps):
         # Planes this close to parallel have no meaningful intersection line (FR-SV-4).
         return _sectors_overlap(da_dirs, db_dirs, na)
@@ -216,7 +223,7 @@ def vertex_overlap(tri_a: np.ndarray, tri_b: np.ndarray, ca: int, cb: int, eps: 
     sb = _ray_section(db_dirs, off_b, eps)
     if sa is None or sb is None:
         return False
-    line = np.cross(na, nb)
+    line = _cross3(na, nb)
     ll = float(np.linalg.norm(line))
     if ll < 1e-12:
         return False
@@ -242,7 +249,7 @@ def _ray_section(dirs: list[np.ndarray], off: list[float], eps: float) -> np.nda
 
 def _sectors_overlap(da: list[np.ndarray], db: list[np.ndarray], n: np.ndarray, tol: float = 1e-12) -> bool:
     def cross(a: np.ndarray, b: np.ndarray) -> float:
-        return float(np.cross(a, b) @ n) / (float(np.linalg.norm(a)) * float(np.linalg.norm(b)))
+        return float(_cross3(a, b) @ n) / (float(np.linalg.norm(a)) * float(np.linalg.norm(b)))
 
     def ordered(d: list[np.ndarray]) -> list[np.ndarray]:
         return d if cross(d[0], d[1]) > 0.0 else [d[1], d[0]]
@@ -275,8 +282,8 @@ def crossing_length(tri_a: np.ndarray, tri_b: np.ndarray, eps: float = PLANE_EPS
     Zero unless each triangle has vertices strictly on both sides of the other's
     plane; touching along an edge or at a vertex is not a crossing.
     """
-    na = np.cross(tri_a[1] - tri_a[0], tri_a[2] - tri_a[0])
-    nb = np.cross(tri_b[1] - tri_b[0], tri_b[2] - tri_b[0])
+    na = _cross3(tri_a[1] - tri_a[0], tri_a[2] - tri_a[0])
+    nb = _cross3(tri_b[1] - tri_b[0], tri_b[2] - tri_b[0])
     la, lb = float(np.linalg.norm(na)), float(np.linalg.norm(nb))
     if la == 0.0 or lb == 0.0:
         return 0.0
@@ -285,7 +292,7 @@ def crossing_length(tri_a: np.ndarray, tri_b: np.ndarray, eps: float = PLANE_EPS
     da = (tri_a - tri_b[0]) @ nb
     if not (db.max() > eps and db.min() < -eps and da.max() > eps and da.min() < -eps):
         return 0.0
-    line = np.cross(na, nb)
+    line = _cross3(na, nb)
     ll = float(np.linalg.norm(line))
     if ll < 1e-12:
         return 0.0
@@ -300,11 +307,11 @@ def crossing_length(tri_a: np.ndarray, tri_b: np.ndarray, eps: float = PLANE_EPS
 def coplanar_overlap_area(tri_a: np.ndarray, tri_b: np.ndarray) -> float:
     """Area of overlap of two triangles that lie in one plane (tri_a's plane)."""
     origin = tri_a[0]
-    n = np.cross(tri_a[1] - origin, tri_a[2] - origin)
+    n = _cross3(tri_a[1] - origin, tri_a[2] - origin)
     n /= np.linalg.norm(n)
     ax = tri_a[1] - origin
     ax /= np.linalg.norm(ax)
-    ay = np.cross(n, ax)
+    ay = _cross3(n, ax)
 
     def poly(tri: np.ndarray) -> shapely.Polygon:
         rel = tri - origin
@@ -318,7 +325,7 @@ def coplanar_overlap_area(tri_a: np.ndarray, tri_b: np.ndarray) -> float:
 
 def point_in_triangle(x: np.ndarray, tri: np.ndarray, eps: float) -> bool:
     """x (assumed in the triangle's plane) inside the closed triangle, with tolerance."""
-    n = np.cross(tri[1] - tri[0], tri[2] - tri[0])
+    n = _cross3(tri[1] - tri[0], tri[2] - tri[0])
     nn = float(np.linalg.norm(n))
     if nn == 0.0:
         return False
@@ -328,7 +335,7 @@ def point_in_triangle(x: np.ndarray, tri: np.ndarray, eps: float) -> bool:
     for k in range(3):
         e0, e1 = tri[k], tri[(k + 1) % 3]
         edge = e1 - e0
-        if float(np.cross(edge, x - e0) @ n) < -eps * float(np.linalg.norm(edge)):
+        if float(_cross3(edge, x - e0) @ n) < -eps * float(np.linalg.norm(edge)):
             return False
     return True
 
