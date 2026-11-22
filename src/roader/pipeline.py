@@ -28,18 +28,27 @@ from dataclasses import dataclass, field
 import numpy as np
 
 from roader.complete import (
+    Completion,
     check_clearances,
+    complete_occluded,
     complete_terrain,
+    completion_flags,
     label_under_deck,
     seat_supports,
     side_slopes,
     split_at_structures,
 )
 from roader.complete.junctions import build_junctions
+from roader.conflate.candidates import SheetCandidate, candidate_flag, unmatched_sheets
 from roader.conflate.crossings import CrossingMeasure, find_crossings
 from roader.conflate.graph import data_extent, select_roads
 from roader.conflate.register import cross_profiles, near_points
-from roader.conflate.structures import StructureExtent, find_extents, side_drop
+from roader.conflate.structures import (
+    StructureExtent,
+    chain_extents,
+    find_extents,
+    side_drop,
+)
 from roader.conflate.track import track_line
 from roader.evidence import Evidence, build_evidence
 from roader.evidence.strips import STRIP_TOL_M
@@ -57,7 +66,6 @@ from roader.rules import RuleBook
 from roader.structures import infer_structure, parapet_fill
 from roader.structures.infer import _footprint_on
 
-UNMATCHED_SHEET_CELLS = 400  # FR-VC-5: paved sheets this large with no road are reported
 RULE_EXTENT_PAD_M = 1.0
 SKEW_REACH_M = 15.0
 PARAPET_EDGE_GAP_M = 0.02  # keeps the parapet face and the pavement edge distinct sweep lines
@@ -70,6 +78,8 @@ class PipelineResult:
     fits: list[RoadFit]
     crossing_measures: list[CrossingMeasure] = field(default_factory=list)
     extents: list[StructureExtent] = field(default_factory=list)
+    candidates: list[SheetCandidate] = field(default_factory=list)  # FR-VC-5
+    completions: list[Completion] = field(default_factory=list)  # FR-OC-1
 
     def measured(self) -> dict:
         """Pipeline measurements in the shape ``roader.validate.run_gates`` takes."""
@@ -142,7 +152,7 @@ def run_pipeline(
         a, b = _footprint_on(by_id[c.upper_road], by_id[c.lower_road], c, lateral + RULE_EXTENT_PAD_M)
         extents.append(StructureExtent(c.upper_road, a, b, "rule", None, None))
         flags.append(Flag("FR-VC-4:not_found", c.id, "FR-VC-4", "no structure ends found in the data; span set from the crossed road and lateral clearance rule"))
-    extents.sort(key=lambda e: (e.road_id, e.s_start))
+    extents = chain_extents(extents, drops, {f.road.id: f.road.length for f in fits})
 
     barriers = {}
     for f in fits:
@@ -196,18 +206,21 @@ def run_pipeline(
         label_under_deck(road, model)
         road.prov = road_summary(road)
     flags.extend(check_clearances(model, rules))
+    completions = complete_occluded(model, {f.road.id: (f.track.s, f.track.z) for f in fits})
+    flags.extend(completion_flags(completions))
     # Stage 8 terrain after the clearance refit, so caps and soffits are final (FR-OC-3).
     model.terrain = complete_terrain(fit_points, model, rules)
     seat_supports(model, rules)
     # L6 areas lifted from the canonical roads, so they match the sweeps of the saved model (FR-SG-3, D-043, D-045).
     model.junctions, junction_flags = build_junctions(loads(dumps(dataclasses.replace(model, terrain=None))))
     flags.extend(junction_flags)
-    flags.extend(_unmatched_sheets(ev, fits))
+    candidates = unmatched_sheets(ev, fits)
+    flags.extend(candidate_flag(c) for c in candidates)
     model.flags = sorted(flags, key=lambda f: (f.req, f.code, f.element_id, f.message))
     # The canonical form (D-011): a model built here and the same model read back
     # from its native file render byte-identical exports (AC-H5).
     model = loads(dumps(model))
-    return PipelineResult(model, ev, fits, measures, extents)
+    return PipelineResult(model, ev, fits, measures, extents, candidates, completions)
 
 
 def road_summary(road) -> Provenance:
@@ -305,25 +318,6 @@ def _mark_withheld(road, held: set[tuple[int, int]]) -> list[tuple[float, float]
         if sum(c in held for c in cells) >= 3:
             iv.reason = "withheld for validation (D-018)"
             out.append((iv.s0, iv.s1))
-    return out
-
-
-def _unmatched_sheets(ev: Evidence, fits: list[RoadFit]) -> list[Flag]:
-    """FR-VC-5: large paved sheets no road runs on, reported as candidates with geometry."""
-    used = {int(s) for f in fits for s in f.track.sheet if s >= 0}
-    out = []
-    for sh in ev.sheets:
-        if sh.index in used or sh.pavement_cells < UNMATCHED_SHEET_CELLS:
-            continue
-        out.append(
-            Flag(
-                "FR-VC-5:candidate",
-                f"sheet_{sh.index}",
-                "FR-VC-5",
-                f"paved sheet without a vector: {sh.pavement_cells} m2 paved, centroid ({sh.centroid[0]:.1f}, {sh.centroid[1]:.1f}), "
-                f"z {sh.z_min:.1f}-{sh.z_max:.1f}",
-            )
-        )
     return out
 
 

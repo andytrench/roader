@@ -42,6 +42,8 @@ FASCIA_TOP_M = 0.3
 FASCIA_BOTTOM_M = 4.0
 FASCIA_MIN_POINTS = 50
 FASCIA_COVERAGE = 0.3
+PIER_END_CLEAR_M = 5.0  # no pier closer than this to an abutment
+MIN_PIER_GAP_M = 8.0
 METHOD_CONFIDENCE = {"class17": 0.9, "sheet_break": 0.7, "class17_only": 0.5}
 
 
@@ -144,6 +146,38 @@ def measured_depth(upper: RoadFit, ev: Evidence, s0: float, s1: float, overhang:
     return float(np.percentile(d, 95.0)), int(d.size), coverage
 
 
+def _even_piers(
+    extent: StructureExtent, piers: list[float], zones: list[tuple[float, float]], need: float, rules: RuleBook, era: str
+) -> tuple[list[float], set[float]]:
+    """FR-ST-3, last priority: split spans longer than ``structure.even_span`` high into equal spans.
+
+    A pier that would land in a crossed road's clear zone moves to the nearer
+    zone edge (never into a travel lane); one that then crowds a neighbour is
+    dropped. Returns all piers, sorted, and the set added here.
+    """
+    rule = rules.get("structure.even_span")
+    typical, _ = rules.fill("structure.even_span", era=era)
+    stations = [extent.s_start, *sorted(piers), extent.s_end]
+    added: list[float] = []
+    for a, b in itertools.pairwise(stations):
+        if b - a <= rule.high:
+            continue
+        n = math.ceil((b - a) / typical)
+        for k in range(1, n):
+            s = a + k * (b - a) / n
+            for z0, z1 in zones:
+                if z0 - 0.5 * need < s < z1 + 0.5 * need:
+                    s = z0 - 0.5 * need if s - z0 < z1 - s else z1 + 0.5 * need
+            if not a + PIER_END_CLEAR_M <= s <= b - PIER_END_CLEAR_M:
+                continue
+            if any(z0 - 0.5 * need < s < z1 + 0.5 * need for z0, z1 in zones):
+                continue
+            if added and s - added[-1] < MIN_PIER_GAP_M:
+                continue
+            added.append(s)
+    return sorted([*piers, *added]), set(added)
+
+
 def parapet_fill(road, structure: Structure, existing: list[Barrier], rules: RuleBook) -> list[Barrier]:
     """Rule parapets on deck sides where none was observed (FR-ST-5, FR-RD-4: observed parts win)."""
     era = era_of(structure.year_built)
@@ -195,7 +229,7 @@ def infer_structure(
     year = None
     era = era_of(year)
     sid = stable_id("st", road.id, round(extent.s_start, 0))
-    on = sorted([c for c in crossings if extent.s_start - 1.0 <= c.upper_s <= extent.s_end + 1.0], key=lambda c: c.upper_s)
+    on = sorted([c for c in crossings if c.upper_road == road.id and extent.s_start - 1.0 <= c.upper_s <= extent.s_end + 1.0], key=lambda c: c.upper_s)
     skew = float(np.mean([c.skew_rad for c in on])) if on else 0.0
     lateral, _lp = rules.fill("clearance.lateral.support", road_class=fits[on[0].lower_road].road.road_class if on else "*")
     col_w, col_prov = rules.fill("column.width", era=era)
@@ -204,11 +238,14 @@ def infer_structure(
     zones = [_footprint_on(upper, fits[c.lower_road], c, lateral) for c in on]
     zones.sort()
     piers = []
+    need = col_w / max(math.cos(skew), 0.2) + 0.5
+    inner = (extent.s_start + PIER_END_CLEAR_M, extent.s_end - PIER_END_CLEAR_M)
     for (a0, a1), (b0, b1) in itertools.pairwise(zones):
         gap0, gap1 = a1, b0
-        need = col_w / max(math.cos(skew), 0.2) + 0.5
-        if gap1 - gap0 >= need:
-            piers.append(0.5 * (gap0 + gap1))
+        mid = 0.5 * (gap0 + gap1)
+        if gap1 - gap0 >= need and inner[0] <= mid <= inner[1]:
+            piers.append(mid)
+    piers, even = _even_piers(extent, piers, zones, need, rules, era)
     stations = [extent.s_start, *piers, extent.s_end]
     spans = list(np.diff(stations))
     max_span = float(max(spans)) if spans else extent.length
@@ -270,7 +307,8 @@ def infer_structure(
             ground = float(min(lows)) if lows else road.profile.z(s) - depth - 5.0
             flags.append(Flag("FR-OC-3:ground_by_neighbour", sid, "FR-OC-3", f"no ground returns beside the deck at s={s:.1f}; footing from the lower road"))
         label = f"a{1 if n == 0 else 2}" if kind == "abutment" else f"p{n}"
-        prov = Provenance(Source.RULE, cap_prov.confidence, rule_id=foot_prov.rule_id if kind == "abutment" else col_prov.rule_id, flags=["FR-ST-3:layout_rule" if kind == "pier" else "FR-ST-3:measured_end"])
+        layout = "FR-ST-3:even_spacing" if s in even else "FR-ST-3:layout_rule"
+        prov = Provenance(Source.RULE, cap_prov.confidence, rule_id=foot_prov.rule_id if kind == "abutment" else col_prov.rule_id, flags=[layout if kind == "pier" else "FR-ST-3:measured_end"])
         supports.append(
             Support(
                 id=stable_id("sp", sid, label),
@@ -288,6 +326,11 @@ def infer_structure(
     st_prov = Provenance(Source.MEASURED, METHOD_CONFIDENCE.get(extent.method, 0.5), flags=[f"FR-VC-4:{extent.method}"])
     if extent.one_sided:
         st_prov.flags.append("FR-VC-4:one_sided")
+    if extent.clipped:
+        st_prov.flags.append("FR-VC-4:clipped_at_road_end")
+        flags.append(Flag("FR-VC-4:clipped", sid, "FR-VC-4", f"structure ends clamped to its road ({extent.s_start:.1f}-{extent.s_end:.1f}); the deck may continue past the modelled road"))
+    if extent.chained:
+        st_prov.flags.append("FR-CR-3:chained " + "; ".join(f"{a:.1f}-{b:.1f} {m}" for a, b, m in extent.chained))
     if extent.geom and extent.class17:
         st_prov.flags.append(f"FR-VC-4:sheet_break {extent.geom[0]:.1f}-{extent.geom[1]:.1f}; class17 {extent.class17[0]:.1f}-{extent.class17[1]:.1f}")
     if review:
@@ -300,7 +343,7 @@ def infer_structure(
         s_end=float(extent.s_end),
         family=family,
         year_built=year,
-        crossed_roads=[c.lower_road for c in on],
+        crossed_roads=list(dict.fromkeys(c.lower_road for c in on)),
         deck=deck,
         supports=supports,
         prov=st_prov,

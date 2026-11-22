@@ -13,6 +13,16 @@ placeholder = true
 note = "Maximum span below which the default family is slab; multi_girder otherwise."
 
 [[rule]]
+id = "structure.even_span"
+typical = 35.0
+low = 20.0
+high = 60.0
+unit = "m"
+origin = "placeholder: engineering judgement, unverified"
+placeholder = true
+note = "FR-ST-3 last resort: a span longer than high is split into equal spans near typical (long viaducts with nothing observed)."
+
+[[rule]]
 id = "structure.review_span"
 typical = 150.0
 low = 100.0
