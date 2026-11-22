@@ -264,7 +264,11 @@ def _walls(
     if p in terrain and q in terrain:
         tp, tq = terrain[p], terrain[q]
         if any(bot[0] < tp < top[0] or bot[1] < tq < top[1] for bot, top in ranges):
-            cuts.add((tp, tq))
+            # A ground line crossing a body level along the wall cannot be a strip boundary;
+            # the wall then keeps the terrain levels as ladder vertices only (D-072).
+            trial = sorted(cuts | {(tp, tq)})
+            if all(hi[1] >= lo[1] for lo, hi in pairwise(trial)):
+                cuts.add((tp, tq))
     order = sorted(cuts)
     for lo, hi in pairwise(order):
         if hi[1] < lo[1]:

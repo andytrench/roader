@@ -114,6 +114,9 @@ def terrain_meshes(
 
     faces: list[tuple[int, int, int]] = []
     ring_used: set[int] = set()
+    extra: list[tuple[float, float, float]] = []  # boundary vertices that are neither grid nor solid (D-072)
+    extra_index: dict[tuple[int, int], int] = {}
+    edges = _EdgeIndex(footprints, ring, ring_index, overlay, sampler)
     if region is not None and not region.is_empty:
         for part in shapely.get_parts(region):
             for tri in shapely.get_parts(shapely.constrained_delaunay_triangles(part)):
@@ -123,8 +126,14 @@ def terrain_meshes(
                     if kind == "r":
                         ring_used.add(a)
                         refs.append(n_grid + a)
-                    else:
+                    elif kind == "g":
                         refs.append(gref(b, a))
+                    else:
+                        key = _key(float(x), float(y))
+                        if key not in extra_index:
+                            extra_index[key] = len(extra)
+                            extra.append((float(x), float(y), edges.z(float(x), float(y))))
+                        refs.append(-1 - extra_index[key])
                 faces.append((refs[0], refs[1], refs[2]))
 
     leaves = _leaves(band, zg, tol)
@@ -149,19 +158,27 @@ def terrain_meshes(
 
     refs = np.array(faces, dtype=np.int64).reshape(-1, 3)
     ring_arr = np.array(ring, dtype=np.float64).reshape(-1, 3)
+    refs = np.where(refs < 0, n_grid + len(ring_arr) - 1 - refs, refs)
     gj, gi = np.divmod(np.arange(n_grid), nx)
-    allv = np.vstack([np.column_stack([xs[gi], ys[gj], zg[gj, gi]]), ring_arr])
+    allv = np.vstack([np.column_stack([xs[gi], ys[gj], zg[gj, gi]]), ring_arr, np.array(extra, dtype=np.float64).reshape(-1, 3)])
     pa, pb, pc = allv[refs[:, 0]], allv[refs[:, 1]], allv[refs[:, 2]]
     area2 = (pb[:, 0] - pa[:, 0]) * (pc[:, 1] - pa[:, 1]) - (pb[:, 1] - pa[:, 1]) * (pc[:, 0] - pa[:, 0])
-    if np.any(np.abs(area2) <= 1e-12):
+    # Overlay points within the snap distance of one vertex collapse a triangle; it carries no surface (D-072).
+    keep = np.abs(area2) > 1e-12
+    collapsed = (refs[:, 0] == refs[:, 1]) | (refs[:, 1] == refs[:, 2]) | (refs[:, 2] == refs[:, 0])
+    if np.any(~keep & ~collapsed & (refs < n_grid).all(axis=1)):
         raise ValueError("FR-SG-6: degenerate terrain triangle")
+    refs, area2 = refs[keep], area2[keep]
     flip = area2 < 0.0
     refs[flip] = refs[flip][:, [0, 2, 1]]
 
     x_lo, x_hi = xs[0] + GRID_SNAP_M, xs[-1] - GRID_SNAP_M
     y_lo, y_hi = ys[0] + GRID_SNAP_M, ys[-1] - GRID_SNAP_M
     for n, (x, y, _z) in enumerate(ring):
-        if x_lo < x < x_hi and y_lo < y < y_hi and ring_index[_key(*overlay(x, y))] == n and n not in ring_used:
+        if (
+            x_lo < x < x_hi and y_lo < y < y_hi and ring_index[_key(*overlay(x, y))] == n and n not in ring_used
+            and not edges.covered(x, y)
+        ):
             raise ValueError(f"FR-SG-6: footprint vertex ({x:.3f}, {y:.3f}) is not on the terrain boundary")
 
     labels = _face_components(refs)
@@ -249,6 +266,7 @@ def _face_components(faces: np.ndarray) -> np.ndarray:
 
 
 def _lookup(x: float, y: float, ring_index: dict[tuple[int, int], int], sampler: TerrainSampler) -> tuple[str, int, int]:
+    """("r", ring index, 0), ("g", column, row), or ("x", 0, 0) for a vertex that is neither."""
     n = ring_index.get(_key(x, y))
     if n is not None:
         return ("r", n, 0)
@@ -257,4 +275,56 @@ def _lookup(x: float, y: float, ring_index: dict[tuple[int, int], int], sampler:
     j = round((y - p.origin_y) / p.cell_m)
     if 0 <= i < p.nx and 0 <= j < p.ny and abs(sampler.xs[i] - x) <= SNAP_M and abs(sampler.ys[j] - y) <= SNAP_M:
         return ("g", i, j)
-    raise ValueError(f"FR-SG-6: terrain re-triangulation produced a vertex ({x:.4f}, {y:.4f}) that is neither grid nor solid")
+    return ("x", 0, 0)
+
+
+class _EdgeIndex:
+    """Footprint outline edges, for boundary vertices the overlay adds where footprints of
+    different solids cross or a footprint leaves the patch (D-072): such a vertex takes the
+    ground level interpolated along the outline edge it lies on, else the sampled terrain."""
+
+    def __init__(self, footprints, ring, ring_index, overlay, sampler: TerrainSampler) -> None:
+        self.footprints, self.ring, self.ring_index = footprints, ring, ring_index
+        self.overlay, self.sampler = overlay, sampler
+        self._tree = None
+        self._union = None
+
+    def _build(self) -> None:
+        segs, ends = [], []
+        for loop in self.footprints:
+            pts = [self.overlay(x, y) for x, y in loop]
+            for k in range(len(pts)):
+                a, b = pts[k], pts[(k + 1) % len(pts)]
+                if a != b:
+                    segs.append(shapely.linestrings([a, b]))
+                    ends.append((a, b))
+        self._segs, self._ends = segs, ends
+        self._tree = shapely.STRtree(segs)
+
+    def _level(self, x: float, y: float) -> float:
+        n = self.ring_index.get(_key(x, y))
+        return float(self.ring[n][2]) if n is not None else self.sampler(x, y)
+
+    def z(self, x: float, y: float) -> float:
+        if self._tree is None:
+            self._build()
+        pt = shapely.points(x, y)
+        best = None
+        for k in self._tree.query(pt, predicate="dwithin", distance=1e-6):
+            d = shapely.distance(self._segs[int(k)], pt)
+            if best is None or d < best[0]:
+                best = (d, int(k))
+        if best is None:
+            return self.sampler(x, y)
+        (ax, ay), (bx, by) = self._ends[best[1]]
+        length2 = (bx - ax) ** 2 + (by - ay) ** 2
+        t = min(max(((x - ax) * (bx - ax) + (y - ay) * (by - ay)) / length2, 0.0), 1.0)
+        return (1.0 - t) * self._level(ax, ay) + t * self._level(bx, by)
+
+    def covered(self, x: float, y: float) -> bool:
+        """A footprint vertex strictly inside the union of footprints (solids overlap there)."""
+        if self._union is None:
+            self._union = shapely.union_all([Polygon([self.overlay(a, b) for a, b in loop]) for loop in self.footprints])
+            shapely.prepare(self._union)
+        p = shapely.points(*self.overlay(x, y))
+        return bool(self._union.contains(p)) and shapely.distance(self._union.boundary, p) > 1e-6
