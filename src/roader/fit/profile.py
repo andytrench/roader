@@ -147,7 +147,11 @@ def _inner(sb, zb, wb, pvi, lengths, rules, road_class, scale):
             if abs(g) > high:
                 lhs[1 + j, 1 + j] += scale
                 rhs[1 + j] += scale * math.copysign(high, g)
-        x = np.linalg.solve(lhs + 1e-9 * np.eye(n_g + 1), rhs)
+        try:
+            x = np.linalg.solve(lhs + 1e-9 * np.eye(n_g + 1), rhs)
+        except np.linalg.LinAlgError:
+            # A trial PVI layout can leave a grade segment with no samples.
+            x = np.linalg.lstsq(lhs, rhs, rcond=None)[0]
         r = a @ x - zb
         w = wb / np.sqrt(1.0 + (r / F_SCALE_M) ** 2)
     r = a @ x - zb
