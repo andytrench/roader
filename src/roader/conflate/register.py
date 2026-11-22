@@ -33,6 +33,7 @@ WIDTH_DEV_M = 1.0
 WIDTH_DEV_REL = 0.1
 SMOOTH_SIGMA_M = 10.0  # along-road kernel for the lateral correction
 XY_SIGMA_M = 15.0  # plan smoothing of measured midpoints; local quadratic, so arcs are not biased
+STATION_DRIFT_M = 5.0  # a smoothed center this far along the line from its station is re-stationed
 HEIGHT_BAND_M = 0.3
 # Layer probabilities blur at the edge, where one cell holds pavement and verge,
 # so edges are decided on point height and intensity; the probability only
@@ -335,13 +336,17 @@ def register_line(line: Polyline, prof: Profiles) -> tuple[Polyline, np.ndarray,
     blend = np.clip(1.0 - (dist - 3.0 * XY_SIGMA_M) / XY_SIGMA_M, 0.0, 1.0)[:, None]
     fallback = line.offset_point(prof.s, offsets)
     pts = blend * pts + (1.0 - blend) * fallback
-    # Away from measured centers the plan fit is an extrapolation: there each point
-    # keeps its profile station and only moves sideways, so the line cannot
-    # stretch along itself where edges are sparse (decks and ramps in a stack).
+    # Away from measured centers the plan fit is an extrapolation, and with only a
+    # few centers in its window it bunches up: there each point keeps its profile
+    # station and only moves sideways, so the line cannot stretch or fold along
+    # itself where edges are sparse (decks and ramps in a stack).
     s_p, u_p, ok = line.project(pts)
+    drift = np.abs(s_p - np.clip(prof.s, 0.0, line.length))
     # On a tight curve a point can project onto another part of the line.
-    same = ok & np.isfinite(u_p) & (np.abs(s_p - np.clip(prof.s, 0.0, line.length)) <= XY_SIGMA_M)
+    same = ok & np.isfinite(u_p) & (drift <= XY_SIGMA_M)
     sideways = line.offset_point(prof.s, np.where(same, u_p, offsets))
-    far = np.clip((dist - XY_SIGMA_M) / XY_SIGMA_M, 0.0, 1.0)[:, None]
+    far = np.clip((dist - XY_SIGMA_M) / XY_SIGMA_M, 0.0, 1.0)
+    slid = np.clip((np.where(ok, drift, 0.0) - STATION_DRIFT_M) / STATION_DRIFT_M, 0.0, 1.0)
+    far = np.maximum(far, slid)[:, None]
     pts = (1.0 - far) * pts + far * sideways
     return Polyline(pts), prof.s, mid, weight

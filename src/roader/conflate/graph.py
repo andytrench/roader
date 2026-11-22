@@ -77,9 +77,8 @@ def _chain(start: int, edges: list[VectorEdge], members: set[int], same) -> list
     order = [start]
     used = {start}
     for direction in (1, -1):
-        current = start
+        coords = _oriented(edges[start])
         while True:
-            coords = _oriented(edges[current])
             end = coords[-1] if direction == 1 else coords[0]
             end_heading = _heading(coords[-2], coords[-1]) if direction == 1 else _heading(coords[1], coords[0])
             best = None
@@ -96,12 +95,12 @@ def _chain(start: int, edges: list[VectorEdge], members: set[int], same) -> list
                     h = _heading(c[0], c[1]) if direction == 1 else _heading(c[-1], c[-2])
                     turn = abs(math.remainder(h - end_heading, 2 * math.pi))
                     if turn <= JOIN_HEADING_MAX and (best is None or turn < best[1]):
-                        best = (j, turn)
+                        best = (j, turn, c)
             if best is None:
                 break
             used.add(best[0])
             order = order + [best[0]] if direction == 1 else [best[0], *order]
-            current = best[0]
+            coords = best[2]
     return order
 
 
@@ -111,6 +110,10 @@ def _merge_coords(ids: list[int], edges: list[VectorEdge]) -> tuple[np.ndarray, 
     ranges = []
     for n, i in enumerate(ids):
         c = _oriented(edges[i])
+        if not out and len(ids) > 1:
+            nxt = _oriented(edges[ids[1]])
+            if min(math.hypot(*(c[0] - p)) for p in (nxt[0], nxt[-1])) < min(math.hypot(*(c[-1] - p)) for p in (nxt[0], nxt[-1])):
+                c = c[::-1]
         if out:
             prev_end = out[-1][-1]
             if math.hypot(*(c[0] - prev_end)) > math.hypot(*(c[-1] - prev_end)):

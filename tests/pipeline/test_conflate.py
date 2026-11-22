@@ -32,6 +32,19 @@ def test_fr_vc_1_scope_and_chaining(points, vectors):
     assert all(s.oneway for s in seeds if s.kind == "mainline")
 
 
+def test_fr_vc_1_two_way_street_drawn_in_mixed_directions_chains_without_doubling_back():
+    tags = {"highway": "secondary", "name": "Main Street"}
+    pieces = [np.array([[a, 0.0], [a + 50.0, 0.5], [a + 100.0, 0.0]]) for a in np.arange(0.0, 500.0, 100.0)]
+    drawn = [p if k % 2 else p[::-1] for k, p in enumerate(pieces)]  # every other way drawn east to west
+    edges = [VectorEdge("osm", str(k), c, dict(tags)) for k, c in enumerate(drawn)]
+    edges.append(VectorEdge("osm", "fwy", np.array([[250.0, -100.0], [250.0, 100.0]]), {"highway": "motorway", "ref": "I 1", "oneway": "yes"}))
+    street = next(s for s in select_roads(edges) if s.kind == "crossing_street")
+    assert len(street.vector_refs) == 5
+    assert abs(street.line.length - 500.0) < 0.1
+    x = street.line.xy[:, 0]
+    assert np.all(np.diff(x) > 0) or np.all(np.diff(x) < 0)
+
+
 def test_fr_vc_2_lower_roads_are_occluded_under_the_deck(model):
     for fid in ("eb", "wb"):
         road = by_feature(model, fid)
