@@ -33,6 +33,7 @@ from roader.rules import RuleBook
 
 WIDTH_KNOT_M = 50.0
 WIDTH_TOL_M = 0.15
+KNOT_SUPPORT = 3  # edge stations a width knot needs within half a knot spacing (D-063)
 MIN_SIDE_M = 0.5  # the reference line lies on its pavement, so each edge is at least this far to its side
 SLOPE_KNOT_M = 40.0
 SLOPE_TOL = 0.003
@@ -71,14 +72,16 @@ def side_valid(prof: Profiles, values: np.ndarray) -> np.ndarray:
     return ok & (np.abs(values - local) <= np.maximum(WIDTH_DEV_M, WIDTH_DEV_REL * local))
 
 
-def supported_knots(knots: np.ndarray, s: np.ndarray, reach: float) -> np.ndarray:
-    """Knots with data within ``reach``: a knot without its own data is set by its
-    neighbour's data alone and swings far beyond any measured value (FR-OC-1 tapers instead)."""
+def supported_knots(knots: np.ndarray, s: np.ndarray, reach: float, least: int = KNOT_SUPPORT) -> np.ndarray:
+    """Knots with at least ``least`` data stations within ``reach``: a knot without its own
+    data is set by its neighbour's data alone, and two knots resting on one isolated
+    edge split it between them, so either swings far beyond any measured value
+    (FR-OC-1 tapers instead)."""
     if len(s) == 0:
         return knots[:1]
     s = np.sort(s)
-    pos = np.clip(np.searchsorted(s, knots), 1, len(s) - 1) if len(s) > 1 else np.zeros(len(knots), dtype=np.int64)
-    near = np.minimum(np.abs(knots - s[pos - 1 if len(s) > 1 else 0]), np.abs(knots - s[pos])) <= reach
+    count = np.searchsorted(s, knots + reach, side="right") - np.searchsorted(s, knots - reach, side="left")
+    near = count >= min(least, len(s))
     return knots[near] if near.any() else knots[:1]
 
 

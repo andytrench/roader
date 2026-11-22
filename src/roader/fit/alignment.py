@@ -22,7 +22,6 @@ from scipy.optimize import least_squares
 
 from roader.conflate.polyline import Polyline
 from roader.fit.piecewise import hat_basis
-from roader.fit.priors import curvature_penalty
 from roader.model.geometry import AlignElement, Alignment
 from roader.model.provenance import Provenance, Source
 from roader.model.serialize import FLOAT_DIGITS
@@ -42,6 +41,16 @@ PIN_HEADING_M = 20.0  # a heading error at a pinned end weighs as its lateral of
 KAPPA_WINDOW_M = 10.0
 KMAX_RULE_FACTOR = 2.0  # hard curvature bound, in units of the rule's least radius (FR-AF-4 stays the soft prior)
 SUPPORT_M = 10.0  # FR-AF-1 deviation is checked where measured centerline samples are this close
+PIECE_M = 30.0  # at most one piece per this much length, and MAX_PIECES in all
+MAX_PIECES = 24
+SHORT_PIECES = 6  # a short road may still use this many pieces of MIN_PIECE_M
+PIN_ZONE_M = 40.0  # line samples this close to a pinned end do not decide the piece count
+# Once the best deviation is within STALL_DEV_M, stop after STALL_PIECES more pieces that
+# improve it by less than STALL_GAIN (from a fresh start the deviation is not monotone in m).
+STALL_PIECES = 3
+STALL_GAIN = 0.98
+STALL_DEV_M = 4.0 * MAX_DEV_M
+LSQ_TOL = 1e-6
 
 
 @dataclass
@@ -134,8 +143,10 @@ def _residuals(params, m, length, ties, s_data, xy_data, w_data, rules, road_cla
             if len(pin) > 3 and pin[3] is not None:
                 res.append(np.array([ANCHOR_WEIGHT * PIN_HEADING_M**2 * (k_end - pin[3])]))
     if rules is not None:
-        pen = [math.sqrt(curvature_penalty(rules, float(k), road_class)) for k in chain.kappa]
-        res.append(RULE_WEIGHT * math.sqrt(max(len(s_data), 1)) * np.array(pen))
+        # roader.fit.priors.curvature_penalty, with the rule read once per fit (ends[4]).
+        k_rule = ends[4]
+        pen = np.maximum(np.abs(chain.kappa) - k_rule, 0.0) / k_rule
+        res.append(RULE_WEIGHT * math.sqrt(max(len(s_data), 1)) * pen)
     # Keep pieces from collapsing.
     lengths = np.diff(chain.knots)
     res.append(np.maximum(0.0, MIN_PIECE_M - lengths) * 10.0)
@@ -145,14 +156,16 @@ def _residuals(params, m, length, ties, s_data, xy_data, w_data, rules, road_cla
     return np.concatenate(res)
 
 
-def _fit(m, length, ties, init, s_data, xy_data, w_data, rules, road_class, ends):
+def _fit(m, length, ties, init, s_data, xy_data, w_data, rules, road_class, ends, loss="soft_l1"):
     sol = least_squares(
         _residuals,
         init,
         args=(m, length, ties, s_data, xy_data, w_data, rules, road_class, ends),
-        loss="soft_l1",
+        loss=loss,
         f_scale=0.1,
         x_scale="jac",
+        ftol=LSQ_TOL,
+        xtol=LSQ_TOL,
         max_nfev=400,
     )
     return sol.x
@@ -272,30 +285,45 @@ def fit_alignment(
         near = np.minimum(np.abs(s_check - sd_sorted[pos - 1 if len(sd_sorted) > 1 else 0]), np.abs(s_check - sd_sorted[pos]))
         supported = near <= SUPPORT_M
     check_sup = check_xy[supported] if supported.sum() >= 2 else check_xy
+    # Near a pinned end the chain follows the pin (D-051), not the line: those samples
+    # are reported but do not decide how many pieces are needed.
+    pinned = np.zeros(len(check_xy), dtype=bool)
+    if pins[0] is not None:
+        pinned |= s_check < PIN_ZONE_M
+    if pins[1] is not None:
+        pinned |= s_check > length - PIN_ZONE_M
+    free = supported & ~pinned
+    check_free = check_xy[free] if free.sum() >= 2 else check_sup
     w = np.asarray(weights, dtype=np.float64)
-    max_pieces = max_pieces or max(2, min(12, math.ceil(length / 60.0)))
+    max_pieces = max_pieces or max(2, min(MAX_PIECES, max(math.ceil(length / PIECE_M), min(SHORT_PIECES, int(length // MIN_PIECE_M)))))
     # Curvature is bounded at KMAX_RULE_FACTOR / minimum radius of the class: tighter
     # pieces only appear where an end has too few samples to hold it.
-    kmax = KMAX_RULE_FACTOR / rules.get("curve.radius", road_class).low if rules is not None else math.inf
-    ends = (check_xy[0], check_xy[-1], tuple(pins), kmax)
+    k_rule = 1.0 / rules.get("curve.radius", road_class).low if rules is not None else math.inf
+    kmax = KMAX_RULE_FACTOR * k_rule
+    ends = (check_xy[0], check_xy[-1], tuple(pins), kmax, k_rule)
     best = None
     for m in range(1, max_pieces + 1):
         ties: dict = {}
         params = _initial(m, length, check_xy, ties)
         s_fit = s_data.copy()
-        for _ in range(PROJECTION_PASSES):
-            params = _fit(m, length, ties, params, s_fit, xy, w, rules, road_class, ends)
+        for n_pass in range(PROJECTION_PASSES):
+            # The first pass is plain least squares, so samples far from the initial chain
+            # (the line leaving a pinned end at an angle) pull it before the robust pass
+            # can discount them as outliers.
+            loss = "linear" if n_pass == 0 else "soft_l1"
+            params = _fit(m, length, ties, params, s_fit, xy, w, rules, road_class, ends, loss)
             chain = _pieces_from(params, m, length, ties, kmax)
             s_fit = _reproject(chain, xy)
-        dev, rms = _deviation(chain, check_sup)
-        snapped = _snap(chain, m, length, s_fit, xy, w, rules, road_class, check_sup, max_dev, ends)
+        dev, _rms = _deviation(chain, check_free)
+        snapped = _snap(chain, m, length, s_fit, xy, w, rules, road_class, check_free, max_dev, ends)
         if snapped is not None:
-            chain, dev, rms = snapped
-        if best is None or dev < best[1]:
-            best = (chain, dev, rms, m)
-        if dev <= max_dev:
+            chain, dev, _rms = snapped
+        if best is None or dev < STALL_GAIN * best[1]:
+            best = (chain, dev, m)
+        if dev <= max_dev or (best[1] <= STALL_DEV_M and m - best[2] >= STALL_PIECES):
             break
-    chain, dev, rms, m = best
+    chain, _dev, m = best
+    dev, rms = _deviation(chain, check_sup)
     flags = [] if dev <= max_dev else [f"FR-AF-1:deviation {dev:.2f} m"]
     return chain, AlignmentFit(Alignment(), dev, rms, m, flags)
 
