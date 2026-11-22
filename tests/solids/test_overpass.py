@@ -1,0 +1,287 @@
+"""Solid generation on the synthetic overpass (FR-SG-1..6, FR-SV-1..5, FR-SV-7, AC-H3, AC-H5, AC-H6)."""
+
+from __future__ import annotations
+
+import hashlib
+import math
+import os
+import subprocess
+import sys
+
+import numpy as np
+import pytest
+from shapely.geometry import Point, Polygon
+from shapely.ops import unary_union
+
+from roader.model import Mesh
+from roader.model.synthetic import overpass_model
+from roader.solids import generate
+
+from . import meshcheck as mc
+
+
+@pytest.fixture(scope="module")
+def model():
+    return overpass_model()
+
+
+@pytest.fixture(scope="module")
+def meshes(model) -> list[Mesh]:
+    return generate(model)
+
+
+def _closed(meshes: list[Mesh]) -> list[Mesh]:
+    return [m for m in meshes if m.closed]
+
+
+def _by_id(meshes: list[Mesh]) -> dict[str, Mesh]:
+    return {m.id: m for m in meshes}
+
+
+def test_body_list_and_provenance_ac_h6_fr_dm_3(model, meshes):
+    st = model.structures[0]
+    over = model.road(st.carried_road)
+    ids = _by_id(meshes)
+    assert len(ids) == len(meshes)
+    for road in model.roads:
+        n = 2 if road is over else 1
+        found = [m for m in meshes if m.element_id == road.id and m.part == "pavement"]
+        assert len(found) == n
+    assert f"{st.id}:deck" in ids
+    for b in over.cross_section.barriers:
+        assert f"{b.id}:parapet" in ids
+    for sp in st.supports:
+        if sp.kind == "abutment":
+            assert f"{sp.id}:abutment" in ids
+        else:
+            assert f"{sp.id}:pier_cap" in ids
+            assert sum(1 for m in meshes if m.element_id == sp.id and m.part == "pier_column") == sp.n_columns
+    for ss in model.side_slopes:
+        assert f"{ss.id}:embankment" in ids
+    layers = {"pavement": "L3", "embankment": "L4", "deck": "L5", "parapet": "L5", "abutment": "L5",
+              "pier_cap": "L5", "pier_column": "L5", "terrain": "L7"}
+    for m in meshes:
+        assert m.layer == layers[m.part]
+        assert m.material
+        assert m.source is not None
+        assert m.id.startswith(f"{m.element_id}:{m.part}")
+        assert m.closed == (m.part != "terrain")
+    assert meshes[-1].part == "terrain"
+
+
+@pytest.mark.parametrize("index", range(20))
+def test_every_solid_is_valid_fr_sv_1_to_6(meshes, index):
+    closed = _closed(meshes)
+    if index >= len(closed):
+        pytest.skip("fewer solids")
+    mesh = closed[index]
+    assert mc.solid_problems(mesh) == [], mesh.id
+
+
+def test_solid_count(meshes):
+    assert len(_closed(meshes)) == 20
+
+
+def test_no_crossing_triangles_fr_sv_4_fr_sv_7(meshes):
+    assert mc.crossing_pairs(_closed(meshes)) == []
+
+
+def test_interiors_do_not_overlap_fr_sv_7(meshes):
+    closed = _closed(meshes)
+    for mesh in closed:
+        pts = mc.interior_samples(mesh)
+        assert len(pts) > 5, mesh.id
+        for other in closed:
+            if other is mesh:
+                continue
+            lo, hi = mc.bbox(other)
+            near = pts[np.all((pts >= lo) & (pts <= hi), axis=1)]
+            if len(near):
+                assert not mc.inside(near, other).any(), (mesh.id, other.id)
+
+
+def test_contacts_are_conforming_fr_sv_7(meshes):
+    for a in meshes:
+        for b in meshes:
+            if a is not b and mc.boxes_overlap(a, b):
+                assert mc.t_junctions(a, b) == 0, (a.id, b.id)
+
+
+def test_pavement_deck_and_parapets_share_faces_fr_sg_2(model, meshes):
+    st = model.structures[0]
+    over = model.road(st.carried_road)
+    ids = _by_id(meshes)
+    deck = ids[f"{st.id}:deck"]
+    for k in (0, 1):
+        pav = ids[f"{over.id}:pavement:{k}"]
+        assert mc.shared_faces(pav, deck) > 0
+        assert mc.t_junctions(pav, deck) == 0 and mc.t_junctions(deck, pav) == 0
+    for b in over.cross_section.barriers:
+        par = ids[f"{b.id}:parapet"]
+        normals = np.cross(par.vertices[par.faces[:, 1]] - par.vertices[par.faces[:, 0]],
+                           par.vertices[par.faces[:, 2]] - par.vertices[par.faces[:, 0]])
+        bottom = int(np.sum(normals[:, 2] < -1e-9))
+        assert mc.shared_faces(par, deck) == bottom > 0
+    for sp in st.supports:
+        top = ids[f"{sp.id}:abutment"] if sp.kind == "abutment" else ids[f"{sp.id}:pier_cap"]
+        assert mc.shared_faces(top, deck) > 0
+
+
+def test_embankment_top_is_pavement_underside_fr_sg_2(model, meshes):
+    ids = _by_id(meshes)
+    for road in model.roads[:2]:
+        pav = ids[f"{road.id}:pavement"]
+        n = pav.faces.shape[0]
+        normals = np.cross(pav.vertices[pav.faces[:, 1]] - pav.vertices[pav.faces[:, 0]],
+                           pav.vertices[pav.faces[:, 2]] - pav.vertices[pav.faces[:, 0]])
+        underside = int(np.sum(normals[:, 2] < -1e-9))
+        shared = sum(mc.shared_faces(pav, ids[f"{ss.id}:embankment"]) for ss in model.side_slopes if ss.road_id == road.id)
+        assert shared == underside > 0 and n > underside
+
+
+def test_structure_union_is_one_solid_fr_sv_7(model, meshes):
+    st = model.structures[0]
+    over = model.road(st.carried_road)
+    parts = {st.id} | {sp.id for sp in st.supports} | {b.id for b in over.cross_section.barriers}
+    members = [m for m in meshes if m.element_id in parts]
+    assert len(members) == 8
+    verts, faces = mc.merge_union(members)
+    union = Mesh("u", "u", "L5", "deck", "x", "rule", verts, faces)
+    assert mc.closed_and_oriented(union) == []
+    assert mc.components(union) == 1
+    assert mc.vertex_fans(union) == 0
+    total = sum(float(np.sum(m.vertices[m.faces][:, 0] * np.cross(m.vertices[m.faces][:, 1], m.vertices[m.faces][:, 2]))) / 6.0
+                for m in members)
+    from roader.model import signed_volume
+    assert math.isclose(signed_volume(union), total, rel_tol=1e-9)
+
+
+def _surface_hits(mesh: Mesh, xy: np.ndarray) -> list[np.ndarray]:
+    """Elevations where vertical lines at xy cross the mesh."""
+    v = mesh.vertices
+    a, b, c = v[mesh.faces[:, 0]], v[mesh.faces[:, 1]], v[mesh.faces[:, 2]]
+    out = []
+    for x, y in xy:
+        d = (b[:, 1] - c[:, 1]) * (a[:, 0] - c[:, 0]) + (c[:, 0] - b[:, 0]) * (a[:, 1] - c[:, 1])
+        ok = np.abs(d) > 1e-14
+        l1 = ((b[:, 1] - c[:, 1]) * (x - c[:, 0]) + (c[:, 0] - b[:, 0]) * (y - c[:, 1])) / np.where(ok, d, 1.0)
+        l2 = ((c[:, 1] - a[:, 1]) * (x - c[:, 0]) + (a[:, 0] - c[:, 0]) * (y - c[:, 1])) / np.where(ok, d, 1.0)
+        l3 = 1.0 - l1 - l2
+        hit = ok & (l1 >= -1e-12) & (l2 >= -1e-12) & (l3 >= -1e-12)
+        out.append(l1[hit] * a[hit, 2] + l2[hit] * b[hit, 2] + l3[hit] * c[hit, 2])
+    return out
+
+
+def test_void_under_deck_is_open_ac_h3_g3(model, meshes):
+    st = model.structures[0]
+    deck = _by_id(meshes)[f"{st.id}:deck"]
+    checked = 0
+    for road_id in st.crossed_roads:
+        road = model.road(road_id)
+        xs = road.cross_section
+        pts, zs = [], []
+        for s in np.arange(0.0, road.length, 0.5):
+            for u in np.linspace(-xs.width_right(s) + 0.05, xs.width_left(s) - 0.05, 9):
+                x, y = road.alignment.offset_point(float(s), float(u))
+                pts.append((x, y))
+                zs.append(road.surface_z(float(s), float(u)))
+        pts = np.array(pts)
+        lo, hi = mc.bbox(deck)
+        sel = np.all((pts >= lo[:2]) & (pts <= hi[:2]), axis=1)
+        pts, zs = pts[sel], np.array(zs)[sel]
+        soffits = _surface_hits(deck, pts)
+        under = [(p, z, h.min()) for p, z, h in zip(pts, zs, soffits, strict=True) if len(h)]
+        assert len(under) > 50
+        for mesh in _closed(meshes):
+            hits = _surface_hits(mesh, np.array([p for p, _, _ in under]))
+            for (_p, z, soffit), h in zip(under, hits, strict=True):
+                assert not np.any((h > z + 0.05) & (h < soffit - 1e-6)), mesh.id
+        checked += len(under)
+    assert checked > 100
+
+
+def test_terrain_conforms_fr_sg_6(model, meshes):
+    terrain = meshes[-1]
+    assert not terrain.closed and terrain.layer == "L7"
+    t = model.terrain
+    x0, y0 = t.origin_x, t.origin_y
+    x1, y1 = x0 + (t.nx - 1) * t.cell_m, y0 + (t.ny - 1) * t.cell_m
+    solid_edges = set()
+    for m in _closed(meshes):
+        for a, b in mc.edges(m.faces).tolist():
+            pa, pb = tuple(m.vertices[a]), tuple(m.vertices[b])
+            solid_edges.add((pa, pb))
+            solid_edges.add((pb, pa))
+    e = mc.edges(terrain.faces)
+    keys, counts = np.unique(np.sort(e, axis=1), axis=0, return_counts=True)
+    assert counts.max() <= 2
+    on_border = 0
+    for a, b in keys[counts == 1].tolist():
+        pa, pb = terrain.vertices[a], terrain.vertices[b]
+        border = any(
+            abs(pa[k] - v) < 1e-6 and abs(pb[k] - v) < 1e-6 for k, v in ((0, x0), (0, x1), (1, y0), (1, y1))
+        )
+        if border:
+            on_border += 1
+            continue
+        assert (tuple(pa), tuple(pb)) in solid_edges
+    assert on_border > 0
+    # No terrain inside a ground-contact footprint; the ground under the span stays.
+    tv = {tuple(r) for r in terrain.vertices.tolist()}
+    footprints = []
+    for m in _closed(meshes):
+        if any(tuple(r) in tv for r in m.vertices.tolist()):
+            footprints.append(unary_union([Polygon(tri[:, :2]) for tri in m.vertices[m.faces] if Polygon(tri[:, :2]).area > 1e-9]))
+    assert len(footprints) >= 10
+    fp = unary_union(footprints).buffer(-1e-6)
+    cent = terrain.vertices[terrain.faces].mean(axis=1)
+    lo, hi = np.array(fp.bounds[:2]), np.array(fp.bounds[2:])
+    sel = np.all((cent[:, :2] >= lo) & (cent[:, :2] <= hi), axis=1)
+    assert not any(fp.contains(Point(p)) for p in cent[sel, :2])
+    over = model.road(model.structures[0].carried_road)
+    under_span = np.array([over.alignment.offset_point(250.9, 0.0), over.alignment.offset_point(230.0, 0.0)])
+    assert [len(h) for h in _surface_hits(terrain, under_span)] == [1, 1]
+
+
+def test_determinism_ac_h5(model, meshes):
+    again = generate(overpass_model())
+    assert [m.id for m in again] == [m.id for m in meshes]
+    for a, b in zip(meshes, again, strict=True):
+        assert np.array_equal(a.vertices, b.vertices) and np.array_equal(a.faces, b.faces)
+
+
+def _digest_in_subprocess(seed: str) -> str:
+    code = (
+        "import hashlib\n"
+        "from roader.model.synthetic import overpass_model\n"
+        "from roader.solids import generate\n"
+        "h = hashlib.sha256()\n"
+        "for m in generate(overpass_model()):\n"
+        "    h.update(m.id.encode()); h.update(m.vertices.tobytes()); h.update(m.faces.tobytes())\n"
+        "print(h.hexdigest())\n"
+    )
+    src = os.path.join(os.path.dirname(__file__), "..", "..", "src")
+    env = dict(os.environ, PYTHONHASHSEED=seed, PYTHONPATH=os.path.abspath(src))
+    return subprocess.run([sys.executable, "-c", code], env=env, capture_output=True, text=True, check=True).stdout.strip()
+
+
+def test_determinism_across_processes_ac_h5(meshes):
+    h = hashlib.sha256()
+    for m in meshes:
+        h.update(m.id.encode())
+        h.update(m.vertices.tobytes())
+        h.update(m.faces.tobytes())
+    assert _digest_in_subprocess("1") == _digest_in_subprocess("2") == h.hexdigest()
+
+
+def test_triangle_budget_report_fr_as_2(model, meshes, capsys):
+    st = model.structures[0]
+    over = model.road(st.carried_road)
+    parts = {st.id} | {sp.id for sp in st.supports} | {b.id for b in over.cross_section.barriers}
+    overpass = sum(len(m.faces) for m in meshes if m.element_id in parts)
+    assert overpass < 60_000
+    with capsys.disabled():
+        print()
+        for m in meshes:
+            print(f"  {m.id:42s} {m.part:12s} {len(m.faces):7d}")
+        print(f"  overpass (structure parts): {overpass} triangles")
