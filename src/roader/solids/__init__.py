@@ -18,6 +18,7 @@ from roader.solids.assemble import assemble
 from roader.solids.attributes import RoadFrame, finish, terrain_attributes
 from roader.solids.bodies import road_bodies
 from roader.solids.grid import PlanVertices
+from roader.solids.junctions import JunctionPlan
 from roader.solids.terrain import TerrainSampler, terrain_meshes
 
 TERRAIN_ELEMENT_ID = "terrain"
@@ -47,9 +48,11 @@ def generate(model: RoadModel, chord_tol_m: float = 0.01, profile: str = "analyt
     realtime = profile == "realtime"
     sampler = TerrainSampler(model.terrain) if model.terrain is not None else None
     pv = PlanVertices()
+    plan = JunctionPlan(model, pv)  # L6 areas replace the road sweeps they cover (FR-SG-3)
     bodies = []
     for road in model.roads:
-        bodies.extend(road_bodies(model, road, sampler, chord_tol_m, pv, realtime=realtime))
+        bodies.extend(plan.clip(road_bodies(model, plan.road(road), sampler, chord_tol_m, pv, realtime=realtime)))
+    bodies.extend(plan.bodies(sampler, chord_tol_m))
     result = assemble(bodies, pv, sampler, conforming=not realtime)
     frames = {road.id: RoadFrame(road) for road in model.roads}
     meshes = [finish(raw, pv, frames, realtime=realtime) for raw in result.raw]
