@@ -6,22 +6,24 @@ clearance check against the structure above; engineered ground under bridges
 
 Public API:
     label_under_deck, split_at_structures, check_clearances, clearance_profile
-    side_slopes, terrain_patch
+    side_slopes, complete_terrain (terrain completion), seat_supports
 """
 
-from roader.complete.earthwork import side_slopes, terrain_patch
+from roader.complete.earthwork import side_slopes
 from roader.complete.occlusion import (
     check_clearances,
     clearance_profile,
     label_under_deck,
     split_at_structures,
 )
+from roader.complete.terrain import complete_terrain, seat_supports
 
 __all__ = [
     "check_clearances",
     "clearance_profile",
+    "complete_terrain",
     "label_under_deck",
+    "seat_supports",
     "side_slopes",
     "split_at_structures",
-    "terrain_patch",
 ]

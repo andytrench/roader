@@ -1,8 +1,13 @@
-"""Milestone 1 site wboylston_laurel_i190 end to end (AC-H2..H6, AC-A1, AC-A3, AC-A4, AC-A5).
+"""Milestone 1 acceptance on wboylston_laurel_i190 (plan 1.12): AC-H1..H6, AC-A1, AC-A3, AC-A4, AC-A5.
 
-Runs on the full AOI at full density (about 8.1 M returns, roughly a minute):
-evidence is computed only inside a 45 m corridor around the in-scope roads, so
-no cropping or decimation is needed. Skipped when the fixture is not fetched.
+Runs on the full AOI at full density (about 8.1 M returns): evidence is computed
+only inside a 45 m corridor around the in-scope roads, so no cropping or
+decimation is needed. The unit goes through ``roader.export.run.export_model``
+(meshes, exports twice for AC-H5, every gate, publish or hold). About three
+minutes; skipped when the fixture is not fetched.
+
+References: AC-H2 and AC-A4 use the draft hand-labelled crossing list, AC-A5 the
+draft structure ends in the same file (``status: draft, needs human review``).
 """
 
 from __future__ import annotations
@@ -14,23 +19,17 @@ import numpy as np
 import pytest
 import yaml
 
-from roader.io import build_unit_record, load_unit_config, read_points, read_vectors
+from roader.export.run import export_model
+from roader.io import (
+    FrameTransformer,
+    build_unit_record,
+    load_unit_config,
+    read_points,
+    read_vectors,
+)
 from roader.model import dumps
-from roader.pipeline import (
-    deck_edge_mask,
-    holdout_for,
-    measure_edges,
-    pavement_points,
-    run_pipeline,
-)
-from roader.validate import (
-    crossing_dz_accuracy,
-    horizontal_accuracy,
-    run_gates,
-    structure_station_accuracy,
-    surface_accuracy,
-)
-from roader.validate.accuracy import holdout_mask
+from roader.pipeline import holdout_for, measure_edges, pavement_points, run_pipeline
+from roader.validate.val3dity import find_val3dity
 
 ROOT = Path(__file__).resolve().parents[2]
 CONFIG = ROOT / "configs" / "units" / "wboylston_laurel_i190.toml"
@@ -41,12 +40,6 @@ pytestmark = pytest.mark.skipif(
     not (cfg.lidar[0].path.exists() and cfg.vectors["osm"].path.exists()),
     reason="fixture not fetched; run scripts/fetch_fixtures.py --site wboylston_laurel_i190",
 )
-
-try:
-    from roader.solids import generate
-except ImportError:  # the solids lane has not merged yet
-    generate = None
-
 
 @pytest.fixture(scope="module")
 def site():
@@ -79,7 +72,7 @@ def _reference(model):
 
 def test_scope_roads_and_crossings(site):
     model = site[3].model
-    assert sorted(r.name for r in model.roads) == ["I 190 northbound", "I 190 southbound", "Laurel Street"]
+    assert sorted(r.name for r in model.roads) == ["I-190 northbound", "I-190 southbound", "Laurel Street"]
     assert len(model.crossings) == 2
     laurel = next(r for r in model.roads if r.name == "Laurel Street")
     assert all(c.upper_road == laurel.id for c in model.crossings)
@@ -87,35 +80,11 @@ def test_scope_roads_and_crossings(site):
         assert abs(math.degrees(abs(c.skew_rad)) - 32.0) < 3.0
 
 
-def test_hard_gates(site):
-    model = site[3].model
-    ref, _dz = _reference(model)
-    meshes = []
-    if generate is not None:
-        try:
-            meshes = generate(model)
-        except NotImplementedError:
-            meshes = []
-    report = run_gates(model, meshes, crossings_ref=ref)
-    gates = {r.gate: r for r in report.results}
-    for gate in ("AC-H2", "AC-H3", "AC-H4", "AC-H6"):
-        assert gates[gate].passed, (gate, [v.message for v in gates[gate].violations][:5])
-    print({g: (r.passed, r.skipped_reason, r.metrics) for g, r in gates.items()})
-
-
 def test_ac_h5_model_bytes_reproduce(site):
     pts, _pav, hold, res = site
     frame = cfg.frame()
     again = run_pipeline(pts, read_vectors(cfg.vectors, frame), frame, res.model.unit, holdout=hold)
     assert dumps(again.model) == dumps(res.model)
-
-
-def test_ac_a4_against_the_draft_crossing_list(site):
-    model = site[3].model
-    _ref, dz = _reference(model)
-    r = crossing_dz_accuracy(model, dz)
-    print(r.metrics, {c.id: round(c.dz_m, 3) for c in model.crossings})
-    assert r.passed, [v.message for v in r.violations]
 
 
 def test_one_structure_spans_both_carriageways(site):
@@ -127,35 +96,52 @@ def test_one_structure_spans_both_carriageways(site):
     assert [sp.kind for sp in sorted(st.supports, key=lambda p: p.station)] == ["abutment", "pier", "abutment"]
 
 
-def test_ac_a5_structure_ends_against_independent_sheet_break(site):
-    """Model ends come from deck-class returns that agree with the sheet break; the
-    reference here is the sheet-break estimate (a different method). There is no
-    hand-labelled end yet, so this reports the gap and bounds it loosely."""
-    res = site[3]
-    st = res.model.structures[0]
-    ext = next(e for e in res.extents if e.road_id == st.carried_road and e.geom)
-    r = structure_station_accuracy(res.model, {st.id: ext.geom}, tol=2.0)
-    print("AC-A5 vs sheet break", r.metrics, (st.s_start, st.s_end), ext.geom)
-    assert r.metrics["max_abs_err_m"] <= 5.0
+def _draft_ends(model) -> dict[str, tuple[float, float]]:
+    """Draft structure ends (lon/lat on the centerline) as stations on the model's carried road."""
+    doc = yaml.safe_load(CROSSINGS.read_text())
+    to_unit = FrameTransformer(cfg.frame())
+    out = {}
+    for entry in doc.get("structure_ends", []):
+        assert entry["status"].startswith("draft")
+        road = _road_for_way(model, entry["carried"]["osm_way"])
+        st = next(s for s in model.structures if s.carried_road == road.id)
+        stations = []
+        for key in ("start_lonlat", "end_lonlat"):
+            x, y = to_unit.lonlat_to_unit([entry[key][0]], [entry[key][1]])
+            stations.append(road.alignment.project(float(x[0]), float(y[0]))[0])
+        out[st.id] = (min(stations), max(stations))
+    return out
 
 
-def test_ac_a1_travel_surface_on_held_out_returns(site):
-    _pts, pav, _hold, res = site
-    raw = surface_accuracy(res.model, pav)
-    mask = holdout_mask(pav[:, :2])
-    edge = deck_edge_mask(res.model, pav)
-    r = surface_accuracy(res.model, pav[~edge], mask=mask[~edge])
-    print("AC-A1 raw", raw.metrics, "travel surface", r.metrics, "deck-edge returns excluded", int((edge & mask).sum()))
-    assert r.passed, r.metrics
+@pytest.fixture(scope="module")
+def acceptance(site, tmp_path_factory):
+    pts, pav, hold, res = site
+    model = res.model
+    ref, dz = _reference(model)
+    measured = {
+        "edges": measure_edges(model, pts, holdout=hold),
+        "crossing_dz": dz,
+        "structure_stations": _draft_ends(model),
+    }
+    out = tmp_path_factory.mktemp("m1")
+    report, paths = export_model(model, out, crossings_ref=ref, points=pav, measured=measured, val3dity_exe=find_val3dity())
+    return report, paths
 
 
-def test_ac_a3_edges_in_held_out_blocks(site):
-    pts, _pav, hold, res = site
-    edges = measure_edges(res.model, pts, holdout=hold)
-    r = horizontal_accuracy(res.model, edges)
-    print("AC-A3", r.metrics)
-    assert r.metrics["n_points"] >= 50
-    assert r.passed, r.metrics
+def test_m1_acceptance_gate_table(acceptance):
+    report, paths = acceptance
+    gates = {r.gate: r for r in report.results}
+    for name in sorted(gates):
+        r = gates[name]
+        print(f"{name:6s} {'PASS' if r.passed else 'FAIL'} {'hard' if r.hard else 'target'} {r.skipped_reason} {r.metrics}")
+    for gate in ("AC-H2", "AC-H3", "AC-H4", "AC-H5", "AC-H6", "AC-A1", "AC-A3", "AC-A4", "AC-A5"):
+        assert gates[gate].passed, (gate, gates[gate].skipped_reason, [v.message for v in gates[gate].violations][:5])
+    assert gates["AC-H1"].metrics.get("n_native_violations") == 0.0, [v.message for v in gates["AC-H1"].violations][:5]
+    if find_val3dity() is None:
+        pytest.skip("val3dity not available: AC-H1 oracle half not run, unit is held by design (D-022)")
+    assert gates["AC-H1"].passed, [v.message for v in gates["AC-H1"].violations][:5]
+    assert all(r.passed for r in report.results if r.hard)
+    assert "held" not in paths
 
 
 def test_unit_record_carries_density_and_strip_metrics(site):

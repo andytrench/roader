@@ -69,13 +69,8 @@ def knot_stations(length: float, spacing: float, gaps: list[tuple[float, float]]
     keep = np.ones(len(knots), dtype=bool)
     for a, b in gaps:
         keep &= ~((knots > a) & (knots < b))
-    knots = knots[keep]
-    extra = []
-    for a, b in gaps:
-        for edge in (a, b):
-            if 0.0 < edge < length:
-                extra.append(edge)
-    return np.unique(np.concatenate([knots, extra]))
+    # No knot at a gap edge either: data there are thin and a knot would swing.
+    return knots[keep]
 
 
 def simplify(knots: np.ndarray, values: np.ndarray, tol: float) -> tuple[np.ndarray, np.ndarray]:

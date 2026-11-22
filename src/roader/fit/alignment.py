@@ -24,6 +24,7 @@ from roader.conflate.polyline import Polyline
 from roader.fit.priors import curvature_penalty
 from roader.model.geometry import AlignElement, Alignment
 from roader.model.provenance import Provenance, Source
+from roader.model.serialize import FLOAT_DIGITS
 from roader.rules import RuleBook
 
 MAX_DEV_M = 0.25  # FR-AF-1
@@ -302,14 +303,23 @@ def to_alignment(chain: _Chain, provs: list[Provenance] | None = None) -> Alignm
             pieces[-1] = (kind, pieces[-1][1], s1, k0, k1)
         else:
             pieces.append((kind, s0, s1, k0, k1))
+    # Every value is rounded as the canonical JSON will round it (D-011, FLOAT_DIGITS), and
+    # each element starts at the end of its rounded predecessor, so reading the model
+    # back moves no joint (AC-H4, AC-H5).
     elements = []
     x, y, h = chain.x0, chain.y0, chain.h0
     for n, (kind, s0, s1, k0, k1) in enumerate(pieces):
         prov = provs[n] if provs else Provenance(Source.MEASURED, 0.5)
-        el = AlignElement(kind, s0, s1 - s0, x, y, h, k0, k1, prov)
+        s0r, s1r = _r(s0), _r(s1)
+        el = AlignElement(kind, s0r, _r(s1r - s0r), _r(x), _r(y), _r(h), _r(k0), _r(k1), prov)
         elements.append(el)
         x, y, h, _k = el.end_state()
     return Alignment(elements)
+
+
+def _r(v: float) -> float:
+    out = round(float(v), FLOAT_DIGITS)
+    return 0.0 if out == 0.0 else out
 
 
 def element_ranges(chain: _Chain) -> list[tuple[float, float]]:

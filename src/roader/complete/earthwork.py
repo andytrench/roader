@@ -1,11 +1,11 @@
-"""L4 side slopes and the L7 terrain patch (FR-OC-3, FR-SG-6 input).
+"""L4 side slopes (FR-OC-3).
 
 Side slopes are measured from the ground just beyond each pavement edge and
 grouped into runs of one kind (fill, cut, wall, none). Where the ground beside a
 road is not observed (under a deck), the neighbouring run is carried through
-and tagged; over a structure the carried road has no side slope. The terrain
-patch is the lowest smooth surface per cell, with deck footprints removed so the
-deck is never taken for ground.
+and tagged; over a structure the carried road has no side slope. Cuts and walls
+are written as ``none`` with the measured kind and ratio in the provenance
+flags, because milestone 1 solids render fills only.
 """
 
 from __future__ import annotations
@@ -14,10 +14,9 @@ import math
 
 import numpy as np
 
-from roader.evidence import Evidence
 from roader.fit.road import RoadFit, confidence
 from roader.model.provenance import Provenance, Source
-from roader.model.schema import SideSlope, Structure, TerrainPatch
+from roader.model.schema import SideSlope, Structure
 from roader.model.serialize import stable_id
 from roader.rules import RuleBook
 
@@ -28,7 +27,9 @@ BAND_OUTER_M = 3.0
 FLAT_SLOPE = 1.0 / 20.0  # gentler than 1:20 is no side slope
 WALL_RATIO = 0.5  # steeper than 1:0.5 (h:v) is a wall
 MIN_RUN_M = 20.0
-TERRAIN_CELL_M = 2.0
+MERGE_RATIO_REL = 0.15
+# A measured fill gentler than this times the rule's flattest fill is the natural ground, not an embankment.
+GENTLE_FACTOR = 1.5
 
 
 def _station_slopes(fit: RoadFit, side: str, skip: list[tuple[float, float]]) -> tuple[np.ndarray, list[str], np.ndarray, np.ndarray]:
@@ -116,6 +117,15 @@ def side_slopes(fit: RoadFit, structures: list[Structure], rules: RuleBook, stri
             vals = vals[np.isfinite(vals) & (vals > 0)]
             observed = [i for i in idx if not filled[i].startswith("carried")]
             obs_frac = len(observed) / max(len(idx), 1)
+            if kind == "fill" and vals.size and float(np.median(vals)) > rules.get("slope.fill_h_per_v").high * GENTLE_FACTOR:
+                kind = "gentle"
+            if kind in ("cut", "wall", "gentle"):
+                # Milestone 1 solids render fills only; the measured cut or wall is kept in the flags.
+                prov = Provenance(Source.MEASURED, confidence(obs_frac, None, strip_factor), n_points=int(counts[idx].sum()), observed_fraction=obs_frac)
+                label = "fill_gentler_than_rule" if kind == "gentle" else kind
+                prov.flags.append(f"L4:measured_{label}:ratio={float(np.median(vals)) if vals.size else 0.0:.2f}")
+                out.append(SideSlope(stable_id("ss", road.id, side, round(s0, 0)), road.id, side, float(s0), float(s1), "none", 0.0, prov))
+                continue
             if kind == "none" or vals.size == 0:
                 ratio = 0.0 if kind == "none" else float("nan")
             else:
@@ -131,44 +141,33 @@ def side_slopes(fit: RoadFit, structures: list[Structure], rules: RuleBook, stri
                     if not ok:
                         prov.flags.append(f"FR-RL-3:out_of_range:{rule.id}")
             out.append(SideSlope(stable_id("ss", road.id, side, round(s0, 0)), road.id, side, float(s0), float(s1), kind, float(ratio), prov))
+    return _merge_similar(out)
+
+
+def _merge_similar(items: list[SideSlope]) -> list[SideSlope]:
+    """Join touching runs of one kind on one side whose ratios differ by less than MERGE_RATIO_REL.
+
+    Two fills meeting at one station with nearly equal ratios would leave their toes
+    a fraction of a millimetre apart, a sliver no solid should carry (FR-SV-5).
+    """
+    items = sorted(items, key=lambda s: (s.road_id, s.side, s.s0))
+    out: list[SideSlope] = []
+    for ss in items:
+        prev = out[-1] if out else None
+        if (
+            prev is not None
+            and prev.road_id == ss.road_id
+            and prev.side == ss.side
+            and prev.kind == ss.kind
+            and abs(prev.s1 - ss.s0) < 1e-6
+            and abs(prev.ratio - ss.ratio) <= MERGE_RATIO_REL * max(prev.ratio, ss.ratio, 1e-9)
+        ):
+            la, lb = prev.s1 - prev.s0, ss.s1 - ss.s0
+            prev.ratio = (prev.ratio * la + ss.ratio * lb) / (la + lb)
+            prev.s1 = ss.s1
+            prev.prov.n_points += ss.prov.n_points
+            continue
+        out.append(ss)
+    for ss in out:
+        ss.ratio = round(ss.ratio, 3)
     return out
-
-
-def terrain_patch(ev: Evidence, structures: list[Structure], fits: dict[str, RoadFit]) -> TerrainPatch | None:
-    lay = ev.layers
-    if len(lay) == 0:
-        return None
-    _keys, first, _count = lay.cell_ranges()
-    # Lowest layer per 1 m cell (layers are sorted by height within a cell), not raised.
-    gi = first
-    ok = (ev.layer_label[gi] == 0) & (lay.n[gi] >= 2)
-    gi = gi[ok]
-    xy = lay.center_xy(gi)
-    z = lay.z[gi]
-    deck = np.zeros(len(gi), dtype=bool)
-    for st in structures:
-        fit = fits[st.carried_road]
-        s, u, inside = fit.line.project(xy, max_dist=30.0)
-        road = fit.road
-        wl = np.interp(s, [k.s for k in road.cross_section.width_left.knots], [k.value for k in road.cross_section.width_left.knots])
-        wr = np.interp(s, [k.s for k in road.cross_section.width_right.knots], [k.value for k in road.cross_section.width_right.knots])
-        pad = st.deck.overhang_m + 0.5
-        deck |= inside & (s >= st.s_start) & (s <= st.s_end) & (u <= wl + pad) & (u >= -wr - pad)
-    xy, z = xy[~deck], z[~deck]
-    if len(z) == 0:
-        return None
-    c = TERRAIN_CELL_M
-    x0 = math.floor(xy[:, 0].min() / c) * c
-    y0 = math.floor(xy[:, 1].min() / c) * c
-    ix = np.floor((xy[:, 0] - x0) / c).astype(np.int64)
-    iy = np.floor((xy[:, 1] - y0) / c).astype(np.int64)
-    nx, ny = int(ix.max()) + 1, int(iy.max()) + 1
-    key = iy * nx + ix
-    order = np.lexsort((z, key))
-    ks, zs = key[order], z[order]
-    uk, start, cnt = np.unique(ks, return_index=True, return_counts=True)
-    med = 0.5 * (zs[start + (cnt - 1) // 2] + zs[start + cnt // 2])
-    grid: list[float | None] = [None] * (nx * ny)
-    for k, v in zip(uk.tolist(), med.tolist(), strict=True):
-        grid[k] = round(v, 3)
-    return TerrainPatch(float(x0), float(y0), c, nx, ny, grid, Provenance(Source.MEASURED, 0.8, n_points=len(z)))

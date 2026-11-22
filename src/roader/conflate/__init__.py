@@ -13,7 +13,12 @@ Public API:
 
 from roader.conflate.graph import RoadSeed, data_extent, select_roads
 from roader.conflate.polyline import Polyline
-from roader.conflate.register import Profiles, cross_profiles, near_points, register_line
+from roader.conflate.register import (
+    Profiles,
+    cross_profiles,
+    near_points,
+    register_line,
+)
 from roader.conflate.track import Track, track_line
 
 __all__ = [

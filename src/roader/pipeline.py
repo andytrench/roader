@@ -27,10 +27,11 @@ import numpy as np
 
 from roader.complete import (
     check_clearances,
+    complete_terrain,
     label_under_deck,
+    seat_supports,
     side_slopes,
     split_at_structures,
-    terrain_patch,
 )
 from roader.conflate.crossings import CrossingMeasure, find_crossings
 from roader.conflate.graph import data_extent, select_roads
@@ -45,13 +46,15 @@ from roader.io.points import PointSet
 from roader.io.vectors import VectorEdge
 from roader.model.provenance import Source
 from roader.model.schema import Flag, Frame, RoadModel, UnitRecord
+from roader.model.serialize import dumps, loads
 from roader.rules import RuleBook
 from roader.structures import infer_structure, parapet_fill
 from roader.structures.infer import _footprint_on
 
 UNMATCHED_SHEET_CELLS = 400  # FR-VC-5: paved sheets this large with no road are reported
 RULE_EXTENT_PAD_M = 1.0
-DECK_LEVEL_M = 2.0
+SKEW_REACH_M = 15.0
+PARAPET_EDGE_GAP_M = 0.02  # keeps the parapet face and the pavement edge distinct sweep lines
 
 
 @dataclass
@@ -147,6 +150,11 @@ def run_pipeline(
         _fit_overhang(by_id[e.road_id].road, res.structure, barriers[e.road_id])
 
     for f in fits:
+        _clip_parapets(barriers[f.road.id], [st for st in structures if st.carried_road == f.road.id])
+        _parapets_outside_pavement(f.road, barriers[f.road.id])
+        for st in structures:
+            if st.carried_road == f.road.id:
+                _fit_overhang(f.road, st, barriers[f.road.id])
         f.road.cross_section.barriers = sorted(barriers[f.road.id], key=lambda b: (b.side, b.s0, b.id))
 
     slopes = []
@@ -165,15 +173,20 @@ def run_pipeline(
         crossings=sorted(crossings, key=lambda c: c.id),
         structures=sorted(structures, key=lambda s: s.id),
         side_slopes=sorted(slopes, key=lambda s: s.id),
-        terrain=terrain_patch(ev, structures, by_id),
     )
     for road in model.roads:
         if any(st.carried_road == road.id for st in model.structures):
             split_at_structures(road, model.structures)
         label_under_deck(road, model)
     flags.extend(check_clearances(model, rules))
+    # Stage 8 terrain after the clearance refit, so caps and soffits are final (FR-OC-3).
+    model.terrain = complete_terrain(fit_points, model, rules)
+    seat_supports(model, rules)
     flags.extend(_unmatched_sheets(ev, fits))
     model.flags = sorted(flags, key=lambda f: (f.req, f.code, f.element_id, f.message))
+    # The canonical form (D-011): a model built here and the same model read back
+    # from its native file render byte-identical exports (AC-H5).
+    model = loads(dumps(model))
     return PipelineResult(model, ev, fits, measures, extents)
 
 
@@ -188,6 +201,36 @@ def build_model(
 ) -> RoadModel:
     """The section 5 model of one unit. ``holdout``: boolean per point, True = withheld (D-018)."""
     return run_pipeline(points, vectors, frame, unit, rules, holdout=holdout).model
+
+
+def _clip_parapets(barriers, structures) -> None:
+    """Parapets stand on the deck: their station range is the structure's (FR-RD-4, FR-SG-1)."""
+    for b in barriers:
+        if b.kind != "parapet":
+            continue
+        for st in structures:
+            if b.s1 > st.s_start and b.s0 < st.s_end:
+                b.s0, b.s1 = max(b.s0, st.s_start), min(b.s1, st.s_end)
+                if abs(b.s0 - st.s_start) < 2.0:
+                    b.s0 = st.s_start
+                if abs(b.s1 - st.s_end) < 2.0:
+                    b.s1 = st.s_end
+                break
+
+
+def _parapets_outside_pavement(road, barriers) -> None:
+    """A parapet's inner face never cuts into the pavement it bounds: offset >= widest pavement over its range."""
+    for b in barriers:
+        if b.kind != "parapet":
+            continue
+        piece = road.cross_section.width_left if b.side == "left" else road.cross_section.width_right
+        # Skewed sweep stations sample the edge up to |tan(skew)| * width beyond the span.
+        a, c = b.s0 - SKEW_REACH_M, b.s1 + SKEW_REACH_M
+        stations = [a, c] + [k.s for k in piece.knots if a < k.s < c]
+        widest = max(piece(s) for s in stations) + PARAPET_EDGE_GAP_M
+        if b.offset_m < widest:
+            b.offset_m = widest
+            b.prov.flags.append("FR-SG-1:offset_at_pavement_edge")
 
 
 def _fit_overhang(road, structure, barriers) -> None:
@@ -267,32 +310,6 @@ def holdout_for(points: PointSet, pavement_xyz: np.ndarray) -> np.ndarray:
     key = pb[:, 0] * 1_000_003 + pb[:, 1]
     wanted = np.array(sorted(bx * 1_000_003 + by for bx, by in blocks), dtype=np.int64)
     return np.isin(key, wanted)
-
-
-def deck_edge_mask(model: RoadModel, xyz: np.ndarray) -> np.ndarray:
-    """True for returns on a deck footprint but outside the carried road's pavement (walkways, curbs, parapets).
-
-    ``roader.validate.surface_accuracy`` assigns such returns to the road below
-    the deck, seven meters down; they are not travel surface of either road.
-    """
-    from roader.conflate.polyline import Polyline
-    from roader.validate.accuracy import _pw
-
-    out = np.zeros(len(xyz), dtype=bool)
-    for st in model.structures:
-        road = model.road(st.carried_road)
-        line = Polyline.from_alignment(road.alignment)
-        s, u, ok = line.project(xyz[:, :2], max_dist=40.0)
-        s = np.nan_to_num(s)
-        xs = road.cross_section
-        on_deck = ok & (s >= st.s_start) & (s <= st.s_end)
-        on_deck &= (u <= _pw(xs.width_left, s) + st.deck.overhang_m + 0.5) & (u >= -_pw(xs.width_right, s) - st.deck.overhang_m - 0.5)
-        inside = (u <= _pw(xs.width_left, s)) & (u >= -_pw(xs.width_right, s))
-        idx = np.flatnonzero(on_deck & ~inside)
-        deck_z = np.array([road.profile.z(float(v)) for v in s[idx]])
-        # Only returns at deck level; the lower road seen past the deck edge stays.
-        out[idx[np.abs(xyz[idx, 2] - deck_z) < DECK_LEVEL_M]] = True
-    return out
 
 
 def measure_edges(model: RoadModel, points: PointSet, holdout: np.ndarray | None = None) -> list[dict]:

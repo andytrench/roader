@@ -323,6 +323,10 @@ class TerrainPatch:
     ny: int
     z: list[float | None]
     prov: Provenance
+    # Per-cell origin of z, same order as z (FR-OC-3, AC-H6). Empty means all
+    # measured. 0 measured, 1 gap interpolated, 2 under a structure, 3 under a
+    # road or embankment footprint, 4 lowered below a non-ground solid.
+    fill: list[int] = field(default_factory=list)
 
 
 # ---------------------------------------------------------------- the model

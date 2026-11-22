@@ -11,6 +11,7 @@ source (FR-IN-7).
 from __future__ import annotations
 
 import math
+import re
 from dataclasses import dataclass, field
 
 import numpy as np
@@ -130,6 +131,13 @@ def _bound(heading: float) -> str:
     return "eastbound"
 
 
+def _route_label(ref: str) -> str:
+    """Interstate refs as written on signs and in crossing lists: "I 190" -> "I-190"."""
+    first = ref.split(";")[0].strip()
+    m = re.fullmatch(r"I\s*-?\s*(\d+[A-Z]?)", first)
+    return f"I-{m.group(1)}" if m else first
+
+
 def _kind(tags: dict[str, str]) -> str:
     highway = tags.get("highway", "")
     if highway in ("motorway", "trunk") and is_limited_access(tags):
@@ -192,7 +200,7 @@ def select_roads(edges: list[VectorEdge], extent: shapely.Geometry | None = None
         name = tags.get("name") or tags.get("ref") or f"{tags.get('highway', 'road')} {first.feature_id}"
         if oneway and _kind(tags) == "mainline":
             h = _heading(pc[0], pc[-1])
-            name = f"{tags.get('ref') or name} {_bound(h)}"
+            name = f"{_route_label(tags.get('ref') or name)} {_bound(h)}"
         spans = []
         offset = line.project(shapely.Point(pc[0]))
         for i, a, b in ranges:

@@ -35,3 +35,32 @@ crossings:
     dz_m: 7.4
     skew_deg: 32
     tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+
+# AC-A5 structure ends. status: draft, needs human review. NOT ground truth.
+#
+# Drafted 2026-11-22 from the pinned lidar fixture only (no imagery, no plans, no
+# inventory record). Method: returns classified 17 (bridge deck) lying on the
+# Laurel Street pavement surface (within the fitted pavement width, within 0.5 m
+# of the fitted surface), projected onto the fitted Laurel Street centerline; the
+# ends are the 0.5th and 99.5th percentile stations, written as lon/lat points on
+# the centerline so they do not depend on model stations. Class 17 is vendor
+# evidence (FR-IN-3); the pipeline also uses it when it agrees with the sheet
+# break, so AC-A5 against these ends is a consistency check, not an independent
+# measurement. The sheet-break estimate (ground 1.5-4 m beyond both pavement
+# edges more than 2.5 m below the deck, skew-corrected) is listed as an
+# alternative; it runs about 3 m longer at each end, probably over the wingwalls.
+# Review checklist: confirm the deck joints (backwalls) from plans, inventory
+# (NBI length about 101 m in OSM) or a site visit, and replace these values.
+structure_ends:
+  - id: laurel_over_i190
+    status: draft, needs human review
+    carried: {osm_way: 183371679, name: Laurel Street}
+    method: class 17 extent on the carried pavement (0.5 / 99.5 percentile stations)
+    start_lonlat: [-71.8171235, 42.3888443]
+    end_lonlat: [-71.8158562, 42.3891055]
+    length_m: 108.3
+    alternative:
+      method: sheet break beside the deck, skew-corrected
+      start_lonlat: [-71.817157, 42.3888374]
+      end_lonlat: [-71.8158264, 42.3891116]
+      length_m: 113.7

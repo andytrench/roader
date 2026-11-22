@@ -5,20 +5,17 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
+from roader.export.run import export_model
 from roader.model import dumps, loads
 from roader.pipeline import build_model, holdout_for, pavement_points, run_pipeline
+from roader.solids import generate
 from roader.validate import (
     crossing_dz_accuracy,
-    run_gates,
     structure_station_accuracy,
     surface_accuracy,
 )
 from roader.validate.accuracy import BLOCK_M
-
-try:
-    from roader.solids import generate
-except ImportError:  # the solids lane has not merged yet
-    generate = None
+from roader.validate.val3dity import find_val3dity
 
 
 def test_ac_h5_fr_pl_3_deterministic_bytes(points, vectors, truth, model):
@@ -27,24 +24,39 @@ def test_ac_h5_fr_pl_3_deterministic_bytes(points, vectors, truth, model):
     assert dumps(loads(dumps(model))) == dumps(model)
 
 
-def _meshes(model):
-    if generate is None:
-        return []
-    try:
-        return generate(model)
-    except NotImplementedError:
-        return []
+REF = [{"upper_name": "Route 1", "lower_name": "I-99 eastbound"}, {"upper_name": "Route 1", "lower_name": "I-99 westbound"}]
 
 
-def test_hard_gates_that_the_model_owns(model):
-    ref = [{"upper_name": "Route 1", "lower_name": "I 99 eastbound"}, {"upper_name": "Route 1", "lower_name": "I 99 westbound"}]
-    meshes = _meshes(model)
-    report = run_gates(model, meshes, crossings_ref=ref)
+def test_generate_renders_every_model_part(model):
+    """Stage 10 consumes the completed model: terrain, embankments, deck, supports, parapets (FR-SG-6, FR-OC-3)."""
+    meshes = generate(model)
+    parts = {m.part for m in meshes}
+    assert {"pavement", "embankment", "deck", "abutment", "pier_cap", "pier_column", "parapet", "terrain"} <= parts
+
+
+def test_fr_oc_3_terrain_completed_with_cell_provenance(model):
+    t = model.terrain
+    assert t is not None and None not in t.z
+    assert len(t.fill) == len(t.z)
+    codes = set(t.fill)
+    assert {0, 2, 3} <= codes  # measured, under the deck, under roads
+    assert any(f.startswith("FR-OC-3:") for f in t.prov.flags)
+
+
+def test_hard_gates_through_export(model, tmp_path):
+    """AC-H1..AC-H6 through the stage 12 publish path (FR-EX-1)."""
+    exe = find_val3dity()
+    report, paths = export_model(model, tmp_path, crossings_ref=REF, val3dity_exe=exe)
     gates = {r.gate: r for r in report.results}
-    for gate in ("AC-H2", "AC-H3", "AC-H4", "AC-H6"):
-        assert gates[gate].passed, (gate, [v.message for v in gates[gate].violations])
-    if meshes:
-        assert gates["AC-H1"].passed or gates["AC-H1"].skipped_reason, [v.message for v in gates["AC-H1"].violations][:5]
+    for gate in ("AC-H2", "AC-H3", "AC-H4", "AC-H5", "AC-H6"):
+        assert gates[gate].passed, (gate, gates[gate].skipped_reason, [v.message for v in gates[gate].violations][:5])
+    native = gates["AC-H1"].metrics.get("n_native_violations")
+    assert native == 0.0, [v.message for v in gates["AC-H1"].violations][:5]
+    if exe is None:
+        pytest.skip("val3dity not available: AC-H1 oracle half not run, unit is held by design (D-022)")
+    assert gates["AC-H1"].passed, [v.message for v in gates["AC-H1"].violations][:5]
+    assert all(r.passed for r in report.results if r.hard)
+    assert "published" in str(paths["model"]) or any("published" in str(p) for p in paths.values())
 
 
 def test_ac_a4_and_a5_against_truth(model, truth):
