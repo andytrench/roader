@@ -188,6 +188,7 @@ Origin key:
 | `pavement.thickness.concrete` | * | * | 0.28 | 0.2 to 0.4 | m | yes | judgement |
 | `structure.slab_max_span` | * | * | 12 | 9 to 15 | m | yes | judgement |
 | `structure.review_span` | * | * | 150 | 100 to 300 | m | yes | judgement |
+| `structure.even_span` | * | * | 35 | 20 to 60 | m | yes | judgement |
 
 All jurisdiction keys are `*` in milestone 1.
 
@@ -204,6 +205,9 @@ Meaning of the less obvious ids:
   defaults to the slab family, and a longer one to `multi_girder` (FR-ST-2).
 - `structure.review_span`: a maximum span at or above this sends the structure to
   the review queue (FR-ST-6).
+- `structure.even_span`: a last resort for long viaducts (FR-ST-3). When a span
+  between placed supports is longer than `high`, piers are added at `typical`
+  spacing, away from the clear zones of crossed roads.
 - `superelevation.radius_crown` and `superelevation.radius_full` set how banking is
   filled by rule from curvature. A curve with a radius at or above `radius_crown`
   keeps the normal crown. A curve with a radius at or below `radius_full` takes
