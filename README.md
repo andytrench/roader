@@ -1,5 +1,7 @@
 # Roader
 
+![Roader: lidar to parametric road model](docs/images/roader_hero.jpg)
+
 Roader implements the Roadway Infrastructure Model (RIM): public airborne lidar
 (USGS 3DEP) plus 2D road vectors in, a parametric road model out, and closed solid
 meshes generated deterministically from that model. Scope is US limited-access
