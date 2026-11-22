@@ -52,7 +52,8 @@ def zones(model: RoadModel) -> dict[str, list[tuple[float, float]]]:
     lengths = {r.id: r.length for r in model.roads}
     out: dict[str, list[tuple[float, float]]] = {}
     for jn in model.junctions:
-        for rid in sorted({sm.road_id for sm in jn.seams}):
+        # A participant without seams lies wholly inside the area (a shared area, D-070).
+        for rid in sorted({sm.road_id for sm in jn.seams} | set(jn.road_ids)):
             if rid not in lengths:
                 raise ValueError(f"junction {jn.id}: seam on missing road {rid}")
             lo = [sm.s for sm in jn.seams if sm.road_id == rid and sm.side > 0]
@@ -84,6 +85,7 @@ class JunctionPlan:
                 self.seam_s.setdefault(sm.road_id, []).append(sm.s)
         self.ranges: dict[str, tuple[int, int]] = {}
         self._current: tuple[str, int] | None = None
+        self._xy: dict[tuple[float, float], int] = {}  # outline vertices shared by touching areas (D-021)
 
     def road(self, road: Road) -> Road:
         """The road to sweep: a copy with a sweep station at every seam."""
@@ -148,9 +150,23 @@ class JunctionPlan:
     def bodies(self, sampler: TerrainSampler | None, tol: float, *, realtime: bool = False) -> list[Body]:
         """Area bodies; ``realtime`` builds them as the road bodies are in that profile (D-047):
         the slab embeds into its fill, the fill into the ground, and both outlines are inset."""
+        areas = sorted(self.model.junctions, key=lambda j: j.id)
+        outlines = [self._outline(jn) for jn in areas]
+        users: dict[int, list[JunctionArea]] = {}
+        for jn, (ring, holes, exact) in zip(areas, outlines, strict=True):
+            for p in [*ring, *(q for h in holes for q in h)]:
+                if p not in exact:
+                    users.setdefault(p, []).append(jn)
+        # Where areas touch (a shared split, D-070) both use one top and one underside, so their walls conform.
+        common: dict[int, tuple[float, float]] = {}
+        pv = self.pv
+        for p, jns in users.items():
+            if len(jns) > 1:
+                top = sum(j.lifted_z(pv.x[p], pv.y[p]) for j in jns) / len(jns)
+                common[p] = (top, top - max(j.thickness_at(pv.x[p], pv.y[p]) for j in jns))
         out: list[Body] = []
-        for jn in sorted(self.model.junctions, key=lambda j: j.id):
-            out.extend(self._junction(jn, sampler, tol, realtime))
+        for jn, (ring, holes, exact) in zip(areas, outlines, strict=True):
+            out.extend(self._junction(jn, ring, holes, {**common, **exact}, sampler, realtime))
         return out
 
     # ------------------------------------------------------------ one area
@@ -171,9 +187,9 @@ class JunctionPlan:
             raise ValueError(f"junction {jn.id}: sweep row at {seam.road_id}@{seam.s:.3f} does not span the seam (skewed station?)")
         return row
 
-    def _junction(self, jn: JunctionArea, sampler: TerrainSampler | None, tol: float, realtime: bool = False) -> list[Body]:
+    def _outline(self, jn: JunctionArea) -> tuple[list[int], list[list[int]], dict[int, tuple[float, float]]]:
+        """Outline and hole vertex ids, with the road grid's own rows at the seams and their (top, underside)."""
         pv = self.pv
-        embed = REALTIME_EMBED_M if realtime else 0.0
         roads = {r.id: r for r in self.model.roads}
         ring_xy = list(jn.outline)
         n = len(ring_xy)
@@ -203,15 +219,33 @@ class JunctionPlan:
                     break
                 k = (k + 1) % n
             insert[a] = row
+            # Outline vertices within the snap distance of a row end are that end (FR-SV-5).
+            for end, step in ((row[0], -1), (row[-1], 1)):
+                k = (a if step < 0 else b) + step
+                while (k % n) not in drop and math.hypot(ring_xy[k % n][0] - pv.x[end], ring_xy[k % n][1] - pv.y[end]) <= OUTLINE_SNAP_M:
+                    drop.add(k % n)
+                    k += step
         ring: list[int] = []
         for k in range(n):
             if k in insert:
                 ring.extend(insert[k])
             elif k not in drop:
                 x, y = refs[k]  # type: ignore[misc]
-                ring.append(pv.add(float(x), float(y)))
-        holes = [[pv.add(float(x), float(y)) for x, y in h] for h in jn.holes]
+                ring.append(self._vertex(float(x), float(y)))
+        holes = [[self._vertex(float(x), float(y)) for x, y in h] for h in jn.holes]
+        return ring, holes, exact
 
+    def _junction(
+        self,
+        jn: JunctionArea,
+        ring: list[int],
+        holes: list[list[int]],
+        exact: dict[int, tuple[float, float]],
+        sampler: TerrainSampler | None,
+        realtime: bool = False,
+    ) -> list[Body]:
+        pv = self.pv
+        embed = REALTIME_EMBED_M if realtime else 0.0
         tris = _triangulate(pv, ring, holes, self._steiner(jn, ring, holes))
 
         def top(p: int) -> float:
@@ -244,6 +278,12 @@ class JunctionPlan:
 
         fill = Body(f"{jn.id}:embankment", jn.id, "L6", "embankment", MAT_SOIL, src, cells, fill_bottom, under, ground=True, inset_m=INSET_SUPPORT_M)
         return [slab, fill]
+
+    def _vertex(self, x: float, y: float) -> int:
+        p = self._xy.get((x, y))
+        if p is None:
+            p = self._xy[(x, y)] = self.pv.add(x, y)
+        return p
 
     def _steiner(self, jn: JunctionArea, ring: list[int], holes: list[list[int]]) -> list[tuple[float, float]]:
         """Interior points: a square lattice plus the participants' reference lines, clear of the boundary."""
