@@ -354,10 +354,13 @@ def check_provenance(model: RoadModel, meshes: Sequence[Mesh]) -> GateResult:
     result = GateResult(gate, passed=True, hard=True)
     n_prov = 0
     for path, obj in _walk(model, "model"):
-        if "prov" not in {f.name for f in fields(obj)}:
+        prov_field = next((f for f in fields(obj) if f.name == "prov"), None)
+        if prov_field is None:
             continue
-        n_prov += 1
         prov = obj.prov
+        if prov is None and prov_field.default is None:
+            continue  # optional whole-element record (D-034); its parameters carry their own tags
+        n_prov += 1
         label = getattr(obj, "id", "") or path
         problem = ""
         if not isinstance(prov, Provenance):
