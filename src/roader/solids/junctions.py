@@ -44,6 +44,7 @@ OUTLINE_SNAP_M = 0.01  # outline vertices this close to a seam row end are that 
 STEINER_M = 2.5  # interior vertex spacing of the area triangulation
 STEINER_CLEAR = 0.4  # Steiner points keep STEINER_CLEAR * STEINER_M from the boundary and each other
 MIN_FILL_M = 0.05  # fill block never thinner than this under the slab
+RT_GROUND_CLEAR_M = 1e-3  # real-time fill top stays this far above the terrain and below the slab top
 EPS_AREA = 1e-9
 
 
@@ -276,7 +277,14 @@ class JunctionPlan:
         def fill_bottom(p: int) -> float:
             return min(ground[p], under(p) - MIN_FILL_M) - embed
 
-        fill = Body(f"{jn.id}:embankment", jn.id, "L6", "embankment", MAT_SOIL, src, cells, fill_bottom, under, ground=True, inset_m=INSET_SUPPORT_M)
+        def fill_top(p: int) -> float:
+            # Real-time walls are cut by the terrain: where it rises above the underside the fill
+            # rises with it (still inside the slab), so the cut never crosses the fill top.
+            if not realtime:
+                return under(p)
+            return max(under(p), min(ground[p] + RT_GROUND_CLEAR_M, top(p) - RT_GROUND_CLEAR_M))
+
+        fill = Body(f"{jn.id}:embankment", jn.id, "L6", "embankment", MAT_SOIL, src, cells, fill_bottom, fill_top, ground=True, inset_m=INSET_SUPPORT_M)
         return [slab, fill]
 
     def _vertex(self, x: float, y: float) -> int:
