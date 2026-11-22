@@ -16,10 +16,11 @@ from typing import Any
 
 import numpy as np
 
-from roader.model.mesh import Mesh
+from roader.model.mesh import Mesh, corner_values
 from roader.model.provenance import Provenance, Source
 from roader.model.schema import RoadModel
 from roader.model.serialize import model_hash, to_plain
+from roader.solids.attributes import UV1_ATLAS_PX, UV1_PAD_PX
 
 GENERATOR = "roader-export"
 
@@ -218,4 +219,26 @@ def node_extras(mesh: Mesh, index: dict[str, ElementInfo]) -> dict[str, Any]:
     }
     if confidence is not None:
         extras["confidence"] = rounded(confidence, 6)
+    density = uv1_texel_density(mesh)
+    if density is not None:
+        extras["uv1_texel_px_per_m"] = rounded(density, 3)
     return extras
+
+
+def uv1_statement() -> dict[str, int]:
+    """FR-AS-5: the atlas every uv1 set is packed for."""
+    return {"resolution_px": UV1_ATLAS_PX, "padding_px": UV1_PAD_PX}
+
+
+def uv1_texel_density(mesh: Mesh) -> float | None:
+    """Lightmap texels per metre of the mesh's uv1 on the stated atlas (FR-AS-5)."""
+    if mesh.uv1 is None or not len(mesh.faces):
+        return None
+    uv = corner_values(mesh, mesh.uv1, 2)
+    t = mesh.vertices[mesh.faces]
+    area3 = 0.5 * np.linalg.norm(np.cross(t[:, 1] - t[:, 0], t[:, 2] - t[:, 0]), axis=1).sum()
+    e1, e2 = uv[:, 1] - uv[:, 0], uv[:, 2] - uv[:, 0]
+    area_uv = 0.5 * np.abs(e1[:, 0] * e2[:, 1] - e1[:, 1] * e2[:, 0]).sum()
+    if area3 <= 0.0:
+        return None
+    return float(UV1_ATLAS_PX * math.sqrt(area_uv / area3))

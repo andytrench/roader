@@ -10,12 +10,23 @@ frame origin (the D-007 transverse Mercator anchor). glTF is Y-up right-handed,
 so a unit-frame point (x east, y north, z up) is written as (x, z, -y). This is a
 proper rotation, so face winding (counter-clockwise from outside) is unchanged.
 The geodetic anchor and PROJ string are in ``asset.extras``.
+
+Meshes that carry FR-AS-3..5 attributes are written with NORMAL (rotated like the
+positions), TEXCOORD_0 (uv0, metres) and TEXCOORD_1 (uv1 atlas). Per-corner
+attributes are unwelded: one glTF vertex per distinct (position, normal, uv0, uv1)
+in first-use order, so hard edges and UV seams survive. UVs are written as stored
+(v not flipped to image space); ``asset.extras.texcoords`` says so.
+
+LODs (FR-AS-1): with ``lods`` given, each level-0 node lists its coarser versions
+through ``MSFT_lod`` (nodes named ``<mesh id>#lod<k>``, outside the scene roots, as
+that extension requires), with ``MSFT_screencoverage`` thresholds in its extras.
 """
 
 from __future__ import annotations
 
 import json
 import struct
+from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Any
 
@@ -29,8 +40,9 @@ from roader.export._common import (
     material_pbr,
     node_extras,
     unit_header,
+    uv1_statement,
 )
-from roader.model.mesh import Mesh
+from roader.model.mesh import Mesh, corner_values
 from roader.model.schema import RoadModel
 
 AXIS_CONVERSION = "gltf(X, Y, Z) = unit(x, z, -y): X east, Y up, Z south"
@@ -43,12 +55,42 @@ _UINT32 = 5125
 _ARRAY_BUFFER = 34962
 _ELEMENT_ARRAY_BUFFER = 34963
 _TRIANGLES = 4
+TEXCOORDS = "TEXCOORD_0 = uv0 (station m, offset m); TEXCOORD_1 = uv1 atlas in [0, 1]; v as in the model, not flipped"
+# MSFT_screencoverage per level, finest first (one more entry than coarser levels).
+SCREEN_COVERAGE = (0.25, 0.1, 0.04, 0.01, 0.0)
 
 
 def to_gltf_axes(vertices: np.ndarray) -> np.ndarray:
     """Unit frame (x east, y north, z up) to glTF Y-up, as float32."""
     v = np.asarray(vertices, dtype=np.float64)
     return np.column_stack([v[:, 0], v[:, 2], -v[:, 1]]).astype("<f4")
+
+
+def unweld(mesh: Mesh) -> tuple[np.ndarray, dict[str, np.ndarray], np.ndarray]:
+    """glTF vertex arrays of a mesh: positions (unit frame), attributes by glTF name, indices.
+
+    Without per-corner attributes the mesh's own vertices and faces are used as they are.
+    """
+    present = {name: value for name, value in (("NORMAL", mesh.normals), ("TEXCOORD_0", mesh.uv0), ("TEXCOORD_1", mesh.uv1)) if value is not None}
+    if not any(np.asarray(v).ndim == 3 for v in present.values()):
+        return mesh.vertices, {k: np.asarray(v, dtype=np.float64) for k, v in present.items()}, mesh.faces
+    width = {"NORMAL": 3, "TEXCOORD_0": 2, "TEXCOORD_1": 2}
+    corners = [mesh.vertices[mesh.faces].reshape(-1, 3)]
+    for name, value in present.items():
+        corners.append(corner_values(mesh, value, width[name]).reshape(-1, width[name]))
+    table = np.hstack(corners).astype("<f4")
+    _keys, first, inverse = np.unique(table, axis=0, return_index=True, return_inverse=True)
+    rank = np.empty(len(first), dtype=np.int64)
+    rank[np.argsort(first, kind="stable")] = np.arange(len(first))
+    order = np.sort(first)
+    index = rank[inverse.reshape(-1)].reshape(-1, 3)
+    positions = mesh.vertices[mesh.faces].reshape(-1, 3)[order]
+    attrs = {}
+    col = 3
+    for name in present:
+        attrs[name] = table[order, col : col + width[name]].astype(np.float64)
+        col += width[name]
+    return positions, attrs, index
 
 
 def _material_entry(name: str, rgba: tuple[float, ...], metallic: float, roughness: float) -> dict[str, Any]:
@@ -63,11 +105,22 @@ def _material_entry(name: str, rgba: tuple[float, ...], metallic: float, roughne
     }
 
 
-def glb_bytes(model: RoadModel, meshes: list[Mesh], *, color_by: str = "material") -> bytes:
-    """Encode meshes as a .glb. color_by: "material" (FR-AS-6) or "source" (FR-RH-1)."""
+def glb_bytes(
+    model: RoadModel,
+    meshes: list[Mesh],
+    *,
+    color_by: str = "material",
+    lods: Mapping[int, Sequence[Mesh]] | None = None,
+) -> bytes:
+    """Encode meshes as a .glb. color_by: "material" (FR-AS-6) or "source" (FR-RH-1).
+
+    ``lods``: level -> meshes (FR-AS-1); level 0 is ``meshes`` itself, coarser levels
+    are attached to the level-0 node of the same mesh id through MSFT_lod.
+    """
     if color_by not in {"material", "source"}:
         raise ValueError(f"unknown color_by {color_by}")
     meshes = check_meshes(meshes)
+    coarser = {level: {m.id: m for m in check_meshes(lods[level])} for level in sorted(lods or {}) if level > 0}
     index = element_index(model)
 
     if color_by == "material":
@@ -94,9 +147,15 @@ def glb_bytes(model: RoadModel, meshes: list[Mesh], *, color_by: str = "material
         blob.extend(data)
         return len(buffer_views) - 1
 
-    for mesh in meshes:
-        positions = to_gltf_axes(mesh.vertices)
-        indices = mesh.faces.astype("<u4").reshape(-1)
+    def add_float(data: np.ndarray, kind: str) -> int:
+        view = add_view(data.tobytes(), _ARRAY_BUFFER)
+        accessors.append({"bufferView": view, "componentType": _FLOAT, "count": len(data), "type": kind})
+        return len(accessors) - 1
+
+    def add_mesh(mesh: Mesh) -> int:
+        verts, attrs, faces = unweld(mesh)
+        positions = to_gltf_axes(verts)
+        indices = faces.astype("<u4").reshape(-1)
         pos_view = add_view(positions.tobytes(), _ARRAY_BUFFER)
         accessors.append(
             {
@@ -108,7 +167,12 @@ def glb_bytes(model: RoadModel, meshes: list[Mesh], *, color_by: str = "material
                 "max": [float(x) for x in positions.max(axis=0)],
             }
         )
-        pos_accessor = len(accessors) - 1
+        attributes = {"POSITION": len(accessors) - 1}
+        if "NORMAL" in attrs:
+            attributes["NORMAL"] = add_float(to_gltf_axes(attrs["NORMAL"]), "VEC3")
+        for name in ("TEXCOORD_0", "TEXCOORD_1"):
+            if name in attrs:
+                attributes[name] = add_float(attrs[name].astype("<f4"), "VEC2")
         idx_view = add_view(indices.tobytes(), _ELEMENT_ARRAY_BUFFER)
         accessors.append(
             {
@@ -127,7 +191,7 @@ def glb_bytes(model: RoadModel, meshes: list[Mesh], *, color_by: str = "material
                 "name": mesh.id,
                 "primitives": [
                     {
-                        "attributes": {"POSITION": pos_accessor},
+                        "attributes": attributes,
                         "indices": idx_accessor,
                         "material": material_of[key],
                         "mode": _TRIANGLES,
@@ -135,7 +199,23 @@ def glb_bytes(model: RoadModel, meshes: list[Mesh], *, color_by: str = "material
                 ],
             }
         )
-        nodes.append({"name": mesh.id, "mesh": len(gltf_meshes) - 1, "extras": node_extras(mesh, index)})
+        return len(gltf_meshes) - 1
+
+    roots = []
+    for mesh in meshes:
+        roots.append(len(nodes))
+        nodes.append({"name": mesh.id, "mesh": add_mesh(mesh), "extras": node_extras(mesh, index)})
+    for root in roots:
+        node = nodes[root]
+        chain = [(level, by_id[node["name"]]) for level, by_id in coarser.items() if node["name"] in by_id]
+        if not chain:
+            continue
+        ids = []
+        for level, mesh in chain:
+            ids.append(len(nodes))
+            nodes.append({"name": f"{mesh.id}#lod{level}", "mesh": add_mesh(mesh), "extras": {**node_extras(mesh, index), "lod": level}})
+        node["extensions"] = {"MSFT_lod": {"ids": ids}}
+        node["extras"] = {**node["extras"], "lod": 0, "MSFT_screencoverage": list(SCREEN_COVERAGE[: len(ids) + 1])}
     while len(blob) % 4:
         blob.append(0)
 
@@ -149,10 +229,11 @@ def glb_bytes(model: RoadModel, meshes: list[Mesh], *, color_by: str = "material
                 "axis_conversion": AXIS_CONVERSION,
                 "units": "meters",
                 "color_by": color_by,
+                **_uv_extras(meshes),
             },
         },
         "scene": 0,
-        "scenes": [{"name": model.unit.unit_id, "nodes": list(range(len(nodes)))}],
+        "scenes": [{"name": model.unit.unit_id, "nodes": roots}],
         "nodes": nodes,
         "meshes": gltf_meshes,
         "materials": materials,
@@ -160,6 +241,8 @@ def glb_bytes(model: RoadModel, meshes: list[Mesh], *, color_by: str = "material
         "bufferViews": buffer_views,
         "buffers": [{"byteLength": len(blob)}],
     }
+    if coarser:
+        doc["extensionsUsed"] = ["MSFT_lod"]
     json_chunk = json.dumps(doc, sort_keys=True, separators=(",", ":"), allow_nan=False).encode("utf-8")
     json_chunk += b" " * (-len(json_chunk) % 4)
     bin_chunk = bytes(blob)
@@ -170,10 +253,27 @@ def glb_bytes(model: RoadModel, meshes: list[Mesh], *, color_by: str = "material
     return bytes(out)
 
 
-def write_glb(model: RoadModel, meshes: list[Mesh], path: Path, *, color_by: str = "material") -> Path:
+def _uv_extras(meshes: list[Mesh]) -> dict[str, Any]:
+    """Texture-coordinate convention and the FR-AS-5 atlas statement, when UVs are present."""
+    out: dict[str, Any] = {}
+    if any(m.uv0 is not None or m.uv1 is not None for m in meshes):
+        out["texcoords"] = TEXCOORDS
+    if any(m.uv1 is not None for m in meshes):
+        out["uv1_atlas"] = uv1_statement()
+    return out
+
+
+def write_glb(
+    model: RoadModel,
+    meshes: list[Mesh],
+    path: Path,
+    *,
+    color_by: str = "material",
+    lods: Mapping[int, Sequence[Mesh]] | None = None,
+) -> Path:
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_bytes(glb_bytes(model, meshes, color_by=color_by))
+    path.write_bytes(glb_bytes(model, meshes, color_by=color_by, lods=lods))
     return path
 
 

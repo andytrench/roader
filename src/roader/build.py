@@ -106,8 +106,12 @@ def build_unit(
     crossings_path: str | Path | None = None,
     val3dity_exe: str | None = None,
     points_overlay: bool = True,
+    profile: str = "analytic",
 ) -> tuple[RoadModel, GateReport, dict[str, Path]]:
-    """Build, gate and publish one unit. Returns the model, the gate report and export paths."""
+    """Build, gate and publish one unit. Returns the model, the gate report and export paths.
+
+    ``profile`` is the export profile of the solids ("analytic" or "realtime", section 7).
+    """
     cfg = load_unit_config(config_path)
     verify_inputs(cfg)
     frame = cfg.frame()
@@ -149,6 +153,7 @@ def build_unit(
         points=pavement,
         measured=measured,
         val3dity_exe=val3dity_exe,
+        profile=profile,
     )
     if points_overlay:
         paths["points"] = write_points_glb(

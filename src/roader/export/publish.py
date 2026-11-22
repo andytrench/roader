@@ -12,6 +12,7 @@ is removed, so a unit that starts failing can never leave a stale published copy
 from __future__ import annotations
 
 import shutil
+from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Any
 
@@ -74,8 +75,12 @@ def write_unit(
     out_dir: Path,
     *,
     points: Any = None,
+    lods: Mapping[int, Sequence[Mesh]] | None = None,
 ) -> dict[str, Path]:
     """Write all exports of one unit and route it through the publish gate.
+
+    ``lods`` (level -> meshes, FR-AS-1) go into the glTF and USD files; level 0 is
+    ``meshes``. CityJSON and the native model carry level 0 only.
 
     Returns paths keyed by "model", "glb", "glb_provenance", "usda", "cityjson",
     "xodr", "report_json", "report_md", "figure:<name>", and "held" when held.
@@ -95,9 +100,9 @@ def write_unit(
 
     paths: dict[str, Path] = {
         "model": write_native(model, dest / FILES["model"]),
-        "glb": write_glb(model, meshes, dest / FILES["glb"]),
-        "glb_provenance": write_glb(model, meshes, dest / FILES["glb_provenance"], color_by="source"),
-        "usda": write_usda(model, meshes, dest / FILES["usda"]),
+        "glb": write_glb(model, meshes, dest / FILES["glb"], lods=lods),
+        "glb_provenance": write_glb(model, meshes, dest / FILES["glb_provenance"], color_by="source", lods=lods),
+        "usda": write_usda(model, meshes, dest / FILES["usda"], lods=lods),
         "cityjson": write_cityjson(model, meshes, dest / FILES["cityjson"]),
         "xodr": write_xodr(model, dest / FILES["xodr"]),
     }
