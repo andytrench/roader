@@ -193,7 +193,7 @@ def side_drop(fit: RoadFit, ev: Evidence) -> tuple[np.ndarray, np.ndarray, np.nd
     return st, out[0], out[1]
 
 
-def deck_class_runs(fit: RoadFit, ev: Evidence) -> list[tuple[float, float]]:
+def deck_class_runs(fit: RoadFit, ev: Evidence, skews: list[tuple[float, float]] | None = None) -> list[tuple[float, float]]:
     road = fit.road
     lp = fit.points
     cls = ev.classification[lp.index]
@@ -217,11 +217,21 @@ def deck_class_runs(fit: RoadFit, ev: Evidence) -> list[tuple[float, float]]:
     any_pts = np.bincount(np.clip(np.rint(lp.s[on_road] / STEP_M).astype(np.int64), 0, len(st) - 1), minlength=len(st))
     sparse = any_pts < 0.2 * max(float(np.median(any_pts[any_pts > 0])) if (any_pts > 0).any() else 0.0, 1.0)
     runs = _runs(counts >= DECK_CLASS_MIN_POINTS, st, GAP_BRIDGE_M + 1.0, MIN_STRUCTURE_M * 0.5, sparse)
-    # Run ends at the outermost deck-class returns, not at the station grid.
+    # Run ends at the outermost deck-class returns, not at the station grid. On a
+    # skewed deck the corners reach past the centerline ends by u tan(skew): each
+    # return is moved to its centerline station first. The skew sign is the one
+    # that gives the crisper (shorter) run, so no sign convention is assumed.
     out = []
     for a, b in runs:
         m = (lp.s[idx] >= a - STEP_M) & (lp.s[idx] <= b + STEP_M)
-        out.append((float(np.percentile(lp.s[idx][m], 0.5)), float(np.percentile(lp.s[idx][m], 99.5))))
+        s, u = lp.s[idx][m], lp.u[idx][m]
+        inside = [k for c, k in skews or [] if a - 5.0 <= c <= b + 5.0]
+        t = math.tan(float(np.mean(inside))) if inside else 0.0
+        ends = min(
+            ((float(np.percentile(v, 0.5)), float(np.percentile(v, 99.5))) for v in (s - u * t, s + u * t)),
+            key=lambda e: e[1] - e[0],
+        )
+        out.append(ends)
     return out
 
 
@@ -297,6 +307,7 @@ def find_extents(fit: RoadFit, ev: Evidence, skews: list[tuple[float, float]] | 
             geom.append((a, b, one))
     geom.sort()
     deck = deck_class_runs(fit, ev)
+    skewed = deck_class_runs(fit, ev, skews) if any(one for _a, _b, one in geom) else deck
     out = []
     used_deck: set[int] = set()
     for a, b, one in geom:
@@ -304,6 +315,11 @@ def find_extents(fit: RoadFit, ev: Evidence, skews: list[tuple[float, float]] | 
         c17 = (min(deck[i][0] for i in match), max(deck[i][1] for i in match)) if match else None
         used_deck.update(match)
         if c17 and abs(c17[0] - a) <= CLASS17_AGREE_M and abs(c17[1] - b) <= CLASS17_AGREE_M:
+            out.append(StructureExtent(fit.road.id, c17[0], c17[1], "class17", (a, b), c17, one))
+        elif c17 and one and len(skewed) == len(deck):
+            # With one side unseen (a twin deck beside it, FR-RS-2) the side drop only
+            # guesses the far end; the deck-class run, read at the centerline, is better.
+            c17 = (min(skewed[i][0] for i in match), max(skewed[i][1] for i in match))
             out.append(StructureExtent(fit.road.id, c17[0], c17[1], "class17", (a, b), c17, one))
         else:
             out.append(StructureExtent(fit.road.id, a, b, "sheet_break", (a, b), c17, one))
