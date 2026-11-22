@@ -9,7 +9,13 @@ from roader.export.cityjson import (
     validate_cityjson,
     write_cityjson,
 )
-from roader.export.gltf import glb_bytes, read_glb, write_glb
+from roader.export.gltf import (
+    glb_bytes,
+    points_glb_bytes,
+    read_glb,
+    write_glb,
+    write_points_glb,
+)
 from roader.export.native import write_native
 from roader.export.opendrive import (
     lane_layout,
@@ -31,6 +37,7 @@ __all__ = [
     "glb_bytes",
     "held_record",
     "lane_layout",
+    "points_glb_bytes",
     "read_glb",
     "read_xodr_geometry",
     "report_markdown",
@@ -39,6 +46,7 @@ __all__ = [
     "write_cityjson",
     "write_glb",
     "write_native",
+    "write_points_glb",
     "write_report",
     "write_unit",
     "write_usda",

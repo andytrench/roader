@@ -34,6 +34,8 @@ PROVENANCE_COLORS: dict[Source, tuple[float, float, float, float]] = {
 # FR-AS-6 semantic material slots, flat base colors for M1: (RGBA, metallic, roughness).
 MATERIALS: dict[str, tuple[tuple[float, float, float, float], float, float]] = {
     "asphalt": ((0.08, 0.08, 0.09, 1.0), 0.0, 0.9),
+    "travel_lane_asphalt": ((0.08, 0.08, 0.09, 1.0), 0.0, 0.9),
+    "deck_concrete": ((0.6, 0.6, 0.58, 1.0), 0.0, 0.8),
     "concrete_pavement": ((0.55, 0.55, 0.53, 1.0), 0.0, 0.85),
     "shoulder": ((0.25, 0.25, 0.25, 1.0), 0.0, 0.9),
     "deck": ((0.6, 0.6, 0.58, 1.0), 0.0, 0.8),

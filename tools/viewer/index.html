@@ -1,0 +1,100 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Roader unit viewer</title>
+<!--
+  Dev viewer for unit exports (FR-EX-4 review renders, AC-P5 viewpoints).
+  Serve a published unit directory and this file over HTTP, e.g.
+    python -m http.server --directory <out>/published/<unit_id>
+  then open index.html?f=meshes.glb&pts=points_sample.glb
+  Query parameters:
+    f      glTF meshes (default meshes.glb)
+    pts    optional point overlay written by roader.export.write_points_glb
+    cam    camera position x,y,z in viewer coordinates (scene recentred on its bbox)
+    at     camera target x,y,z
+    prov=1 keep exported colors (use with meshes_provenance.glb)
+    label  caption text
+  three.js is loaded from a CDN (MIT); nothing is vendored.
+-->
+<style>html,body{margin:0;height:100%;background:#cfe0ee;overflow:hidden}#label{position:fixed;left:16px;bottom:14px;font:600 15px system-ui;color:#1d2a36;background:#ffffffcc;padding:6px 10px;border-radius:6px}</style>
+<script type="importmap">{"imports":{"three":"https://unpkg.com/three@0.160.0/build/three.module.js","three/addons/":"https://unpkg.com/three@0.160.0/examples/jsm/"}}</script>
+</head>
+<body>
+<div id="label"></div>
+<script type="module">
+import * as THREE from 'three';
+import {GLTFLoader} from 'three/addons/loaders/GLTFLoader.js';
+import {OrbitControls} from 'three/addons/controls/OrbitControls.js';
+
+const q = new URLSearchParams(location.search);
+const file = q.get('f') || 'meshes.glb';
+const pts = q.get('pts');
+const vec = (s, d) => (s || d).split(',').map(Number);
+document.getElementById('label').textContent = q.get('label') || file;
+
+const renderer = new THREE.WebGLRenderer({antialias: true, preserveDrawingBuffer: true});
+renderer.setPixelRatio(window.devicePixelRatio);
+renderer.setSize(innerWidth, innerHeight);
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+document.body.appendChild(renderer.domElement);
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0xcfe0ee);
+scene.fog = new THREE.Fog(0xcfe0ee, 500, 1400);
+const camera = new THREE.PerspectiveCamera(40, innerWidth / innerHeight, 0.3, 6000);
+camera.position.set(...vec(q.get('cam'), '150,90,180'));
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.target.set(...vec(q.get('at'), '0,0,0'));
+controls.update();
+
+scene.add(new THREE.HemisphereLight(0xeaf4ff, 0x6b5a45, 1.1));
+const sun = new THREE.DirectionalLight(0xfff3e0, 2.4);
+sun.position.set(-250, 300, 150);
+sun.castShadow = true;
+sun.shadow.mapSize.set(4096, 4096);
+Object.assign(sun.shadow.camera, {left: -400, right: 400, top: 400, bottom: -400, near: 10, far: 1400});
+sun.shadow.bias = -0.0004;
+scene.add(sun);
+
+const palette = q.get('prov') ? [] : [
+  ['asphalt', 0x3b3d40, 0.85], ['deck', 0xb9b6ae, 0.8], ['structural', 0xc9c5bc, 0.8],
+  ['steel', 0x9aa3ab, 0.4], ['soil', 0x8a7a55, 1.0], ['terrain', 0x6f8f4e, 1.0]];
+
+const loader = new GLTFLoader();
+loader.load(file, (gltf) => {
+  const root = gltf.scene;
+  const box = new THREE.Box3().setFromObject(root);
+  const c = box.getCenter(new THREE.Vector3());
+  const shift = new THREE.Vector3(-c.x, -box.min.y, -c.z);
+  root.position.add(shift);
+  root.traverse((o) => {
+    if (!o.isMesh) return;
+    o.castShadow = true; o.receiveShadow = true;
+    o.geometry.computeVertexNormals();
+    o.material.flatShading = true;
+    const name = (o.material.name || '').toLowerCase();
+    for (const [key, hex, rough] of palette) {
+      if (name.includes(key)) { o.material.color.setHex(hex); o.material.roughness = rough; o.material.metalness = 0; }
+    }
+    if (name.includes('terrain')) o.castShadow = false;
+    o.material.needsUpdate = true;
+  });
+  scene.add(root);
+  if (!pts) { window.__ready = true; return; }
+  loader.load(pts, (pg) => {
+    pg.scene.position.add(shift);
+    pg.scene.traverse((o) => { if (o.isPoints) { o.material.size = Number(q.get('ptsize') || 1.5); o.material.sizeAttenuation = false; } });
+    scene.add(pg.scene);
+    window.__ready = true;
+  });
+});
+
+(function loop() { requestAnimationFrame(loop); renderer.render(scene, camera); })();
+addEventListener('resize', () => { camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); renderer.setSize(innerWidth, innerHeight); });
+</script>
+</body>
+</html>

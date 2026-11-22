@@ -23,6 +23,7 @@ Update this file before adding a dependency.
 | requests | Apache-2.0 | HTTP for vector and fixture downloads |
 | matplotlib | Matplotlib License (PSF-based, BSD-compatible) | Unit report figures |
 | pytest | MIT | Tests |
+| three.js 0.160 | MIT | Dev viewer `tools/viewer/index.html`, loaded from a CDN at view time (not vendored or packaged) |
 
 Optional later (not wired yet):
 

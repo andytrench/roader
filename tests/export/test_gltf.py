@@ -3,7 +3,7 @@
 import numpy as np
 import pytest
 
-from roader.export import glb_bytes, read_glb
+from roader.export import glb_bytes, points_glb_bytes, read_glb
 from roader.export._common import PROVENANCE_COLORS
 from roader.model import Mesh, Source
 
@@ -100,3 +100,19 @@ def test_fr_as_10_empty_mesh_rejected(model):
     empty = Mesh("x:pavement", "x", "L3", "pavement", "asphalt", Source.RULE, np.zeros((0, 3)), np.zeros((0, 3)))
     with pytest.raises(ValueError, match="empty"):
         glb_bytes(model, [empty])
+
+
+def test_fr_ex_4_points_overlay_is_deterministic_and_class_colored(model):
+    rng = np.random.default_rng(0)
+    xyz = rng.uniform(-50, 50, (1000, 3))
+    cls = np.where((np.arange(1000) // 4) % 2, 17, 2)
+    data = points_glb_bytes(model, xyz, cls, max_points=300)
+    assert data == points_glb_bytes(model, xyz, cls, max_points=300)
+    doc, blob = read_glb(data)
+    prim = doc["meshes"][0]["primitives"][0]
+    assert prim["mode"] == 0
+    n = doc["accessors"][0]["count"]
+    assert n == len(xyz[::4]) and doc["asset"]["extras"]["decimation_step"] == 4
+    view = doc["bufferViews"][1]
+    colors = np.frombuffer(blob[view["byteOffset"] : view["byteOffset"] + view["byteLength"]], dtype=np.uint8).reshape(-1, 4)
+    assert {tuple(c[:3]) for c in colors} == {(150, 115, 70), (235, 200, 60)}

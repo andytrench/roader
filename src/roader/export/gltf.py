@@ -177,6 +177,80 @@ def write_glb(model: RoadModel, meshes: list[Mesh], path: Path, *, color_by: str
     return path
 
 
+_POINTS = 0
+_UBYTE = 5121
+
+# ASPRS class colors for the review overlay (FR-EX-4); unknown classes are grey.
+CLASS_COLORS = {
+    1: (170, 170, 170),  # unclassified, includes vehicles
+    2: (150, 115, 70),  # ground
+    3: (110, 160, 80),
+    4: (80, 140, 60),
+    5: (50, 110, 45),  # vegetation
+    6: (200, 90, 70),  # building
+    9: (70, 120, 200),  # water
+    11: (60, 60, 66),  # road surface
+    17: (235, 200, 60),  # bridge deck
+}
+
+
+def points_glb_bytes(model: RoadModel, xyz: np.ndarray, classification: np.ndarray, *, max_points: int = 1_500_000) -> bytes:
+    """Lidar returns as one POINTS primitive colored by class, for review renders.
+
+    Decimation takes every k-th point in input order, so output is deterministic.
+    """
+    xyz = np.asarray(xyz, dtype=np.float64)
+    cls = np.asarray(classification).astype(np.int64)
+    step = max(1, int(np.ceil(len(xyz) / max_points)))
+    xyz, cls = xyz[::step], cls[::step]
+    colors = np.full((len(cls), 4), 255, dtype=np.uint8)
+    colors[:, :3] = 140
+    for code, rgb in CLASS_COLORS.items():
+        colors[cls == code, :3] = rgb
+    positions = to_gltf_axes(xyz)
+    pos = positions.tobytes()
+    col = colors.tobytes()
+    pad = -len(pos) % 4
+    blob = pos + b"\0" * pad + col
+    doc: dict[str, Any] = {
+        "asset": {"version": "2.0", "generator": GENERATOR, "extras": {**unit_header(model), "axis_conversion": AXIS_CONVERSION, "decimation_step": step}},
+        "scene": 0,
+        "scenes": [{"name": f"{model.unit.unit_id}_points", "nodes": [0]}],
+        "nodes": [{"name": "lidar_points", "mesh": 0}],
+        "meshes": [{"name": "lidar_points", "primitives": [{"attributes": {"POSITION": 0, "COLOR_0": 1}, "mode": _POINTS}]}],
+        "accessors": [
+            {
+                "bufferView": 0,
+                "componentType": _FLOAT,
+                "count": len(positions),
+                "type": "VEC3",
+                "min": [float(x) for x in positions.min(axis=0)],
+                "max": [float(x) for x in positions.max(axis=0)],
+            },
+            {"bufferView": 1, "componentType": _UBYTE, "normalized": True, "count": len(colors), "type": "VEC4"},
+        ],
+        "bufferViews": [
+            {"buffer": 0, "byteOffset": 0, "byteLength": len(pos), "target": _ARRAY_BUFFER},
+            {"buffer": 0, "byteOffset": len(pos) + pad, "byteLength": len(col), "target": _ARRAY_BUFFER},
+        ],
+        "buffers": [{"byteLength": len(blob)}],
+    }
+    json_chunk = json.dumps(doc, sort_keys=True, separators=(",", ":"), allow_nan=False).encode("utf-8")
+    json_chunk += b" " * (-len(json_chunk) % 4)
+    total = 12 + 8 + len(json_chunk) + 8 + len(blob)
+    out = bytearray(struct.pack("<III", _GLB_MAGIC, 2, total))
+    out += struct.pack("<II", len(json_chunk), _CHUNK_JSON) + json_chunk
+    out += struct.pack("<II", len(blob), _CHUNK_BIN) + blob
+    return bytes(out)
+
+
+def write_points_glb(model: RoadModel, xyz: np.ndarray, classification: np.ndarray, path: Path, *, max_points: int = 1_500_000) -> Path:
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_bytes(points_glb_bytes(model, xyz, classification, max_points=max_points))
+    return path
+
+
 def read_glb(data: bytes) -> tuple[dict[str, Any], bytes]:
     """Split a .glb into its JSON document and BIN chunk, checking the container lengths."""
     magic, version, length = struct.unpack_from("<III", data, 0)
