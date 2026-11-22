@@ -57,6 +57,7 @@ PIER_MAX_LENGTH_M = 3.0  # longer runs are a wall, a fascia or a hedge
 PIER_EDGE_PAD_M = 0.5  # oblique returns just outside the deck edge
 PIER_SNAP_M = 2.0  # an observed pier moves at most this far to clear the lower pavements
 LOWER_PAD_M = 0.5
+PIER_OBSERVED_END_CLEAR_M = 10.0  # nearer groups are the spill slope rising above the lower road
 
 
 @dataclass
@@ -89,7 +90,7 @@ def observed_piers(
     keep = ~np.asarray(on_lower, dtype=bool) & (drop >= PIER_TOP_MIN_DROP_M) & (drop <= ground - PIER_GROUND_CLEAR_M)
     sc = s[keep] - t * u[keep]
     d = drop[keep]
-    inside = (sc >= extent[0] + PIER_END_CLEAR_M) & (sc <= extent[1] - PIER_END_CLEAR_M)
+    inside = (sc >= extent[0] + PIER_OBSERVED_END_CLEAR_M) & (sc <= extent[1] - PIER_OBSERVED_END_CLEAR_M)
     sc, d = sc[inside], d[inside]
     order = np.argsort(sc, kind="stable")
     sc, d = sc[order], d[order]

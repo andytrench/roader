@@ -196,6 +196,11 @@ def test_fr_st_3_no_pier_from_returns_near_the_abutments():
     assert observed_piers(sc.s, sc.u, sc.drop, sc.on_lower, sc.ground_drop, (137.0, 200.0), 0.0) == []
 
 
+def test_fr_st_3_returns_8_m_from_an_abutment_are_the_spill_slope_not_a_pier():
+    sc = _pier_scene(0.0, np.random.default_rng(3))
+    assert observed_piers(sc.s, sc.u, sc.drop, sc.on_lower, sc.ground_drop, (132.0, 200.0), 0.0) == []
+
+
 # ---------------------------------------------------------------- D-031: class 17 ends win
 
 
