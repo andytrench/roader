@@ -318,7 +318,8 @@ def infer_structure(
                 n_columns=0 if kind == "abutment" else max(1, math.ceil(deck_width / per_col)),
                 column_width_m=0.0 if kind == "abutment" else col_w,
                 cap_depth_m=cap_d,
-                cap_width_m=col_w + 2.0 * cap_over,
+                # Measured along the road; on a skew the cap's width across its own line is this times cos(skew) (D-025).
+                cap_width_m=(col_w + 2.0 * cap_over) / (1.0 if kind == "abutment" else max(math.cos(skew), 0.2)),
                 footing_z=float(ground - foot),
                 prov=prov,
             )

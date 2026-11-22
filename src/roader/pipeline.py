@@ -213,6 +213,7 @@ def run_pipeline(
     # Stage 8 terrain after the clearance refit, so caps and soffits are final (FR-OC-3).
     model.terrain = complete_terrain(fit_points, model, rules)
     seat_supports(model, rules)
+    flags.extend(_buildable_fills(model))
     # L6 areas lifted from the canonical roads, so they match the sweeps of the saved model (FR-SG-3, D-043, D-046).
     model.junctions, junction_flags = build_junctions(loads(dumps(dataclasses.replace(model, terrain=None))))
     flags.extend(junction_flags)
@@ -253,6 +254,50 @@ def build_model(
 ) -> RoadModel:
     """The section 5 model of one unit. ``holdout``: boolean per point, True = withheld (D-018)."""
     return run_pipeline(points, vectors, frame, unit, rules, holdout=holdout).model
+
+
+FOLD_FRACTION = 0.7  # a fill toe on the inside of a curve stays within this share of the radius
+FOLD_STEP_M = 5.0
+
+
+def _buildable_fills(model: RoadModel) -> list[Flag]:
+    """L4 fills whose toe cannot be built are written as kind ``none`` with the measured ratio kept (D-041).
+
+    On the inside of a tight curve (a cloverleaf loop over its lower infield) a fill
+    toe reaching toward the centre of curvature folds the embankment over itself;
+    a pavement underside below the terrain has no fill at all. The toe is found as
+    the solids find it, on the finished terrain (L7), every ``FOLD_STEP_M``.
+    """
+    if model.terrain is None:
+        return []
+    from roader.solids.bodies import _toe
+    from roader.solids.terrain import TerrainSampler
+
+    sampler = TerrainSampler(model.terrain)
+    out = []
+    for ss in model.side_slopes:
+        if ss.kind != "fill":
+            continue
+        road = model.road(ss.road_id)
+        sign = 1.0 if ss.side == "left" else -1.0
+        toe = _toe(road, sign, ss.ratio, sampler, ss.id)
+        reason = None
+        for s in np.linspace(ss.s0, ss.s1, max(2, int(np.ceil((ss.s1 - ss.s0) / FOLD_STEP_M)) + 1)):
+            k = road.alignment.evaluate(float(s))[3]
+            try:
+                u = abs(toe(float(s)))
+            except ValueError as exc:
+                reason = f"no toe at s={s:.1f}: {exc}"
+                break
+            if sign * k > 0.0 and u * abs(k) >= FOLD_FRACTION:
+                reason = f"toe {u:.1f} m out on the inside of a {1.0 / abs(k):.0f} m radius at s={s:.1f}"
+                break
+        if reason is None:
+            continue
+        ss.prov.flags.append(f"L4:measured_fill_unbuildable:ratio={ss.ratio:.2f}")
+        ss.kind, ss.ratio = "none", 0.0
+        out.append(Flag("L4:fill_unbuildable", ss.id, "FR-OC-3", f"fill written as none: {reason}"))
+    return out
 
 
 def _over_something(extents: list[StructureExtent], crossings) -> tuple[list[StructureExtent], list[Flag]]:
