@@ -42,7 +42,12 @@ from roader.complete.junctions import build_junctions
 from roader.conflate.candidates import SheetCandidate, candidate_flag, unmatched_sheets
 from roader.conflate.crossings import CrossingMeasure, find_crossings
 from roader.conflate.graph import data_extent, select_roads
-from roader.conflate.register import cross_profiles, near_points
+from roader.conflate.register import (
+    Neighbour,
+    corridor_limits,
+    cross_profiles,
+    near_points,
+)
 from roader.conflate.structures import (
     StructureExtent,
     chain_extents,
@@ -408,6 +413,18 @@ def holdout_for(points: PointSet, pavement_xyz: np.ndarray) -> np.ndarray:
     return np.isin(key, wanted)
 
 
+def _least_half_width(road, rules) -> float:
+    """Half the narrowest pavement a model road can have (as ``fit.links.least_half_width``)."""
+    counts = []
+    for ref in road.vector_refs:
+        try:
+            counts.append(int(ref.tags.get("lanes", "")))
+        except (ValueError, AttributeError):
+            continue
+    lanes = min(counts) if counts else (1 if road.oneway else 2)
+    return 0.5 * max(lanes, 1) * rules.get("lane.width", road_class=road.road_class).low
+
+
 def measure_edges(model: RoadModel, points: PointSet, holdout: np.ndarray | None = None) -> list[dict]:
     """AC-A3 reference: pavement edges measured across each model road.
 
@@ -419,16 +436,20 @@ def measure_edges(model: RoadModel, points: PointSet, holdout: np.ndarray | None
     from roader.validate.accuracy import BLOCK_M
 
     held = _held_blocks(points, holdout)
+    rules = RuleBook.load()
 
     lines = [Polyline.from_alignment(r.alignment) for r in model.roads]
+    halves = [_least_half_width(r, rules) for r in model.roads]
     ev = build_evidence(points, [ln.xy for ln in lines])
     out = []
-    for road, line in zip(model.roads, lines, strict=True):
+    for k, (road, line) in enumerate(zip(model.roads, lines, strict=True)):
         tr = track_line(line, ev)
         lp = near_points(line, ev)
         if len(lp.s) == 0:
             continue
-        prof = cross_profiles(lp, tr.z_at, line.length)
+        # D-068: the same neighbour limits as the fit (D-063), so a reference edge never lies on another road.
+        neighbours = [Neighbour(lines[j], halves[j]) for j in range(len(lines)) if j != k]
+        prof = cross_profiles(lp, tr.z_at, line.length, limits=corridor_limits(line, neighbours))
         valid = prof.valid & (prof.n > 0)
         for side, values in (("left", prof.left), ("right", prof.right)):
             for s, u in zip(prof.s[valid], values[valid], strict=True):

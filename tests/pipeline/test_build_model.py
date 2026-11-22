@@ -125,3 +125,30 @@ def test_fr_rh_1_road_carries_its_whole_road_source(model):
         assert road.prov is not None
         assert road.prov.source == Source.MEASURED
         assert road_source(road) == Source.MEASURED
+
+
+def test_d_068_reference_edges_stay_off_a_neighbouring_pavement():
+    """AC-A3 reference edges use the fit's neighbour limits (D-063), so a ramp's edge never lies on the mainline."""
+    import dataclasses
+
+    from roader.conflate.polyline import Polyline
+    from roader.model.synthetic import overpass_model
+    from roader.pipeline import measure_edges
+    from tests.fit import scenes
+
+    roads = scenes.diverge_merge_scene()
+    ref = overpass_model()
+    truth = dataclasses.replace(ref, roads=roads, crossings=[], structures=[], side_slopes=[], terrain=None, links=[], junctions=[])
+    edges = measure_edges(truth, scenes.to_pointset(scenes.points(roads)))
+    main = Polyline.from_alignment(roads[0].alignment)
+    n_on_main = 0
+    for ramp in roads[1:]:
+        line = Polyline.from_alignment(ramp.alignment)
+        pts = np.array([[e["x"], e["y"]] for e in edges if e["road_id"] == ramp.id])
+        assert len(pts)
+        s, _, _ = line.project(pts)
+        centre = line.point(s)
+        _, u, ok = main.project(centre)
+        # Where the ramp's centreline is still well inside the mainline pavement (5.5 m half-width), neither side is measured.
+        n_on_main += int(np.sum(ok & (np.abs(u) < 3.0)))
+    assert n_on_main == 0
