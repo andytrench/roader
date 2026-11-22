@@ -85,3 +85,51 @@ def test_synthetic_points_leave_the_space_under_the_deck_unsampled() -> None:
     under = (np.abs(pts.xyz[:, 0]) < 3.0) & (np.abs(pts.xyz[:, 1]) < 3.0) & (pts.xyz[:, 2] < 103.0)
     assert not np.any(under)
     assert set(np.unique(pts.truth)) >= {"pavement", "deck", "terrain", "vehicle", "parapet", "noise"}
+
+
+def test_optional_fields_default_and_old_json_loads():
+    """Road.prov and Support.thickness_m are default-valued; files written before them still load (AC-H5, AC-H6)."""
+    import json
+
+    from roader.model import dumps, loads
+
+    model = overpass_model()
+    doc = json.loads(dumps(model))
+    for road in doc["roads"]:
+        road.pop("prov")
+    for st in doc["structures"]:
+        for sp in st["supports"]:
+            sp.pop("thickness_m")
+    old = loads(json.dumps(doc))
+    assert all(r.prov is None for r in old.roads)
+    assert dumps(old) == dumps(model)
+
+
+def test_road_prov_sets_mesh_source():
+    """A road's own provenance is the source of its pavement mesh (AC-H6, supersedes D-027 when set)."""
+    import dataclasses
+
+    from roader.model import Provenance, Source
+    from roader.solids import generate
+
+    model = overpass_model()
+    road = model.roads[0]
+    model.roads[0] = dataclasses.replace(road, prov=Provenance(Source.MEASURED, 0.9, rms_m=0.05))
+    meshes = generate(model)
+    pav = [m for m in meshes if m.element_id == road.id and m.part == "pavement"]
+    assert pav and all(m.source == Source.MEASURED for m in pav)
+
+
+def test_abutment_thickness_overrides_cap_width():
+    """Support.thickness_m sets the abutment block length along the road (FR-ST-3, D-026)."""
+    import dataclasses
+
+    from roader.solids.stations import support_block
+
+    model = overpass_model()
+    st = model.structures[0]
+    abut = next(sp for sp in st.supports if sp.kind == "abutment")
+    s0, s1 = support_block(st, abut)
+    assert s1 - s0 == pytest.approx(abut.cap_width_m)
+    s0, s1 = support_block(st, dataclasses.replace(abut, thickness_m=2.5))
+    assert s1 - s0 == pytest.approx(2.5)

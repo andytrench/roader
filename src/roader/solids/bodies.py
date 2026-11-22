@@ -52,7 +52,9 @@ def least_trusted(sources: list[Source]) -> Source:
 
 
 def road_source(road: Road) -> Source:
-    """Roads carry no provenance record of their own; use the least trusted parameter."""
+    """The road's own provenance when set; otherwise the least trusted parameter (D-027)."""
+    if road.prov is not None:
+        return road.prov.source
     xs = road.cross_section
     sources = [e.prov.source for e in road.alignment.elements]
     sources += [e.prov.source for e in road.profile.elements]

@@ -51,9 +51,12 @@ def support_block(structure: Structure, support: Support) -> tuple[float, float]
     if support.cap_width_m <= 0.0:
         raise ValueError(f"support {support.id}: cap_width_m must be positive")
     if support.kind == "abutment":
+        thickness = support.thickness_m if support.thickness_m is not None else support.cap_width_m
+        if thickness <= 0.0:
+            raise ValueError(f"support {support.id}: abutment thickness must be positive")
         if abs(support.station - structure.s_start) <= abs(support.station - structure.s_end):
-            return structure.s_start, structure.s_start + support.cap_width_m
-        return structure.s_end - support.cap_width_m, structure.s_end
+            return structure.s_start, structure.s_start + thickness
+        return structure.s_end - thickness, structure.s_end
     if support.kind == "pier":
         half = 0.5 * support.cap_width_m
         return support.station - half, support.station + half

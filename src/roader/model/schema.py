@@ -201,6 +201,7 @@ class Road:
     vector_refs: list[VectorRef] = field(default_factory=list)
     support: list[Interval] = field(default_factory=list)
     sheet_ids: list[str] = field(default_factory=list)
+    prov: Provenance | None = None  # whole-road source and fit stats (AC-H6); None: derive from parameters
 
     @property
     def length(self) -> float:
@@ -253,6 +254,7 @@ class Support:
     cap_width_m: float
     footing_z: float  # bottom elevation of the support
     prov: Provenance
+    thickness_m: float | None = None  # abutment thickness along the road (FR-ST-3); None: cap_width_m (D-026)
 
 
 @dataclass
