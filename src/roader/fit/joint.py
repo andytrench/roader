@@ -1,0 +1,451 @@
+"""Joint L2 fitting over connected components (FR-AF-3, AC-H4, D-020).
+
+Roads are first fitted one by one (``roader.fit.road``). Here every connected
+component (roads joined by links or crossings) is re-solved together, subject to:
+
+- equal elevation and equal surface slope where roads join (each link seam);
+- the measured surface-to-surface height difference kept at every crossing;
+- profile smoothness, by keeping each road's PVI stations and curve lengths.
+
+With PVIs and curve lengths fixed each profile is linear in its start elevation
+and tangent grades (``roader.fit.profile._design``), so the component is one
+equality-constrained robust least-squares problem: the constraints are solved
+exactly on their null space and the returns are fitted on what is left.
+
+A seam joins a *child* road end (a ramp leaving or joining) to a *parent* road
+(the one it leaves or joins). The child takes the parent's surface plane at the
+seam: its cross slope on each side is held at the parent's surface slope across
+the child's direction for ``SEAM_HOLD_M``, then moves to its own measured values
+over ``SEAM_TRANSITION_M`` (AC-P2: nonzero transition). Its grade at the seam is
+the parent's surface slope along the child's direction. Where a road's returns
+cannot be met with the seam fixed (its RMS rises by more than ``RMS_RISE_M``) a
+short vertical curve is added ``SEAM_PVI_M`` from the seam, so the seam does not
+bend the rest of the road.
+"""
+
+from __future__ import annotations
+
+import math
+from dataclasses import dataclass, field
+
+import numpy as np
+
+from roader.fit import profile as fp
+from roader.model.geometry import Knot, Piecewise
+from roader.model.provenance import Provenance, Source
+from roader.model.schema import Crossing, Flag, Link, Road
+from roader.rules import RuleBook
+
+SEAM_HOLD_M = 5.0
+SEAM_TRANSITION_M = 20.0
+SEAM_PVI_M = 30.0
+RMS_RISE_M = 0.005
+SEAM_INSET_M = 0.25  # cross-slope samples inset from the edges and the crown, as the AC-H4 test samples
+SEAM_LATERAL_M = 1.0
+BAND_M = 0.15  # surface band around the profile for the returns used (as in roader.fit.road)
+DIFF_M = 0.05
+REG = 1e-6  # ties unobserved parameters to their independent values
+CONSTRAINT_TOL = 1e-6
+IRLS_STEPS = 5
+JOINT_FLAG = "FR-AF-3:joint"
+SEAM_FLAG = "FR-AF-3:seam"
+
+
+@dataclass
+class JointRoad:
+    """One road in the joint solve: the model road, its L2 chain and the returns it was fitted to."""
+
+    road: Road
+    vert: fp._Vert
+    s: np.ndarray  # station, offset, raw height of the surface returns used for L2
+    u: np.ndarray
+    z: np.ndarray
+    gaps: list[tuple[float, float]] = field(default_factory=list)
+    strip_factor: float = 1.0
+    profile_flags: list[Flag] | None = None  # set when the joint solve rebuilt the profile
+
+
+@dataclass
+class Seam:
+    """Where a child road's end meets its parent (FR-AF-3); stations in each road's own frame."""
+
+    link: Link
+    child: str
+    child_s: float
+    parent: str
+    parent_s: float
+    parent_u: float
+
+
+def seam_of(link: Link, roads: dict[str, Road]) -> Seam:
+    """The child is the road whose seam station is one of its own ends; ``to_road`` when both are."""
+    src, dst = roads[link.from_road], roads[link.to_road]
+    s_from = link.from_s if link.from_s is not None else (src.length if link.from_end == "end" else 0.0)
+    to_end_s = 0.0 if link.to_end == "start" else dst.length
+    s_to = link.to_s if link.to_s is not None else to_end_s
+
+    def at_end(road: Road, s: float) -> bool:
+        return min(abs(s), abs(road.length - s)) < 1e-6
+
+    if at_end(dst, s_to):
+        child, cs, parent = dst, (0.0 if abs(s_to) < 1e-6 else dst.length), src
+    else:
+        child, cs, parent = src, (0.0 if abs(s_from) < 1e-6 else src.length), dst
+    x, y, _h, _k = child.alignment.evaluate(cs)
+    ps, pu = parent.alignment.project(x, y)
+    return Seam(link, child.id, cs, parent.id, float(ps), float(pu))
+
+
+# ---------------------------------------------------------------- surface geometry
+
+
+def _slope(road: Road, s: float, u: float) -> float:
+    xs = road.cross_section
+    return xs.slope_left(s) if u >= 0.0 else xs.slope_right(s)
+
+
+def _dslope(road: Road, s: float, u: float) -> float:
+    a, b = max(0.0, s - DIFF_M), min(road.length, s + DIFF_M)
+    return (_slope(road, b, u) - _slope(road, a, u)) / (b - a) if b - a > 1e-9 else 0.0
+
+
+def _frame(road: Road, s: float) -> tuple[np.ndarray, np.ndarray, float]:
+    _x, _y, h, k = road.alignment.evaluate(s)
+    return np.array([math.cos(h), math.sin(h)]), np.array([-math.sin(h), math.cos(h)]), k
+
+
+def surface_gradient(road: Road, s: float, u: float, grade: float | None = None) -> np.ndarray:
+    """Plan gradient (dz/dx, dz/dy) of the pavement at (s, u), as AC-H4 measures it (``validate.seams``)."""
+    g = road.profile.grade(s) if grade is None else grade
+    t, n, k = _frame(road, s)
+    along = (g + _dslope(road, s, u) * u) / max(1.0 - k * u, 1e-6)
+    return along * t + _slope(road, s, u) * n
+
+
+def _side_offsets(road: Road, s: float, side: float) -> list[float]:
+    width = road.cross_section.width_left(s) if side > 0 else road.cross_section.width_right(s)
+    far = width - SEAM_INSET_M
+    if far < SEAM_INSET_M:
+        return [side * SEAM_INSET_M]
+    us = list(np.arange(SEAM_INSET_M, far + 1e-9, SEAM_LATERAL_M))
+    if far - us[-1] > 1e-6:
+        us.append(far)
+    return [side * float(v) for v in us]
+
+
+# ---------------------------------------------------------------- cross slope at seams
+
+
+def _hold(pw: Piecewise, s_c: float, length: float, value: float, prov: Provenance) -> Piecewise:
+    """``pw`` with ``value`` held over SEAM_HOLD_M from the road end at s_c, then a transition back."""
+    d = 1.0 if s_c < 0.5 * length else -1.0
+    hold = min(SEAM_HOLD_M, 0.25 * length)
+    trans = min(SEAM_TRANSITION_M, 0.25 * length)
+    near, far = s_c + d * hold, s_c + d * (hold + trans)
+    resume = pw(far)
+    kept = [k for k in pw.knots if d * (k.s - far) > 1e-6]
+    new = [Knot(s_c, value, prov), Knot(near, value, prov), Knot(far, resume, prov)]
+    knots = sorted(new + kept, key=lambda k: k.s)
+    return Piecewise(knots)
+
+
+def _seam_slopes(child: Road, parent: Road, seam: Seam) -> None:
+    """Child cross slope per side = the parent's surface slope across the child at the seam."""
+    xs = child.cross_section
+    t_c, n_c, _k = _frame(child, seam.child_s)
+    del t_c
+    targets = {}
+    for side in (1.0, -1.0):
+        vals = []
+        for u in _side_offsets(child, seam.child_s, side):
+            x, y = child.alignment.offset_point(seam.child_s, u)
+            ps, pu = parent.alignment.project(x, y)
+            wl, wr = parent.cross_section.width_left(ps), parent.cross_section.width_right(ps)
+            if not (-wr <= pu <= wl):
+                continue
+            vals.append(float(surface_gradient(parent, ps, pu) @ n_c))
+        if not vals:
+            vals = [float(surface_gradient(parent, seam.parent_s, seam.parent_u) @ n_c)]
+        targets[side] = float(np.mean(vals))
+    ref = xs.slope_left.knots[0].prov if xs.slope_left.knots else Provenance(Source.MEASURED, 0.5)
+    pprov = parent.cross_section.slope_left.knots[0].prov if parent.cross_section.slope_left.knots else ref
+    prov = Provenance(
+        pprov.source, min(ref.confidence, pprov.confidence), rms_m=pprov.rms_m, n_points=pprov.n_points, rule_id=pprov.rule_id, flags=[SEAM_FLAG]
+    )
+    xs.slope_left = _hold(xs.slope_left, seam.child_s, child.length, targets[1.0], prov)
+    xs.slope_right = _hold(xs.slope_right, seam.child_s, child.length, targets[-1.0], prov)
+
+
+# ---------------------------------------------------------------- linear rows
+
+
+def _z_row(v: fp._Vert, s: float) -> np.ndarray:
+    return fp._design(np.array([s]), v.pvi, v.lengths)[0]
+
+
+def _g_row(v: fp._Vert, s: float) -> np.ndarray:
+    """d/ds of the design row: grade as a linear function of [z0, g_0 .. g_n]."""
+    n = len(v.pvi)
+    knots = np.concatenate([[0.0], v.pvi, [np.inf]])
+    row = np.zeros(n + 2)
+    for j in range(n + 1):
+        if knots[j] <= s < knots[j + 1] or (j == n and s >= knots[j]):
+            row[1 + j] = 1.0
+    if s < 0.0:
+        row[1] = 1.0
+    for k in range(n):
+        L = v.lengths[k]
+        t = s - (v.pvi[k] - 0.5 * L)
+        if 0.0 < t < L:
+            q = t / L if t < 0.5 * L else -(L - t) / L
+            row[1 + k + 1] += q
+            row[1 + k] -= q
+    return row
+
+
+def _params(v: fp._Vert) -> np.ndarray:
+    return np.concatenate([[v.z0], v.grades])
+
+
+def _with(v: fp._Vert, x: np.ndarray) -> fp._Vert:
+    return fp._Vert(float(x[0]), x[1:].copy(), v.pvi.copy(), v.lengths.copy())
+
+
+def _insert_pvi(v: fp._Vert, p: float, length: float, road_length: float) -> fp._Vert | None:
+    """A curve of ``length`` centered at p, on the tangent there; None if it would overlap another."""
+    a, b = p - 0.5 * length, p + 0.5 * length
+    if a < 0.0 or b > road_length:
+        return None
+    for q, L in zip(v.pvi, v.lengths, strict=True):
+        if a < q + 0.5 * L and b > q - 0.5 * L:
+            return None
+    k = int(np.searchsorted(v.pvi, p))
+    grades = np.insert(v.grades, k + 1, v.grades[k])
+    return fp._Vert(v.z0, grades, np.insert(v.pvi, k, p), np.insert(v.lengths, k, length))
+
+
+# ---------------------------------------------------------------- the solve
+
+
+def _components(ids: list[str], pairs: list[tuple[str, str]]) -> list[list[str]]:
+    parent = {i: i for i in ids}
+
+    def find(i: str) -> str:
+        while parent[i] != i:
+            parent[i] = parent[parent[i]]
+            i = parent[i]
+        return i
+
+    for a, b in pairs:
+        ra, rb = find(a), find(b)
+        if ra != rb:
+            parent[max(ra, rb)] = min(ra, rb)
+    groups: dict[str, list[str]] = {}
+    for i in ids:
+        groups.setdefault(find(i), []).append(i)
+    return [sorted(g) for _r, g in sorted(groups.items())]
+
+
+def _data(item: JointRoad, v: fp._Vert) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+    """1 m bins of cross-slope-corrected returns within the surface band: (design, z, weight, station)."""
+    road = item.road
+    xs = road.cross_section
+    sl = np.array([xs.slope_left(float(a)) for a in item.s])
+    sr = np.array([xs.slope_right(float(a)) for a in item.s])
+    zc = item.z - np.where(item.u >= 0.0, sl, sr) * item.u
+    band = BAND_M + 0.02 * np.abs(item.u)
+    keep = np.abs(zc - v.z(item.s)) <= band
+    sb, zb, cnt = fp._bins(item.s[keep], zc[keep], road.length)
+    wb = np.sqrt(np.minimum(cnt, 25.0)) / 5.0
+    return fp._design(sb, v.pvi, v.lengths), zb, wb, sb
+
+
+def _solve(items: dict[str, JointRoad], verts: dict[str, fp._Vert], rows: list[tuple[dict[str, np.ndarray], float]]):
+    """Equality-constrained robust least squares over the component. Returns (params per road, constraint residual)."""
+    ids = sorted(items)
+    off, n = {}, 0
+    for i in ids:
+        off[i] = n
+        n += len(verts[i].grades) + 1
+    x0 = np.concatenate([_params(verts[i]) for i in ids])
+    c = np.zeros((len(rows), n))
+    d = np.zeros(len(rows))
+    for r, (coef, rhs) in enumerate(rows):
+        for rid, vec in coef.items():
+            c[r, off[rid] : off[rid] + len(vec)] += vec
+        d[r] = rhs
+    blocks = [_data(items[i], verts[i]) for i in ids]
+    a = np.zeros((sum(len(b[1]) for b in blocks), n))
+    zb = np.concatenate([b[1] for b in blocks])
+    wb = np.concatenate([b[2] for b in blocks])
+    r0 = 0
+    for i, b in zip(ids, blocks, strict=True):
+        a[r0 : r0 + len(b[1]), off[i] : off[i] + b[0].shape[1]] = b[0]
+        r0 += len(b[1])
+    if len(rows):
+        _u, sv, vt = np.linalg.svd(c, full_matrices=True)
+        rank = int(np.sum(sv > 1e-10 * max(sv[0], 1e-30)))
+        xp = vt[:rank].T @ ((_u[:, :rank].T @ d) / sv[:rank])
+        null = vt[rank:].T
+    else:
+        xp, null = np.zeros(n), np.eye(n)
+    # Columns are scaled so stations in the hundreds of meters do not swamp z0.
+    scale = np.maximum(np.sqrt(np.sum(a**2, axis=0)), 1.0)
+    # Row multipliers: squared, they are the soft L1 IRLS weights of roader.fit.profile._inner.
+    w = np.sqrt(wb)
+    x = x0.copy()
+    for _ in range(IRLS_STEPS):
+        if null.shape[1] == 0:
+            x = xp
+            break
+        aw = (a * w[:, None]) @ null
+        bw = w * (zb - a @ xp)
+        reg = np.sqrt(REG) * scale[:, None] * null
+        lhs = np.vstack([aw, reg])
+        rhs = np.concatenate([bw, np.sqrt(REG) * scale * (x0 - xp)])
+        y, *_ = np.linalg.lstsq(lhs, rhs, rcond=None)
+        x = xp + null @ y
+        res = a @ x - zb
+        w = np.sqrt(wb) / (1.0 + (res / fp.F_SCALE_M) ** 2) ** 0.25
+    resid = float(np.max(np.abs(c @ x - d))) if len(rows) else 0.0
+    return {i: x[off[i] : off[i] + len(verts[i].grades) + 1] for i in ids}, resid
+
+
+def _rms(item: JointRoad, v: fp._Vert) -> float:
+    a, zb, _wb, _sb = _data(item, v)
+    if not len(zb):
+        return 0.0
+    r = a @ np.concatenate([[v.z0], v.grades]) - zb
+    r = r[np.abs(r) < 1.0]
+    return float(np.sqrt(np.mean(r**2))) if r.size else 0.0
+
+
+def _seam_rows(seam: Seam, roads: dict[str, Road], verts: dict[str, fp._Vert]):
+    child, parent = roads[seam.child], roads[seam.parent]
+    vc, vp = verts[seam.child], verts[seam.parent]
+    ps, pu = seam.parent_s, seam.parent_u
+    t_c, _n_c, _ = _frame(child, seam.child_s)
+    t_p, n_p, k_p = _frame(parent, ps)
+    slope_p = _slope(parent, ps, pu)
+    z_rows = {seam.child: _z_row(vc, seam.child_s)}
+    z_rows[seam.parent] = z_rows.get(seam.parent, 0.0) - _z_row(vp, ps)
+    c1 = float(t_p @ t_c) / max(1.0 - k_p * pu, 1e-6)
+    c2 = c1 * _dslope(parent, ps, pu) * pu + slope_p * float(n_p @ t_c)
+    g_rows = {seam.child: _g_row(vc, seam.child_s)}
+    g_rows[seam.parent] = g_rows.get(seam.parent, 0.0) - c1 * _g_row(vp, ps)
+    return [(z_rows, slope_p * pu), (g_rows, c2)]
+
+
+def _crossing_rows(c: Crossing, roads: dict[str, Road], verts: dict[str, fp._Vert], dz0: float):
+    up, lo = roads[c.upper_road], roads[c.lower_road]
+    su, uu = up.alignment.project(c.x, c.y)
+    sl, ul = lo.alignment.project(c.x, c.y)
+    rows = {c.upper_road: _z_row(verts[c.upper_road], su)}
+    rows[c.lower_road] = rows.get(c.lower_road, 0.0) - _z_row(verts[c.lower_road], sl)
+    return [(rows, dz0 - _slope(up, su, uu) * uu + _slope(lo, sl, ul) * ul)]
+
+
+def _crossing_dz(c: Crossing, roads: dict[str, Road]) -> float:
+    up, lo = roads[c.upper_road], roads[c.lower_road]
+    su, uu = up.alignment.project(c.x, c.y)
+    sl, ul = lo.alignment.project(c.x, c.y)
+    return up.surface_z(su, uu) - lo.surface_z(sl, ul)
+
+
+def _rebuild(item: JointRoad, v: fp._Vert, rules: RuleBook) -> list[Flag]:
+    from roader.fit.road import profile_provenance
+
+    road = item.road
+    a, zb, _wb, sb = _data(item, v)
+    del a
+    xs = road.cross_section
+    sl = np.array([xs.slope_left(float(q)) for q in item.s])
+    sr = np.array([xs.slope_right(float(q)) for q in item.s])
+    zc = item.z - np.where(item.u >= 0.0, sl, sr) * item.u
+    keep = np.abs(zc - v.z(item.s)) <= BAND_M + 0.02 * np.abs(item.u)
+    st = np.linspace(0.0, road.length, 11)
+    paved = float(np.median([xs.width_left(float(q)) + xs.width_right(float(q)) for q in st]))
+    provs, flags = profile_provenance(road.id, road.road_class, v, road.length, item.s[keep], zc[keep], sb, item.gaps, paved, rules, item.strip_factor)
+    for p in provs:
+        p.flags.append(JOINT_FLAG)
+    road.profile = fp.to_profile(v, road.length, provs)
+    item.vert = v
+    item.profile_flags = flags
+    del zb
+    return flags
+
+
+def joint_fit_roads(fits, links: list[Link], crossings: list[Crossing], rules: RuleBook) -> list[Flag]:
+    """``joint_fit`` on pipeline ``RoadFit``s; their roads, L2 chains and profile flags are updated in place.
+
+    Returns the component flags (FR-AF-3); the FR-AF-4 overrides of every profile
+    are in ``RoadFit.profile_flags``.
+    """
+    items = []
+    for f in fits:
+        s, u, z = f.surface if f.surface is not None else (np.zeros(0), np.zeros(0), np.zeros(0))
+        items.append(JointRoad(f.road, f.vert, s, u, z, list(f.gaps), f.strip_factor))
+    flags = joint_fit(items, links, crossings, rules)
+    for f, it in zip(fits, items, strict=True):
+        f.vert = it.vert
+        if it.profile_flags is not None:
+            f.profile_flags = it.profile_flags
+    return [fl for fl in flags if fl.code.startswith("FR-AF-3")]
+
+
+def joint_fit(items: list[JointRoad], links: list[Link], crossings: list[Crossing], rules: RuleBook) -> list[Flag]:
+    """Re-solve L2 (and the cross slope at seams) of every component in place (FR-AF-3).
+
+    Only components holding at least one seam are re-solved; crossings inside them
+    are constraints. A component of crossings alone already keeps its measured
+    height differences, so it is left exactly as fitted. Returns flags:
+    ``FR-AF-3:infeasible`` when a component's constraints cannot all hold, and the
+    rule overrides of the refitted elements (FR-AF-4).
+    """
+    by_id = {it.road.id: it for it in items}
+    roads = {i: it.road for i, it in by_id.items()}
+    links = [lk for lk in links if lk.from_road in roads and lk.to_road in roads]
+    crossings = [c for c in crossings if c.upper_road in roads and c.lower_road in roads]
+    seams = [seam_of(lk, roads) for lk in sorted(links, key=lambda lk: lk.id)]
+    dz0 = {c.id: _crossing_dz(c, roads) for c in crossings}
+    # Parents before children, so a fork's slopes follow an already-held parent.
+    depth = {i: 0 for i in roads}
+    for _ in range(len(seams)):
+        for sm in seams:
+            depth[sm.child] = max(depth[sm.child], depth[sm.parent] + 1)
+    for sm in sorted(seams, key=lambda q: (depth[q.child], q.link.id)):
+        _seam_slopes(roads[sm.child], roads[sm.parent], sm)
+
+    flags: list[Flag] = []
+    pairs = [(s.child, s.parent) for s in seams] + [(c.upper_road, c.lower_road) for c in crossings]
+    seamed = {i for s in seams for i in (s.child, s.parent)}
+    for comp in _components(sorted(roads), pairs):
+        if not seamed.intersection(comp):
+            continue
+        sub = {i: by_id[i] for i in comp}
+        verts = {i: by_id[i].vert for i in comp}
+        base = {i: _rms(by_id[i], verts[i]) for i in comp}
+        cseams = [s for s in seams if s.child in sub]
+        ccross = [c for c in crossings if c.upper_road in sub]
+        for _round in range(3):
+            rows = [r for s in cseams for r in _seam_rows(s, roads, verts)]
+            rows += [r for c in ccross for r in _crossing_rows(c, roads, verts, dz0[c.id])]
+            params, resid = _solve(sub, verts, rows)
+            trial = {i: _with(verts[i], params[i]) for i in comp}
+            worse = [i for i in comp if _rms(by_id[i], trial[i]) - base[i] > RMS_RISE_M]
+            grown = False
+            for i in worse:
+                stations = [s.child_s for s in cseams if s.child == i] + [s.parent_s for s in cseams if s.parent == i]
+                for s0 in sorted(stations):
+                    inward = 1.0 if s0 < 0.5 * roads[i].length else -1.0
+                    v = _insert_pvi(verts[i], s0 + inward * 1.5 * SEAM_PVI_M, SEAM_PVI_M, roads[i].length)
+                    if v is not None:
+                        verts[i], grown = v, True
+            if not grown:
+                break
+        verts = trial
+        if resid > CONSTRAINT_TOL:
+            flags.append(Flag("FR-AF-3:infeasible", comp[0], "FR-AF-3", f"component of {len(comp)} roads: constraints miss by {resid:.2e}"))
+        for i in comp:
+            flags.extend(_rebuild(by_id[i], verts[i], rules))
+    return flags

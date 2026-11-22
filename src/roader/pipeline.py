@@ -6,15 +6,15 @@ in ``holdout`` are removed before any stage sees them (D-018), so AC-A1 can be
 measured on them afterwards.
 
 Order: vector graph (FR-VC-1) -> evidence on the corridor (FR-PN-2/3, FR-RS-1..4)
--> per road: sheet tracking, registration, L1, L2, L3 (FR-VC-2/3, FR-AF-1..5,
-FR-XS-1..3) -> crossings (FR-CR-1/2) -> structure ends (FR-VC-4, FR-CR-3) ->
-barriers and structures (FR-RS-4, FR-ST-2..6, FR-XS-5) -> completion and
-clearance (FR-OC-1..3) -> earthwork and terrain (L4, L7) -> junction areas
-(L6, FR-SG-3) -> unmatched sheets (FR-VC-5).
+-> per road, parents before the ramps hanging off them: sheet tracking, registration, L1,
+L2, L3 (FR-VC-2/3, FR-AF-1..5, FR-XS-1..3) -> crossings (FR-CR-1/2) -> links
+and the joint L2 solve per connected component (FR-AF-3) -> structure ends
+(FR-VC-4, FR-CR-3) -> barriers and structures (FR-RS-4, FR-ST-2..6, FR-XS-5)
+-> completion and clearance (FR-OC-1..3) -> earthwork and terrain (L4, L7)
+-> junction areas (L6, FR-SG-3) -> unmatched sheets (FR-VC-5).
 
-Not yet: joint fitting across links (FR-AF-3; no links in milestone 1),
-inventory matching (FR-ST-1), observed piers, median classification (FR-XS-4),
-multiple collections (FR-IN-4).
+Not yet: inventory matching (FR-ST-1), observed piers, median classification (FR-XS-4), multiple collections
+(FR-IN-4).
 """
 
 from __future__ import annotations
@@ -42,7 +42,9 @@ from roader.conflate.structures import StructureExtent, find_extents, side_drop
 from roader.conflate.track import track_line
 from roader.evidence import Evidence, build_evidence
 from roader.evidence.strips import STRIP_TOL_M
-from roader.fit.road import RoadFit, fit_road
+from roader.fit.joint import joint_fit_roads
+from roader.fit.links import drop_junction_crossings, find_links, fit_network
+from roader.fit.road import RoadFit
 from roader.fit.section import barriers_from_evidence
 from roader.io.points import PointSet
 from roader.io.vectors import VectorEdge
@@ -106,7 +108,7 @@ def run_pipeline(
     for code in ev.strips.corrected:
         flags.append(Flag("FR-PN-2:corrected", unit.unit_id, "FR-PN-2", f"strip {code} shifted by {-ev.strips.offsets_m[code]:+.3f} m"))
 
-    fits = [fit_road(seed, ev, rules, strip_factor=strip_factor) for seed in seeds]
+    fits, junctions = fit_network(seeds, ev, rules, strip_factor=strip_factor)
     by_id = {f.road.id: f for f in fits}
     held_blocks = _held_blocks(points, holdout)
     for f in fits:
@@ -115,6 +117,12 @@ def run_pipeline(
 
     crossings, measures, cflags = find_crossings(fits)
     flags.extend(cflags)
+    links, lflags = find_links(fits, junctions)
+    flags.extend(lflags)
+    crossings, measures, jflags = drop_junction_crossings(crossings, measures, links)
+    flags.extend(jflags)
+    flags.extend(joint_fit_roads(fits, links, crossings, rules))
+    flags.extend(fl for f in fits for fl in f.profile_flags)
 
     # Structure ends from data, then a rule extent for any crossing left uncovered.
     extents: list[StructureExtent] = []
@@ -172,6 +180,7 @@ def run_pipeline(
         unit=unit,
         frame=frame,
         roads=sorted([f.road for f in fits], key=lambda r: r.id),
+        links=links,
         crossings=sorted(crossings, key=lambda c: c.id),
         structures=sorted(structures, key=lambda s: s.id),
         side_slopes=sorted(slopes, key=lambda s: s.id),

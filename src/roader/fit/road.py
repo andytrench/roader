@@ -47,6 +47,7 @@ REGISTER_PASSES = 2
 SURFACE_BAND_M = 0.15
 EDGE_MARGIN_M = 0.3
 OVERRIDE = "FR-AF-4:override"
+PIN_BLEND_M = 60.0
 
 
 @dataclass
@@ -61,6 +62,10 @@ class RoadFit:
     vert: object
     flags: list[Flag] = field(default_factory=list)
     gaps: list[tuple[float, float]] = field(default_factory=list)
+    # Surface returns the L2 fit used (station, offset, raw height), for the joint solve (FR-AF-3).
+    surface: tuple[np.ndarray, np.ndarray, np.ndarray] | None = None
+    strip_factor: float = 1.0
+    profile_flags: list[Flag] = field(default_factory=list)  # FR-AF-4 overrides of the current L2 elements
 
 
 def confidence(observed: float, rms: float | None, strip_factor: float = 1.0) -> float:
@@ -76,7 +81,25 @@ def _stats(res: np.ndarray) -> tuple[float | None, float | None]:
     return float(np.sqrt(np.mean(res**2))), float(np.percentile(np.abs(res), 95.0))
 
 
-def fit_road(seed: RoadSeed, ev: Evidence, rules: RuleBook, *, strip_factor: float = 1.0) -> RoadFit:
+def _pin(data_xy: np.ndarray, check_xy: np.ndarray, anchors) -> tuple[np.ndarray, np.ndarray]:
+    """Move the measured centerline onto junction nodes, blended out over PIN_BLEND_M (FR-AF-3, FR-VC-3)."""
+    line = Polyline(check_xy, step=0.5)
+    s_check = np.concatenate([[0.0], np.cumsum(np.hypot(*np.diff(check_xy, axis=0).T))])
+    s_data, _u, _ok = line.project(data_xy)
+    s_data = np.nan_to_num(s_data, nan=0.0)
+    check, data = check_xy.copy(), data_xy.copy()
+    for i, anchor in enumerate(anchors):
+        if anchor is None:
+            continue
+        delta = np.asarray(anchor[:2], dtype=np.float64) - (check_xy[0] if i == 0 else check_xy[-1])
+        for pts, s in ((check, s_check), (data, s_data)):
+            d = s if i == 0 else s_check[-1] - s
+            pts += np.clip(1.0 - d / PIN_BLEND_M, 0.0, 1.0)[:, None] * delta[None, :]
+    return data, check
+
+
+def fit_road(seed: RoadSeed, ev: Evidence, rules: RuleBook, *, strip_factor: float = 1.0, anchors=(None, None)) -> RoadFit:
+    """``anchors``: per end, None or (x, y, heading or None) the alignment is pinned to (a junction node, FR-AF-3)."""
     flags: list[Flag] = []
     line = seed.line
     track = track_line(line, ev)
@@ -99,7 +122,9 @@ def fit_road(seed: RoadSeed, ev: Evidence, rules: RuleBook, *, strip_factor: flo
         data_w = np.ones(len(data_xy))
         check_xy = seed.line.xy
 
-    chain, arep = fa.fit_alignment(data_xy, data_w, check_xy, rules=rules, road_class=seed.road_class)
+    if any(a is not None for a in anchors):
+        data_xy, check_xy = _pin(np.asarray(data_xy, dtype=np.float64), np.asarray(check_xy, dtype=np.float64), anchors)
+    chain, arep = fa.fit_alignment(data_xy, data_w, check_xy, rules=rules, road_class=seed.road_class, pins=tuple(anchors))
     if arep.flags:
         flags.append(Flag("FR-AF-1", seed.id, "FR-AF-1", "; ".join(arep.flags)))
     alignment = fa.to_alignment(chain)
@@ -137,41 +162,11 @@ def fit_road(seed: RoadSeed, ev: Evidence, rules: RuleBook, *, strip_factor: flo
         sel = inside & (np.abs(zc - pz) <= band)
         vert, _pfit, _bins = fp.fit_profile(lp.s[sel], zc[sel], length, rules=rules, road_class=seed.road_class)
     s_pts, z_pts = lp.s[sel], zc[sel]
+    surface = (lp.s[sel].copy(), lp.u[sel].copy(), lp.z[sel].copy())
 
     # ---------------------------------------------------------------- provenance
     paved = float(np.median(np.interp(prof.s, edges.knots_left, edges.left) + np.interp(prof.s, edges.knots_right, edges.right)))
-    vprovs = []
-    for a, b, kind in fp.element_ranges(vert, length):
-        m = (s_pts >= a) & (s_pts <= b)
-        res = z_pts[m] - vert.z(s_pts[m])
-        res = res[np.abs(res) < 1.0]
-        rms, p95 = _stats(res)
-        obs = fp._observed_fraction(a, b, _bins[0])
-        prov = Provenance(
-            Source.MEASURED,
-            confidence(obs, rms, strip_factor),
-            rms_m=rms,
-            p95_m=p95,
-            n_points=int(res.size),
-            density_pts_m2=float(res.size / max((b - a) * paved, 1e-6)) if res.size else None,
-            observed_fraction=obs,
-        )
-        if obs < 0.999 and any(g0 < b and g1 > a for g0, g1 in gaps):
-            prov.flags.append("FR-OC-1:carried")
-        g0, g1 = float(vert.grade(np.array([a + 1e-6]))[0]), float(vert.grade(np.array([b - 1e-6]))[0])
-        for g in (g0, g1):
-            ok, rule = rules.evaluate("grade", abs(g), road_class=seed.road_class)
-            if not ok and f"{OVERRIDE}:grade" not in prov.flags:
-                prov.flags.append(f"{OVERRIDE}:grade")
-                flags.append(Flag(OVERRIDE, seed.id, "FR-AF-4", f"measured grade {g:.4f} outside rule {rule.id} [{rule.low}, {rule.high}] at s={a:.1f}-{b:.1f}"))
-        if kind == "curve" and abs(g1 - g0) > 1e-6:
-            kval = (b - a) / (100.0 * abs(g1 - g0))
-            rid = "vcurve.k_crest" if g1 < g0 else "vcurve.k_sag"
-            ok, rule = rules.evaluate(rid, kval, road_class=seed.road_class)
-            if not ok:
-                prov.flags.append(f"{OVERRIDE}:{rid}")
-                flags.append(Flag(OVERRIDE, seed.id, "FR-AF-4", f"measured K {kval:.1f} outside rule {rid} [{rule.low}, {rule.high}] at s={a:.1f}-{b:.1f}"))
-        vprovs.append(prov)
+    vprovs, pflags = profile_provenance(seed.id, seed.road_class, vert, length, s_pts, z_pts, _bins[0], gaps, paved, rules, strip_factor)
     profile = fp.to_profile(vert, length, vprovs)
 
     aprovs = []
@@ -238,5 +233,59 @@ def fit_road(seed: RoadSeed, ev: Evidence, rules: RuleBook, *, strip_factor: flo
     for iv in road.support:
         if iv.kind == "unsupported":
             flags.append(Flag("FR-VC-2:unsupported", seed.id, "FR-VC-2", f"no supporting sheet over s={iv.s0:.1f}-{iv.s1:.1f}"))
-    return RoadFit(seed, road, aline, track, prof, lp, edges, vert, flags, gaps)
+    return RoadFit(seed, road, aline, track, prof, lp, edges, vert, flags, gaps, surface, strip_factor, pflags)
+
+
+def profile_provenance(
+    road_id: str,
+    road_class: str,
+    vert,
+    length: float,
+    s_pts: np.ndarray,
+    z_pts: np.ndarray,
+    bin_s: np.ndarray,
+    gaps: list[tuple[float, float]],
+    paved_width: float,
+    rules: RuleBook,
+    strip_factor: float = 1.0,
+) -> tuple[list[Provenance], list[Flag]]:
+    """Per L2 element: residual statistics, observed fraction, rule overrides (FR-AF-4, FR-AF-5, FR-OC-1).
+
+    ``z_pts`` are cross-slope-corrected heights at stations ``s_pts``; ``bin_s`` the
+    occupied 1 m profile bins.
+    """
+    flags: list[Flag] = []
+    vprovs = []
+    for a, b, kind in fp.element_ranges(vert, length):
+        m = (s_pts >= a) & (s_pts <= b)
+        res = z_pts[m] - vert.z(s_pts[m])
+        res = res[np.abs(res) < 1.0]
+        rms, p95 = _stats(res)
+        obs = fp._observed_fraction(a, b, bin_s)
+        prov = Provenance(
+            Source.MEASURED,
+            confidence(obs, rms, strip_factor),
+            rms_m=rms,
+            p95_m=p95,
+            n_points=int(res.size),
+            density_pts_m2=float(res.size / max((b - a) * paved_width, 1e-6)) if res.size else None,
+            observed_fraction=obs,
+        )
+        if obs < 0.999 and any(g0 < b and g1 > a for g0, g1 in gaps):
+            prov.flags.append("FR-OC-1:carried")
+        g0, g1 = float(vert.grade(np.array([a + 1e-6]))[0]), float(vert.grade(np.array([b - 1e-6]))[0])
+        for g in (g0, g1):
+            ok, rule = rules.evaluate("grade", abs(g), road_class=road_class)
+            if not ok and f"{OVERRIDE}:grade" not in prov.flags:
+                prov.flags.append(f"{OVERRIDE}:grade")
+                flags.append(Flag(OVERRIDE, road_id, "FR-AF-4", f"measured grade {g:.4f} outside rule {rule.id} [{rule.low}, {rule.high}] at s={a:.1f}-{b:.1f}"))
+        if kind == "curve" and abs(g1 - g0) > 1e-6:
+            kval = (b - a) / (100.0 * abs(g1 - g0))
+            rid = "vcurve.k_crest" if g1 < g0 else "vcurve.k_sag"
+            ok, rule = rules.evaluate(rid, kval, road_class=road_class)
+            if not ok:
+                prov.flags.append(f"{OVERRIDE}:{rid}")
+                flags.append(Flag(OVERRIDE, road_id, "FR-AF-4", f"measured K {kval:.1f} outside rule {rid} [{rule.low}, {rule.high}] at s={a:.1f}-{b:.1f}"))
+        vprovs.append(prov)
+    return vprovs, flags
 

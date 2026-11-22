@@ -36,6 +36,8 @@ MIN_PIECE_M = 15.0
 RULE_WEIGHT = 0.5
 PROJECTION_PASSES = 2
 END_WEIGHT = 10.0
+ANCHOR_WEIGHT = 100.0
+PIN_HEADING_M = 20.0  # a heading error at a pinned end weighs as its lateral offset this far along
 KAPPA_WINDOW_M = 10.0
 SUPPORT_M = 10.0  # FR-AF-1 deviation is checked where measured centerline samples are this close
 
@@ -117,8 +119,13 @@ def _residuals(params, m, length, ties, s_data, xy_data, w_data, rules, road_cla
     along = dx * np.cos(hh) + dy * np.sin(hh)
     res = [w_data * lat, ALONG_WEIGHT * w_data * along]
     # Stations are anchored at both ends of the registered line, so the chain cannot slide along itself.
-    for (ex, ey), (px_, py_), hh_ in ((ends[0], pts[0], h[0]), (ends[1], pts[-1], h[-1])):
+    # An end pinned to a junction node (FR-AF-3) is held in both directions and in heading.
+    for (ex, ey), (px_, py_), hh_, pin in ((ends[0], pts[0], h[0], ends[2][0]), (ends[1], pts[-1], h[-1], ends[2][1])):
         res.append(np.array([END_WEIGHT * ((ex - px_) * math.cos(hh_) + (ey - py_) * math.sin(hh_))]))
+        if pin is not None:
+            res.append(np.array([ANCHOR_WEIGHT * (-(ex - px_) * math.sin(hh_) + (ey - py_) * math.cos(hh_))]))
+            if pin[2] is not None:
+                res.append(np.array([ANCHOR_WEIGHT * PIN_HEADING_M * math.remainder(hh_ - pin[2], 2.0 * math.pi)]))
     if rules is not None:
         pen = [math.sqrt(curvature_penalty(rules, float(k), road_class)) for k in chain.kappa]
         res.append(RULE_WEIGHT * math.sqrt(max(len(s_data), 1)) * np.array(pen))
@@ -220,10 +227,14 @@ def fit_alignment(
     road_class: str = "*",
     max_pieces: int | None = None,
     max_dev: float = MAX_DEV_M,
+    pins: tuple = (None, None),
 ) -> tuple[_Chain, AlignmentFit]:
     """Fit the chain to centerline samples ``xy`` (ordered along travel) with ``weights``.
 
     ``check_xy`` is the registered centerline the FR-AF-1 deviation limit applies to.
+    ``pins``: per end, None or (x, y, heading or None) of a junction node on another
+    road's reference line (FR-AF-3); the chain's end is held on the first / last
+    ``check_xy`` point, which must be (x, y), and on that heading when given.
     Returns the chain and a fit report; ``to_alignment`` turns the chain into L1 elements.
     """
     xy = np.asarray(xy, dtype=np.float64)
@@ -242,7 +253,7 @@ def fit_alignment(
     check_sup = check_xy[supported] if supported.sum() >= 2 else check_xy
     w = np.asarray(weights, dtype=np.float64)
     max_pieces = max_pieces or max(2, min(12, math.ceil(length / 60.0)))
-    ends = (check_xy[0], check_xy[-1])
+    ends = (check_xy[0], check_xy[-1], tuple(pins))
     best = None
     for m in range(1, max_pieces + 1):
         ties: dict = {}
