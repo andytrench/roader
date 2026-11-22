@@ -17,8 +17,8 @@
 # Washington Street. dz is upper minus lower (FR-CR-1), to 0.1 m. skew_deg is from
 # perpendicular, between the OSM centerlines. I-95 is signed north = east here.
 #
-# Review checklist: confirm the vertical order; confirm the I-93 deck is one structure
-# (or twin superstructures with a closed median joint); decide whether the NE loop's
+# Review checklist: confirm the vertical order; (decided 2026-11-22: the I-93 deck is
+# modelled as twin structures, one per carriageway); decide whether the NE loop's
 # merge taper (way 9522025, drawn about 1 m from the I-95 southbound centerline under
 # the deck) is a separate crossing or part of I-95 southbound; confirm deck ends.
 
@@ -33,7 +33,7 @@ crossings:
     lower_z_m: 31.6
     dz_m: 6.2
     skew_deg: 29
-    structure: i93_over_i95
+    structure: i93_sb_over_i95
     tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
   - id: i93_sb_over_i95_sb
     upper: {osm_way: 48847133, name: I-93 southbound, highway: motorway}
@@ -43,7 +43,7 @@ crossings:
     lower_z_m: 31.5
     dz_m: 6.5
     skew_deg: 30
-    structure: i93_over_i95
+    structure: i93_sb_over_i95
     tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
   - id: i93_nb_over_i95_nb
     upper: {osm_way: 48847135, name: I-93 northbound, highway: motorway}
@@ -53,7 +53,7 @@ crossings:
     lower_z_m: 31.7
     dz_m: 5.9
     skew_deg: 28
-    structure: i93_over_i95
+    structure: i93_nb_over_i95
     tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
   - id: i93_nb_over_i95_sb
     upper: {osm_way: 48847135, name: I-93 northbound, highway: motorway}
@@ -63,7 +63,7 @@ crossings:
     lower_z_m: 31.7
     dz_m: 6.1
     skew_deg: 29
-    structure: i93_over_i95
+    structure: i93_nb_over_i95
     tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
   - id: i93_nb_over_ne_loop
     upper: {osm_way: 48847135, name: I-93 northbound, highway: motorway}
@@ -73,7 +73,7 @@ crossings:
     lower_z_m: 31.6
     dz_m: 6.2
     skew_deg: 21
-    structure: i93_over_i95
+    structure: i93_nb_over_i95
     tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
   - id: washington_over_i95_nb
     upper: {osm_way: 74585246, name: Washington Street, highway: secondary}
@@ -114,19 +114,25 @@ crossings:
 structure_ends:
   status: draft, needs human review
   structures:
-    - id: i93_over_i95
-      carries: [48847133, 1481276626, 1481276627, 48847135]
-      over: [932920636, 1090762636, 1099001790, 9522025]
+    - id: i93_sb_over_i95
+      carries: [48847133, 1481276626, 1481276627]
+      over: [932920636, 1090762636, 1099001790]
       note: >-
-        One class 17 sheet spans both I-93 carriageways (continuous across the median,
-        no gap); a parallelogram whose end lines run parallel to I-95, skew about 29 deg.
-        The I-93 southbound to Peabody ramp diverges on the deck (ways 1481276626, 1481276627).
+        Reviewer decision 2026-11-22: twin structures, one per I-93 carriageway, although
+        one class 17 sheet spans both (continuous across the median); skew about 29 deg.
+        The I-93 southbound to Peabody ramp diverges on this deck (ways 1481276626, 1481276627).
       ends:
         - along: 48847133
           start_lonlat: [-71.119178, 42.502612]
           end_lonlat: [-71.118914, 42.501891]
           length_m: 82.9
           osm_bridge_length_m: 73.7
+    - id: i93_nb_over_i95
+      carries: [48847135]
+      over: [932920636, 1090762636, 1099001790, 9522025]
+      note: >-
+        Reviewer decision 2026-11-22: twin structures, one per I-93 carriageway.
+      ends:
         - along: 48847135
           start_lonlat: [-71.118557, 42.501830]
           end_lonlat: [-71.118805, 42.502534]
