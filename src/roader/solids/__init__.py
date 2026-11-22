@@ -52,7 +52,7 @@ def generate(model: RoadModel, chord_tol_m: float = 0.01, profile: str = "analyt
     bodies = []
     for road in model.roads:
         bodies.extend(plan.clip(road_bodies(model, plan.road(road), sampler, chord_tol_m, pv, realtime=realtime)))
-    bodies.extend(plan.bodies(sampler, chord_tol_m))
+    bodies.extend(plan.bodies(sampler, chord_tol_m, realtime=realtime))
     result = assemble(bodies, pv, sampler, conforming=not realtime)
     frames = {road.id: RoadFrame(road) for road in model.roads}
     meshes = [finish(raw, pv, frames, realtime=realtime) for raw in result.raw]

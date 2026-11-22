@@ -25,7 +25,15 @@ from shapely.geometry import Point, Polygon
 from roader.model.geometry import Knot, Piecewise
 from roader.model.schema import JunctionArea, Road, RoadModel
 from roader.solids.assemble import Body
-from roader.solids.bodies import MAT_PAVEMENT, MAT_SOIL, mesh_id, pavement_bottom
+from roader.solids.bodies import (
+    INSET_ROAD_M,
+    INSET_SUPPORT_M,
+    MAT_PAVEMENT,
+    MAT_SOIL,
+    REALTIME_EMBED_M,
+    mesh_id,
+    pavement_bottom,
+)
 from roader.solids.grid import Cell, PlanVertices
 from roader.solids.stations import STATION_MERGE_M
 from roader.solids.terrain import TerrainSampler
@@ -137,10 +145,12 @@ class JunctionPlan:
                 out.append(dataclasses.replace(body, mesh_id=mesh_id(body.element_id, body.part, k, counts[key]), cells=run, zb={}, zt={}))
         return out
 
-    def bodies(self, sampler: TerrainSampler | None, tol: float) -> list[Body]:
+    def bodies(self, sampler: TerrainSampler | None, tol: float, *, realtime: bool = False) -> list[Body]:
+        """Area bodies; ``realtime`` builds them as the road bodies are in that profile (D-047):
+        the slab embeds into its fill, the fill into the ground, and both outlines are inset."""
         out: list[Body] = []
         for jn in sorted(self.model.junctions, key=lambda j: j.id):
-            out.extend(self._junction(jn, sampler, tol))
+            out.extend(self._junction(jn, sampler, tol, realtime))
         return out
 
     # ------------------------------------------------------------ one area
@@ -161,8 +171,9 @@ class JunctionPlan:
             raise ValueError(f"junction {jn.id}: sweep row at {seam.road_id}@{seam.s:.3f} does not span the seam (skewed station?)")
         return row
 
-    def _junction(self, jn: JunctionArea, sampler: TerrainSampler | None, tol: float) -> list[Body]:
+    def _junction(self, jn: JunctionArea, sampler: TerrainSampler | None, tol: float, realtime: bool = False) -> list[Body]:
         pv = self.pv
+        embed = REALTIME_EMBED_M if realtime else 0.0
         roads = {r.id: r for r in self.model.roads}
         ring_xy = list(jn.outline)
         n = len(ring_xy)
@@ -216,7 +227,10 @@ class JunctionPlan:
 
         cells = [Cell([a, b, c], [(a, b, c)]) for a, b, c in tris]
         src = jn.prov.source
-        slab = Body(f"{jn.id}:pavement", jn.id, "L6", "pavement", MAT_PAVEMENT, src, cells, under, top, ground=False)
+        def keel(p: int) -> float:
+            return under(p) - embed
+
+        slab = Body(f"{jn.id}:pavement", jn.id, "L6", "pavement", MAT_PAVEMENT, src, cells, keel, top, ground=False, inset_m=INSET_ROAD_M)
         if sampler is None:
             return [slab]
         verts = {p for c in cells for p in c.loop}
@@ -226,9 +240,9 @@ class JunctionPlan:
             return [slab]
 
         def fill_bottom(p: int) -> float:
-            return min(ground[p], under(p) - MIN_FILL_M)
+            return min(ground[p], under(p) - MIN_FILL_M) - embed
 
-        fill = Body(f"{jn.id}:embankment", jn.id, "L6", "embankment", MAT_SOIL, src, cells, fill_bottom, under, ground=True)
+        fill = Body(f"{jn.id}:embankment", jn.id, "L6", "embankment", MAT_SOIL, src, cells, fill_bottom, under, ground=True, inset_m=INSET_SUPPORT_M)
         return [slab, fill]
 
     def _steiner(self, jn: JunctionArea, ring: list[int], holes: list[list[int]]) -> list[tuple[float, float]]:

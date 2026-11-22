@@ -256,3 +256,17 @@ def test_no_terrain_gives_a_slab_only(model):
     meshes = generate(bare)
     assert [m.part for m in meshes if m.element_id == jn.id] == ["pavement"]
     assert all(mc.solid_problems(m) == [] for m in meshes)
+
+
+def test_fr_sv_7_realtime_junction_bodies_inset_and_embedded(model):
+    """Real-time profile (D-047): the area's slab and fill are inset and embedded like the sweeps, so no coplanar overlap."""
+    from roader.validate.realtime import check_realtime
+
+    rt = generate(model, profile="realtime")
+    jn = model.junctions[0]
+    slab = next(m for m in rt if m.id == f"{jn.id}:pavement")
+    analytic = next(m for m in generate(model) if m.id == slab.id)
+    assert slab.vertices[:, 2].min() < analytic.vertices[:, 2].min() - 0.2
+    assert _plan(slab).area < _plan(analytic).area
+    near = [m for m in rt if m.closed and (m.element_id == jn.id or m.layer in ("L3", "L4"))]
+    assert check_realtime(near) == []
