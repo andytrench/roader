@@ -323,7 +323,9 @@ def register_line(line: Polyline, prof: Profiles) -> tuple[Polyline, np.ndarray,
     has = weight > 0
     if has.sum() < 3:
         return line, prof.s, mid, weight
-    offsets = smooth_series(prof.s[has], mid[has], prof.s, sigma=3.0 * SMOOTH_SIGMA_M)
+    # Held at its end value beyond the measured stations, never extrapolated.
+    held = np.clip(prof.s, prof.s[has][0], prof.s[has][-1])
+    offsets = smooth_series(prof.s[has], mid[has], held, sigma=3.0 * SMOOTH_SIGMA_M)
     measured = line.offset_point(prof.s[has], mid[has])
     sx = smooth_series(prof.s[has], measured[:, 0], prof.s, sigma=XY_SIGMA_M, weights=weight[has], degree=2)
     sy = smooth_series(prof.s[has], measured[:, 1], prof.s, sigma=XY_SIGMA_M, weights=weight[has], degree=2)
@@ -336,8 +338,10 @@ def register_line(line: Polyline, prof: Profiles) -> tuple[Polyline, np.ndarray,
     # Away from measured centers the plan fit is an extrapolation: there each point
     # keeps its profile station and only moves sideways, so the line cannot
     # stretch along itself where edges are sparse (decks and ramps in a stack).
-    _s, u_p, ok = line.project(pts)
-    sideways = line.offset_point(prof.s, np.where(ok & np.isfinite(u_p), u_p, offsets))
+    s_p, u_p, ok = line.project(pts)
+    # On a tight curve a point can project onto another part of the line.
+    same = ok & np.isfinite(u_p) & (np.abs(s_p - np.clip(prof.s, 0.0, line.length)) <= XY_SIGMA_M)
+    sideways = line.offset_point(prof.s, np.where(same, u_p, offsets))
     far = np.clip((dist - XY_SIGMA_M) / XY_SIGMA_M, 0.0, 1.0)[:, None]
     pts = (1.0 - far) * pts + far * sideways
     return Polyline(pts), prof.s, mid, weight
