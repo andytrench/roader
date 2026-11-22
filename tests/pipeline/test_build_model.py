@@ -114,3 +114,14 @@ def test_ac_h6_every_rule_fill_names_its_rule(model):
     provs = list(walk(model))
     assert provs
     assert all(p.rule_id for p in provs if p.source == Source.RULE)
+
+
+def test_fr_rh_1_road_carries_its_whole_road_source(model):
+    """D-045: the rendered road body is colored by its observed surface, not the rule-filled thickness."""
+    from roader.model.provenance import Source
+    from roader.solids.bodies import road_source
+
+    for road in model.roads:
+        assert road.prov is not None
+        assert road.prov.source == Source.MEASURED
+        assert road_source(road) == Source.MEASURED

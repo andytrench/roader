@@ -44,7 +44,7 @@ from roader.fit.road import RoadFit, fit_road
 from roader.fit.section import barriers_from_evidence
 from roader.io.points import PointSet
 from roader.io.vectors import VectorEdge
-from roader.model.provenance import Source
+from roader.model.provenance import Provenance, Source
 from roader.model.schema import Flag, Frame, RoadModel, UnitRecord
 from roader.model.serialize import dumps, loads
 from roader.rules import RuleBook
@@ -178,6 +178,7 @@ def run_pipeline(
         if any(st.carried_road == road.id for st in model.structures):
             split_at_structures(road, model.structures)
         label_under_deck(road, model)
+        road.prov = road_summary(road)
     flags.extend(check_clearances(model, rules))
     # Stage 8 terrain after the clearance refit, so caps and soffits are final (FR-OC-3).
     model.terrain = complete_terrain(fit_points, model, rules)
@@ -188,6 +189,23 @@ def run_pipeline(
     # from its native file render byte-identical exports (AC-H5).
     model = loads(dumps(model))
     return PipelineResult(model, ev, fits, measures, extents)
+
+
+def road_summary(road) -> Provenance:
+    """D-045: whole-road source for the rendered body, by length over alignment and profile."""
+    weight: dict[Source, float] = {}
+    conf = 0.0
+    total = 0.0
+    for e in [*road.alignment.elements, *road.profile.elements]:
+        weight[e.prov.source] = weight.get(e.prov.source, 0.0) + e.length
+        conf += e.prov.confidence * e.length
+        total += e.length
+    source = max(weight, key=lambda s: (weight[s], s.value))
+    share = weight[source] / total
+    rule_id = None
+    if source == Source.RULE:
+        rule_id = max((e for e in [*road.alignment.elements, *road.profile.elements] if e.prov.source == Source.RULE), key=lambda e: e.length).prov.rule_id
+    return Provenance(source, round(conf / total, 6), observed_fraction=round(weight.get(Source.MEASURED, 0.0) / total, 6), rule_id=rule_id, flags=[f"FR-RH-1:road_summary:{source.value}:{share:.2f}"])
 
 
 def build_model(
