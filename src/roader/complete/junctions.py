@@ -37,7 +37,8 @@ from roader.model.serialize import stable_id
 GORE_GAP_M = 1.0  # a seam's cross-section line stays this clear of other participants' pavement
 SEAM_MARGIN_M = 1.0  # added beyond the first clear station
 SEARCH_STEP_M = 0.5
-LOCAL_REACH_M = 150.0  # footprint of another participant considered around its anchor
+MAX_REACH_M = 200.0  # roads still overlapping this far from the node are a fitting problem, not a junction
+LOCAL_REACH_M = MAX_REACH_M + 100.0  # footprint of another participant considered around its anchor
 TOUCH_LATERAL_M = 1.0  # a road end this far outside another road's pavement edge still touches it
 END_SNAP_M = 0.5  # anchors this close to a road end are that end
 LEVEL_DZ_M = 1.0  # a road end within this of the other surface is at grade (else it passes over or under)
@@ -189,9 +190,14 @@ def _local_footprint(road: Road, anchor: float) -> Polygon:
 
 
 def _first_clear(road: Road, start: float, direction: float, others: list[Polygon]) -> float | None:
-    """First station from start (moving in direction) whose cross-section line clears every other footprint."""
+    """First station from start (moving in direction) whose cross-section line clears every other footprint.
+
+    None when the road ends first; NaN when the roads still overlap MAX_REACH_M from the node.
+    """
     s = start
     while 0.0 <= s <= road.length:
+        if abs(s - start) > MAX_REACH_M:
+            return math.nan
         line = _row_line(road, s)
         if all(line.distance(p) >= GORE_GAP_M for p in others):
             return s
@@ -205,14 +211,14 @@ def _interval(road: Road, anchor: float, others: list[Polygon]) -> tuple[float, 
     lo, hi = anchor, anchor
     if anchor > 0.0:
         c = _first_clear(road, anchor, -1.0, others)
-        lo = 0.0 if c is None else max(0.0, c - SEAM_MARGIN_M)
-        if anchor >= length and c is None:
+        if (c is None and anchor >= length) or (c is not None and math.isnan(c)):
             return None
+        lo = 0.0 if c is None else max(0.0, c - SEAM_MARGIN_M)
     if anchor < length:
         c = _first_clear(road, anchor, 1.0, others)
-        hi = length if c is None else min(length, c + SEAM_MARGIN_M)
-        if anchor <= 0.0 and c is None:
+        if (c is None and anchor <= 0.0) or (c is not None and math.isnan(c)):
             return None
+        hi = length if c is None else min(length, c + SEAM_MARGIN_M)
     if lo < END_SNAP_M:
         lo = 0.0
     if hi > length - END_SNAP_M:
@@ -243,7 +249,8 @@ def build_junctions(model: RoadModel) -> tuple[list[JunctionArea], list[Flag]]:
             intervals[rid] = iv
         if not ok:
             flags.append(Flag("FR-SG-3:no_clear_seam", min(node.anchors), "FR-SG-3",
-                              f"roads {sorted(node.anchors)} meeting at ({node.x:.1f}, {node.y:.1f}) never separate; no junction area"))
+                              f"roads {sorted(node.anchors)} meeting at ({node.x:.1f}, {node.y:.1f}) do not separate within "
+                              f"{MAX_REACH_M:.0f} m (or one lies wholly on the other); no junction area"))
             continue
         groups.append(([node], intervals))
     groups = _merge(groups)
