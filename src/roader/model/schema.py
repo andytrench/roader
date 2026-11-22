@@ -327,6 +327,7 @@ class TerrainPatch:
     # measured. 0 measured, 1 gap interpolated, 2 under a structure, 3 under a
     # road or embankment footprint, 4 lowered below a non-ground solid.
     fill: list[int] = field(default_factory=list)
+    id: str = "terrain"  # element id of the L7 meshes (FR-DM-3)
 
 
 # ---------------------------------------------------------------- the model

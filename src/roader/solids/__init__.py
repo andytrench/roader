@@ -36,6 +36,6 @@ def generate(model: RoadModel, chord_tol_m: float = 0.01) -> list[Mesh]:
     meshes = result.meshes
     if sampler is not None and model.terrain is not None:
         meshes += terrain_meshes(
-            sampler, result.footprints, result.ring, TERRAIN_ELEMENT_ID, model.terrain.prov.source, chord_tol_m
+            sampler, result.footprints, result.ring, model.terrain.id, model.terrain.prov.source, chord_tol_m
         )
     return meshes

@@ -156,3 +156,18 @@ def test_junction_and_link_seams_round_trip():
     assert again.junctions[0].seams[0] == JunctionSeam(model.roads[0].id, 420.0, 3.0, 5.5)
     assert again.links[-1].from_s == 420.0
     assert dumps(again) == dumps(model)
+
+
+def test_terrain_patch_id_names_l7_meshes():
+    """TerrainPatch.id is the element id of the terrain meshes (FR-DM-3, AC-H6)."""
+    import dataclasses
+
+    from roader.solids import generate
+    from roader.validate import check_provenance
+
+    model = overpass_model()
+    model.terrain = dataclasses.replace(model.terrain, id="terrain_unit")
+    meshes = generate(model)
+    terrain = [m for m in meshes if m.layer == "L7"]
+    assert terrain and all(m.element_id == "terrain_unit" for m in terrain)
+    assert check_provenance(model, meshes).passed

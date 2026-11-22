@@ -362,7 +362,7 @@ def model_element_ids(model: RoadModel) -> set[str]:
     """Ids a mesh may name as its producing element (FR-DM-3)."""
     ids = {obj.id for _p, obj in _walk(model, "model") if isinstance(getattr(obj, "id", None), str)}
     if model.terrain is not None:
-        ids.add("terrain")
+        ids.add(model.terrain.id)
     return ids
 
 
