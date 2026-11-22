@@ -6,14 +6,15 @@ in ``holdout`` are removed before any stage sees them (D-018), so AC-A1 can be
 measured on them afterwards.
 
 Order: vector graph (FR-VC-1) -> evidence on the corridor (FR-PN-2/3, FR-RS-1..4)
--> per road, parents before the ramps hanging off them: sheet tracking, registration, L1,
+-> divided highways drawn as one way split into twins (FR-XS-4) -> per road,
+parents before the ramps hanging off them: sheet tracking, registration, L1,
 L2, L3 (FR-VC-2/3, FR-AF-1..5, FR-XS-1..3) -> crossings (FR-CR-1/2) -> links
 and the joint L2 solve per connected component (FR-AF-3) -> structure ends
 (FR-VC-4, FR-CR-3) -> barriers and structures (FR-RS-4, FR-ST-2..6, FR-XS-5)
--> completion and clearance (FR-OC-1..3) -> earthwork and terrain (L4, L7)
--> junction areas (L6, FR-SG-3) -> unmatched sheets (FR-VC-5).
+-> medians (FR-XS-4) -> completion and clearance (FR-OC-1..3) -> earthwork and
+terrain (L4, L7) -> junction areas (L6, FR-SG-3) -> unmatched sheets (FR-VC-5).
 
-Not yet: inventory matching (FR-ST-1), observed piers, median classification (FR-XS-4), multiple collections
+Not yet: inventory matching (FR-ST-1), observed piers, multiple collections
 (FR-IN-4).
 """
 
@@ -44,6 +45,7 @@ from roader.evidence import Evidence, build_evidence
 from roader.evidence.strips import STRIP_TOL_M
 from roader.fit.joint import joint_fit_roads
 from roader.fit.links import drop_junction_crossings, find_links, fit_network
+from roader.fit.median import classify_medians, split_divided
 from roader.fit.road import RoadFit
 from roader.fit.section import barriers_from_evidence
 from roader.io.points import PointSet
@@ -108,6 +110,8 @@ def run_pipeline(
     for code in ev.strips.corrected:
         flags.append(Flag("FR-PN-2:corrected", unit.unit_id, "FR-PN-2", f"strip {code} shifted by {-ev.strips.offsets_m[code]:+.3f} m"))
 
+    seeds, dflags = split_divided(seeds, ev)
+    flags.extend(dflags)
     fits, junctions = fit_network(seeds, ev, rules, strip_factor=strip_factor)
     by_id = {f.road.id: f for f in fits}
     held_blocks = _held_blocks(points, holdout)
@@ -166,6 +170,7 @@ def run_pipeline(
             if st.carried_road == f.road.id:
                 _fit_overhang(f.road, st, barriers[f.road.id])
         f.road.cross_section.barriers = sorted(barriers[f.road.id], key=lambda b: (b.side, b.s0, b.id))
+    flags.extend(classify_medians(fits, ev))
 
     slopes = []
     for f in fits:
