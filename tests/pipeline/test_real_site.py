@@ -6,8 +6,8 @@ decimation is needed. The unit goes through ``roader.export.run.export_model``
 (meshes, exports twice for AC-H5, every gate, publish or hold). About three
 minutes; skipped when the fixture is not fetched.
 
-References: AC-H2 and AC-A4 use the draft hand-labelled crossing list, AC-A5 the
-draft structure ends in the same file (``status: draft, needs human review``).
+References: AC-H2 and AC-A4 use the hand-labelled crossing list, AC-A5 the
+structure ends in the same file (reviewed 2026-11-22; AC-A5 stays a consistency check, D-044).
 """
 
 from __future__ import annotations
@@ -102,7 +102,7 @@ def _draft_ends(model) -> dict[str, tuple[float, float]]:
     to_unit = FrameTransformer(cfg.frame())
     out = {}
     ends = doc.get("structure_ends", {})
-    assert ends["status"].startswith("draft")
+    assert ends["status"].startswith(("draft", "reviewed"))
     for entry in ends["structures"]:
         for end in entry["ends"]:
             road = _road_for_way(model, end["along"])

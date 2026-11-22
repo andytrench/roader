@@ -13,9 +13,9 @@ conventions are in [AGENTS.md](AGENTS.md).
 
 ## Status
 
-Milestone 1 (one rural freeway overpass, end to end) passes every hard gate and
-accuracy target on real lidar at Laurel Street over I-190, West Boylston MA; its
-reference crossing list awaits human review. Milestone 2 (one full interchange)
+Milestone 1 (one rural freeway overpass, end to end) is done: every hard gate and
+accuracy target passes on real lidar at Laurel Street over I-190, West Boylston MA,
+against a reviewed reference. Milestone 2 (one full interchange)
 is in progress. See [docs/RND_PILOT.md](docs/RND_PILOT.md).
 
 ## Quick start
