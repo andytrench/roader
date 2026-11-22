@@ -10,8 +10,12 @@ whose interior holds the node, or the longer one when both end there.
 Roads are fitted parents first (``fit_network``), and a child's alignment end is
 pinned to the node's position on its parent's fitted reference line, so the two
 reference lines meet exactly and the child's seam section lies on the parent's
-surface on each side of its crown. Seam stations (``find_links``) are the
-child's end and its projection onto the parent.
+surface on each side of its crown. Where the child leaves within
+``PIN_HEADING_MAX`` of the parent's direction it is also pinned to the parent's
+heading and curvature there: a ramp leaving a crowned carriageway at an angle,
+or on a different curvature, cannot match the parent's surface slope across
+the whole seam. Seam stations (``find_links``) are the child's end and its
+projection onto the parent.
 
 Link direction follows traffic: a child starting on its parent is a ``diverge``
 (parent -> child, ``to_s = 0``); a child ending on its parent is a ``merge``
@@ -101,14 +105,16 @@ def fit_network(seeds: list[RoadSeed], ev, rules, *, strip_factor: float = 1.0) 
             node = seed.line.xy[0] if j.end == "start" else seed.line.xy[-1]
             parent = fitted[j.parent].road
             ps, _pu = parent.alignment.project(float(node[0]), float(node[1]))
-            x, y, hp, _k = parent.alignment.evaluate(ps)
+            x, y, hp, kp = parent.alignment.evaluate(ps)
             hc = _input_heading(seed, j.end)
-            # A shallow junction starts tangent to the parent; a steep one (a ramp terminal) keeps its own heading.
-            heading = None
-            for cand in (hp, hp + math.pi) if not parent.oneway else (hp,):
+            # A shallow junction starts tangent to the parent and on its curvature, so the
+            # two surfaces share their slope across the whole seam (AC-H4); a steep one (a
+            # ramp terminal) keeps its own heading.
+            heading = curvature = None
+            for cand, k in ((hp, kp), (hp + math.pi, -kp)) if not parent.oneway else ((hp, kp),):
                 if abs(math.remainder(hc - cand, 2.0 * math.pi)) <= PIN_HEADING_MAX:
-                    heading = math.remainder(cand, 2.0 * math.pi)
-            anchors[0 if j.end == "start" else 1] = (x, y, heading)
+                    heading, curvature = math.remainder(cand, 2.0 * math.pi), k
+            anchors[0 if j.end == "start" else 1] = (x, y, heading, curvature)
         fitted[sid] = fit_road(seed, ev, rules, strip_factor=strip_factor, anchors=tuple(anchors))
     return [fitted[s.id] for s in seeds], js
 

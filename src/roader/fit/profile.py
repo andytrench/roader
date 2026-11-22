@@ -23,6 +23,7 @@ from scipy.optimize import least_squares
 from roader.fit.priors import bound_penalty
 from roader.model.geometry import Profile, VerticalElement
 from roader.model.provenance import Provenance, Source
+from roader.model.serialize import FLOAT_DIGITS
 from roader.rules import RuleBook
 
 BIN_M = 1.0
@@ -358,9 +359,19 @@ def element_ranges(v: _Vert, length: float) -> list[tuple[float, float, str]]:
 
 
 def to_profile(v: _Vert, length: float, provs: list[Provenance] | None = None) -> Profile:
-    """L2 elements; each starts exactly at the end elevation and grade of the previous one."""
+    """L2 elements; each starts exactly at the end elevation and grade of the previous one.
+
+    Stations are rounded as the canonical JSON rounds them (D-011) and each length
+    is taken between rounded stations, so a model read back has no station gap at
+    any joint (AC-H4).
+    """
     elements: list[VerticalElement] = []
-    for n, (a, b, kind) in enumerate(element_ranges(v, length)):
+    for n, (a_raw, b_raw, kind) in enumerate(element_ranges(v, length)):
+        a, b = round(a_raw, FLOAT_DIGITS), round(b_raw, FLOAT_DIGITS)
+        if elements:
+            a = round(elements[-1].s0 + elements[-1].length, FLOAT_DIGITS)
+        if b - a <= 0.0:
+            continue
         prov = provs[n] if provs else Provenance(Source.MEASURED, 0.5)
         if kind == "curve":
             g0, g1 = _curve_grade(v, a), _curve_grade(v, b)
@@ -375,7 +386,7 @@ def to_profile(v: _Vert, length: float, provs: list[Provenance] | None = None) -
                 g0 = g_end
             else:
                 g0 = g1 = g_end
-        elements.append(VerticalElement(a, b - a, z0, g0, g1, prov))
+        elements.append(VerticalElement(a, round(b - a, FLOAT_DIGITS), z0, g0, g1, prov))
     return Profile(elements)
 
 

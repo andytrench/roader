@@ -108,7 +108,9 @@ def test_fr_af_4_override_flag_in_model(points, truth):
     eb = by_feature(res.model, "eb")
     assert any("FR-AF-4:override:grade" in e.prov.flags for e in eb.profile.elements)
     assert any(f.code == "FR-AF-4:override" and f.element_id == eb.id for f in res.model.flags)
-    assert abs(eb.profile.elements[0].g0 - 0.07) < 0.003
+    # The scene's flat terrain puts this road in a 20 m cut at one end, so judge the dominant measured element.
+    main = max(eb.profile.elements, key=lambda e: e.prov.n_points)
+    assert abs(main.g0 - 0.07) < 0.003
 
 
 def test_fr_af_5_element_provenance(model):

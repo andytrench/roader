@@ -141,6 +141,46 @@ def test_fr_af_3_crossing_clearance_kept_as_a_constraint():
     assert abs(dz1 - dz0) < 1e-3
 
 
+def test_fr_af_3_conflicting_constraints_are_dropped_not_forced():
+    """Two clearances at one place that disagree: the second is not enforced and is flagged."""
+    truth = scenes.diverge_merge_scene()
+    over = _over_street(truth, truth[1])
+    truth = [*truth, over]
+    items = _independent(truth)
+    roads = {it.road.id: it.road for it in items}
+    ramp, street = roads[truth[1].id], roads[over.id]
+    x, y, _h, _k = truth[1].alignment.evaluate(250.0)
+    su, uu = street.alignment.project(x, y)
+    sl, ul = ramp.alignment.project(x, y)
+    dz0 = street.surface_z(su, uu) - ramp.surface_z(sl, ul)
+    prov = Provenance(Source.MEASURED, 0.9)
+    # cx_b claims 0.5 m more at the same place.
+    good = Crossing("cx_a", street.id, su, ramp.id, sl, x, y, dz0, 0.2, prov)
+    bad = Crossing("cx_b", street.id, su, ramp.id, sl, x, y, dz0 + 0.5, 0.2, prov)
+    links = _links(truth)
+    flags = joint_fit(items, links, [good, bad], RULES)
+    assert any(f.code == "FR-AF-3:constraint_dropped" and f.element_id == "cx_b" for f in flags)
+    assert _violations(items, links) == []
+    assert abs(street.surface_z(su, uu) - ramp.surface_z(sl, ul) - dz0) < 1e-3
+    for it, t in zip(items, truth, strict=True):
+        s = np.arange(5.0, t.length - 5.0, 10.0)
+        assert max(abs(it.road.profile.z(float(v)) - t.profile.z(float(v))) for v in s) < 0.1
+
+
+def test_fr_vc_3_registration_off_the_vector_is_bridged():
+    """A registered line that jumps 20 m onto another pavement is pulled back to the input line's offsets."""
+    from roader.fit.road import REGISTER_MAX_M, _guard
+
+    s = np.linspace(0.0, 400.0, 801)
+    seed = Polyline(np.column_stack([s, np.zeros_like(s)]))
+    off = np.where((s > 150.0) & (s < 220.0), 20.0, 1.0)
+    reg = Polyline(np.column_stack([s, off]))
+    fixed = _guard(reg, seed)
+    _st, u, ok = seed.project(fixed.xy)
+    assert np.max(np.abs(u[ok])) <= REGISTER_MAX_M
+    assert np.mean(np.abs(u[ok] - 1.0) < 1e-6) > 0.98
+
+
 def test_fr_af_3_seam_of_link():
     truth = scenes.diverge_merge_scene()
     m, exit_ramp, entry = truth

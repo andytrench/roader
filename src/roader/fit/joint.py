@@ -45,7 +45,11 @@ SEAM_LATERAL_M = 1.0
 BAND_M = 0.15  # surface band around the profile for the returns used (as in roader.fit.road)
 DIFF_M = 0.05
 REG = 1e-6  # ties unobserved parameters to their independent values
-CONSTRAINT_TOL = 1e-6
+BIG = 1e10  # weight of a scaled, normalized constraint row
+INDEPENDENT_TOL = 1e-7
+CONSISTENT_TOL = 1e-6
+CONSTRAINT_TOL = 1e-5
+REVERT_RMS_M = 0.05  # a component whose solve would worsen any road's returns by this much is left as fitted
 IRLS_STEPS = 5
 JOINT_FLAG = "FR-AF-3:joint"
 SEAM_FLAG = "FR-AF-3:seam"
@@ -260,20 +264,48 @@ def _data(item: JointRoad, v: fp._Vert) -> tuple[np.ndarray, np.ndarray, np.ndar
     return fp._design(sb, v.pvi, v.lengths), zb, wb, sb
 
 
-def _solve(items: dict[str, JointRoad], verts: dict[str, fp._Vert], rows: list[tuple[dict[str, np.ndarray], float]]):
-    """Equality-constrained robust least squares over the component. Returns (params per road, constraint residual)."""
-    ids = sorted(items)
+def _assemble(ids, verts, rows):
     off, n = {}, 0
     for i in ids:
         off[i] = n
         n += len(verts[i].grades) + 1
-    x0 = np.concatenate([_params(verts[i]) for i in ids])
     c = np.zeros((len(rows), n))
     d = np.zeros(len(rows))
-    for r, (coef, rhs) in enumerate(rows):
+    for r, (coef, rhs, _tag) in enumerate(rows):
         for rid, vec in coef.items():
             c[r, off[rid] : off[rid] + len(vec)] += vec
         d[r] = rhs
+    return off, n, c, d
+
+
+def _admit(c: np.ndarray, d: np.ndarray) -> list[int]:
+    """Rows kept in order: each is independent of those before it, or redundant and consistent with them."""
+    kept: list[int] = []
+    for r in range(len(c)):
+        norm = float(np.linalg.norm(c[r]))
+        if norm == 0.0:
+            continue
+        row, rhs = c[r] / norm, d[r] / norm
+        if kept:
+            k = c[kept] / np.linalg.norm(c[kept], axis=1)[:, None]
+            dk = d[kept] / np.linalg.norm(c[kept], axis=1)
+            alpha, *_ = np.linalg.lstsq(k.T, row, rcond=None)
+            if np.linalg.norm(row - k.T @ alpha) <= INDEPENDENT_TOL and abs(rhs - float(alpha @ dk)) > CONSISTENT_TOL:
+                continue
+        kept.append(r)
+    return kept
+
+
+def _solve(items: dict[str, JointRoad], verts: dict[str, fp._Vert], rows: list):
+    """Equality-constrained robust least squares over the component.
+
+    Constraint rows enter with a weight ``BIG`` after scaling, so they hold to far
+    below the AC-H4 tolerances while nothing can blow up. Returns (params per
+    road, worst constraint residual).
+    """
+    ids = sorted(items)
+    off, n, c, d = _assemble(ids, verts, rows)
+    x0 = np.concatenate([_params(verts[i]) for i in ids])
     blocks = [_data(items[i], verts[i]) for i in ids]
     a = np.zeros((sum(len(b[1]) for b in blocks), n))
     zb = np.concatenate([b[1] for b in blocks])
@@ -282,29 +314,20 @@ def _solve(items: dict[str, JointRoad], verts: dict[str, fp._Vert], rows: list[t
     for i, b in zip(ids, blocks, strict=True):
         a[r0 : r0 + len(b[1]), off[i] : off[i] + b[0].shape[1]] = b[0]
         r0 += len(b[1])
-    if len(rows):
-        _u, sv, vt = np.linalg.svd(c, full_matrices=True)
-        rank = int(np.sum(sv > 1e-10 * max(sv[0], 1e-30)))
-        xp = vt[:rank].T @ ((_u[:, :rank].T @ d) / sv[:rank])
-        null = vt[rank:].T
-    else:
-        xp, null = np.zeros(n), np.eye(n)
     # Columns are scaled so stations in the hundreds of meters do not swamp z0.
     scale = np.maximum(np.sqrt(np.sum(a**2, axis=0)), 1.0)
+    a_s, c_s = a / scale, c / scale
+    norms = np.maximum(np.linalg.norm(c_s, axis=1), 1e-30)
+    c_s, d_s = c_s / norms[:, None], d / norms
+    y0 = x0 * scale
     # Row multipliers: squared, they are the soft L1 IRLS weights of roader.fit.profile._inner.
     w = np.sqrt(wb)
     x = x0.copy()
     for _ in range(IRLS_STEPS):
-        if null.shape[1] == 0:
-            x = xp
-            break
-        aw = (a * w[:, None]) @ null
-        bw = w * (zb - a @ xp)
-        reg = np.sqrt(REG) * scale[:, None] * null
-        lhs = np.vstack([aw, reg])
-        rhs = np.concatenate([bw, np.sqrt(REG) * scale * (x0 - xp)])
+        lhs = np.vstack([a_s * w[:, None], math.sqrt(REG) * np.eye(n), math.sqrt(BIG) * c_s])
+        rhs = np.concatenate([w * zb, math.sqrt(REG) * y0, math.sqrt(BIG) * d_s])
         y, *_ = np.linalg.lstsq(lhs, rhs, rcond=None)
-        x = xp + null @ y
+        x = y / scale
         res = a @ x - zb
         w = np.sqrt(wb) / (1.0 + (res / fp.F_SCALE_M) ** 2) ** 0.25
     resid = float(np.max(np.abs(c @ x - d))) if len(rows) else 0.0
@@ -333,7 +356,7 @@ def _seam_rows(seam: Seam, roads: dict[str, Road], verts: dict[str, fp._Vert]):
     c2 = c1 * _dslope(parent, ps, pu) * pu + slope_p * float(n_p @ t_c)
     g_rows = {seam.child: _g_row(vc, seam.child_s)}
     g_rows[seam.parent] = g_rows.get(seam.parent, 0.0) - c1 * _g_row(vp, ps)
-    return [(z_rows, slope_p * pu), (g_rows, c2)]
+    return [(z_rows, slope_p * pu, (seam.link.id, "elevation")), (g_rows, c2, (seam.link.id, "grade"))]
 
 
 def _crossing_rows(c: Crossing, roads: dict[str, Road], verts: dict[str, fp._Vert], dz0: float):
@@ -342,14 +365,50 @@ def _crossing_rows(c: Crossing, roads: dict[str, Road], verts: dict[str, fp._Ver
     sl, ul = lo.alignment.project(c.x, c.y)
     rows = {c.upper_road: _z_row(verts[c.upper_road], su)}
     rows[c.lower_road] = rows.get(c.lower_road, 0.0) - _z_row(verts[c.lower_road], sl)
-    return [(rows, dz0 - _slope(up, su, uu) * uu + _slope(lo, sl, ul) * ul)]
+    return [(rows, dz0 - _slope(up, su, uu) * uu + _slope(lo, sl, ul) * ul, (c.id, "clearance"))]
 
 
-def _crossing_dz(c: Crossing, roads: dict[str, Road]) -> float:
-    up, lo = roads[c.upper_road], roads[c.lower_road]
-    su, uu = up.alignment.project(c.x, c.y)
-    sl, ul = lo.alignment.project(c.x, c.y)
-    return up.surface_z(su, uu) - lo.surface_z(sl, ul)
+def _rounds(sub, verts, cseams, ccross, roads, dz0, base):
+    """Solve, and add a vertical curve near the seams of any road whose returns it cannot follow; up to 3 rounds."""
+    verts = dict(verts)
+    for _round in range(3):
+        rows = [r for s in cseams for r in _seam_rows(s, roads, verts)]
+        rows += [r for c in ccross for r in _crossing_rows(c, roads, verts, dz0[c.id])]
+        _off, _n, cm, dm = _assemble(sorted(sub), verts, rows)
+        keep = set(_admit(cm, dm))
+        dropped = [rows[r][2] for r in range(len(rows)) if r not in keep]
+        params, resid = _solve(sub, verts, [rows[r] for r in sorted(keep)])
+        trial = {i: _with(verts[i], params[i]) for i in sub}
+        grown = False
+        for i in sorted(sub):
+            if _rms(sub[i], trial[i]) - base[i] <= RMS_RISE_M:
+                continue
+            stations = [s.child_s for s in cseams if s.child == i] + [s.parent_s for s in cseams if s.parent == i]
+            for s0 in sorted(stations):
+                v = _insert_pvi(verts[i], s0 + _inward(s0, roads[i]) * 1.5 * SEAM_PVI_M, SEAM_PVI_M, roads[i].length)
+                if v is not None:
+                    verts[i], grown = v, True
+        if not grown:
+            break
+    return trial, dropped, resid
+
+
+def _inward(s0: float, road: Road) -> float:
+    return 1.0 if s0 < 0.5 * road.length else -1.0
+
+
+def _ensure_freedom(verts: dict[str, fp._Vert], cseams: list[Seam], ccross: list[Crossing], roads: dict[str, Road]) -> None:
+    """Short vertical curves near a child's seams until it has two parameters beyond its constraints."""
+    for i in sorted(verts):
+        need = 2 * sum(s.child == i for s in cseams) + sum(i in (c.upper_road, c.lower_road) for c in ccross)
+        stations = sorted(s.child_s for s in cseams if s.child == i)
+        k = 1
+        while len(verts[i].grades) + 1 < need + 2 and stations and k <= 4:
+            for s0 in stations:
+                v = _insert_pvi(verts[i], s0 + _inward(s0, roads[i]) * 1.5 * k * SEAM_PVI_M, SEAM_PVI_M, roads[i].length)
+                if v is not None and len(verts[i].grades) + 1 < need + 2:
+                    verts[i] = v
+            k += 1
 
 
 def _rebuild(item: JointRoad, v: fp._Vert, rules: RuleBook) -> list[Flag]:
@@ -407,7 +466,7 @@ def joint_fit(items: list[JointRoad], links: list[Link], crossings: list[Crossin
     links = [lk for lk in links if lk.from_road in roads and lk.to_road in roads]
     crossings = [c for c in crossings if c.upper_road in roads and c.lower_road in roads]
     seams = [seam_of(lk, roads) for lk in sorted(links, key=lambda lk: lk.id)]
-    dz0 = {c.id: _crossing_dz(c, roads) for c in crossings}
+    dz0 = {c.id: float(c.dz_m) for c in crossings}
     # Parents before children, so a fork's slopes follow an already-held parent.
     depth = {i: 0 for i in roads}
     for _ in range(len(seams)):
@@ -427,25 +486,43 @@ def joint_fit(items: list[JointRoad], links: list[Link], crossings: list[Crossin
         base = {i: _rms(by_id[i], verts[i]) for i in comp}
         cseams = [s for s in seams if s.child in sub]
         ccross = [c for c in crossings if c.upper_road in sub]
-        for _round in range(3):
-            rows = [r for s in cseams for r in _seam_rows(s, roads, verts)]
-            rows += [r for c in ccross for r in _crossing_rows(c, roads, verts, dz0[c.id])]
-            params, resid = _solve(sub, verts, rows)
-            trial = {i: _with(verts[i], params[i]) for i in comp}
-            worse = [i for i in comp if _rms(by_id[i], trial[i]) - base[i] > RMS_RISE_M]
-            grown = False
-            for i in worse:
-                stations = [s.child_s for s in cseams if s.child == i] + [s.parent_s for s in cseams if s.parent == i]
-                for s0 in sorted(stations):
-                    inward = 1.0 if s0 < 0.5 * roads[i].length else -1.0
-                    v = _insert_pvi(verts[i], s0 + inward * 1.5 * SEAM_PVI_M, SEAM_PVI_M, roads[i].length)
-                    if v is not None:
-                        verts[i], grown = v, True
-            if not grown:
+        _ensure_freedom(verts, cseams, ccross, roads)
+        while True:
+            trial, dropped, resid = _rounds(sub, verts, cseams, ccross, roads, dz0, base)
+            rise = {i: _rms(by_id[i], trial[i]) - base[i] for i in comp}
+            worst = max(rise, key=lambda i: (rise[i], i))
+            if rise[worst] <= REVERT_RMS_M:
                 break
-        verts = trial
+            # A seam on a road its returns cannot follow is dropped, not forced.
+            off = [s for s in cseams if worst in (s.child, s.parent)]
+            for s in off:
+                flags.append(
+                    Flag(
+                        "FR-AF-3:seam_dropped",
+                        s.link.id,
+                        "FR-AF-3",
+                        f"seam not enforced: with it the joint solve worsens {roads[worst].name} by {rise[worst]:.3f} m RMS",
+                    )
+                )
+            cseams = [s for s in cseams if s not in off]
+            if not off:
+                # Its clearances then: a crossing measured on a road its returns cannot follow.
+                gone = [c for c in ccross if worst in (c.upper_road, c.lower_road)]
+                for c in gone:
+                    flags.append(Flag("FR-AF-3:constraint_dropped", c.id, "FR-AF-3", f"clearance not enforced: with it the joint solve worsens {roads[worst].name} by {rise[worst]:.3f} m RMS"))
+                ccross = [c for c in ccross if c not in gone]
+                if not gone:
+                    break
+            if not cseams:
+                trial = None
+                break
+        if trial is None:
+            flags.append(Flag("FR-AF-3:reverted", comp[0], "FR-AF-3", f"component of {len(comp)} roads left as fitted one by one"))
+            continue
+        for tag, what in dropped:
+            flags.append(Flag("FR-AF-3:constraint_dropped", tag, "FR-AF-3", f"{what} constraint conflicts with the others in its component and is not enforced"))
         if resid > CONSTRAINT_TOL:
             flags.append(Flag("FR-AF-3:infeasible", comp[0], "FR-AF-3", f"component of {len(comp)} roads: constraints miss by {resid:.2e}"))
         for i in comp:
-            flags.extend(_rebuild(by_id[i], verts[i], rules))
+            flags.extend(_rebuild(by_id[i], trial[i], rules))
     return flags

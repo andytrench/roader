@@ -5,6 +5,12 @@ the measured pavement (twice, so the second pass measures on a line that already
 follows the road), fit the alignment, re-measure everything on the alignment,
 fit cross slopes and the profile jointly (two passes), then the edge lines.
 
+A registered line that strays more than ``REGISTER_MAX_M`` from the input vector
+has followed another pavement (a ramp, the other carriageway); that stretch is
+bridged from its neighbours and its measured centers are ignored (flagged
+``FR-VC-3:off_vector``). Junction anchors pin the alignment's ends to a parent
+road (``roader.fit.links``, FR-AF-3).
+
 Confidence of a measured element (FR-EX-2 input, recorded per element):
 ``0.95 * observed_fraction ** 0.5 / (1 + (rms / 0.10) ** 2) * strip_factor``,
 where ``strip_factor`` is 0.8 when flight strips disagree by more than 5 cm and
@@ -17,6 +23,7 @@ import math
 from dataclasses import dataclass, field
 
 import numpy as np
+from scipy.spatial import cKDTree
 
 from roader.conflate.graph import RoadSeed
 from roader.conflate.polyline import Polyline
@@ -48,6 +55,10 @@ SURFACE_BAND_M = 0.15
 EDGE_MARGIN_M = 0.3
 OVERRIDE = "FR-AF-4:override"
 PIN_BLEND_M = 60.0
+REGISTER_MAX_M = 6.0  # a registered centerline further than this from the input vector followed another pavement
+GUARD_MARGIN_M = 10.0
+HINT_STEP_M = 10.0
+HINT_WEIGHT = 0.3
 
 
 @dataclass
@@ -81,6 +92,38 @@ def _stats(res: np.ndarray) -> tuple[float | None, float | None]:
     return float(np.sqrt(np.mean(res**2))), float(np.percentile(np.abs(res), 95.0))
 
 
+def _within(seed_line: Polyline, xy: np.ndarray) -> np.ndarray:
+    """Points within REGISTER_MAX_M of the input line, past its ends included."""
+    s, u, _ok = seed_line.project(xy)
+    s, u = np.nan_to_num(s, nan=-np.inf), np.nan_to_num(u, nan=np.inf)
+    return (np.abs(u) <= REGISTER_MAX_M) & (s >= -REGISTER_MAX_M) & (s <= seed_line.length + REGISTER_MAX_M)
+
+
+def _guard(reg: Polyline, seed_line: Polyline) -> Polyline:
+    """The registered line, with stretches more than REGISTER_MAX_M off the input vector bridged.
+
+    Input vectors are a few meters off (spec section 3); a registered line further
+    away has followed another pavement (a ramp, the other carriageway). Those
+    stretches take the offsets of the good stretches either side, interpolated
+    along the input line (FR-VC-3: a smooth correction).
+    """
+    s, u, _ok = seed_line.project(reg.xy)
+    good = _within(seed_line, reg.xy)
+    if good.all():
+        return reg
+    # The way off and back is not a measurement either: keep clear of it.
+    s_bad = np.sort(np.nan_to_num(s[~good], nan=-np.inf))
+    pos = np.clip(np.searchsorted(s_bad, s), 1, len(s_bad) - 1) if len(s_bad) > 1 else np.zeros(len(s), dtype=np.int64)
+    near_bad = np.minimum(np.abs(s - s_bad[pos - 1 if len(s_bad) > 1 else 0]), np.abs(s - s_bad[pos])) <= GUARD_MARGIN_M
+    good &= ~near_bad
+    if good.sum() < max(3, 0.3 * len(good)):
+        return seed_line
+    order = np.argsort(s[good], kind="stable")
+    sg, ug = s[good][order], u[good][order]
+    st = np.linspace(0.0, seed_line.length, max(2, math.ceil(seed_line.length / 2.0) + 1))
+    return seed_line.shifted(st, np.interp(st, sg, ug))
+
+
 def _pin(data_xy: np.ndarray, check_xy: np.ndarray, anchors) -> tuple[np.ndarray, np.ndarray]:
     """Move the measured centerline onto junction nodes, blended out over PIN_BLEND_M (FR-AF-3, FR-VC-3)."""
     line = Polyline(check_xy, step=0.5)
@@ -105,17 +148,38 @@ def fit_road(seed: RoadSeed, ev: Evidence, rules: RuleBook, *, strip_factor: flo
     track = track_line(line, ev)
     prof = None
     data_xy = check_xy = None
+    rejected, bridged = 0, False
     for _ in range(REGISTER_PASSES):
         lp = near_points(line, ev)
         prof = cross_profiles(lp, track.z_at, line.length)
         reg, _st, mid, weight = register_line(line, prof)
         has = weight > 0
+        guarded = _guard(reg, seed.line)
+        bridged = guarded is not reg
         if has.sum() >= 3:
             data_xy = line.offset_point(prof.s[has], mid[has])
             data_w = weight[has]
+            if guarded is not reg:
+                near = _within(seed.line, data_xy)
+                rejected = max(rejected, int((~near).sum()))
+                data_xy, data_w = data_xy[near], data_w[near]
+                if len(data_xy) < 3:
+                    data_xy = None
+        reg = guarded
         check_xy = reg.xy
         line = reg
         track = track_line(line, ev)
+    if bridged:
+        flags.append(
+            Flag("FR-VC-3:off_vector", seed.id, "FR-VC-3", f"registered line strayed over {REGISTER_MAX_M:.0f} m off the input vector; bridged, {rejected} measured centers ignored")
+        )
+        if data_xy is not None:
+            # The bridged line stands in, weakly, where no measured center is left (a vector hint).
+            hint = check_xy[:: int(HINT_STEP_M / 0.5)]
+            d, _i = cKDTree(data_xy).query(hint)
+            fill = d > fa.SUPPORT_M
+            data_xy = np.vstack([data_xy, hint[fill]])
+            data_w = np.concatenate([data_w, np.full(int(fill.sum()), HINT_WEIGHT)])
     if data_xy is None:
         flags.append(Flag("FR-VC-2:unsupported", seed.id, "FR-VC-2", "no pavement edges measured; alignment follows the input vector"))
         data_xy = seed.line.xy[::10]
