@@ -122,6 +122,9 @@ def tri_tri_touch(
     return False
 
 
+FLAT_SINE = 1e-6  # sine of the angle under which two face planes count as parallel
+
+
 def tri_tri_intersect_batch(ta: np.ndarray, tb: np.ndarray, eps: float = PLANE_EPS) -> np.ndarray:
     """Vectorized closed-triangle intersection for pairs sharing no vertex (touching counts).
 
@@ -147,7 +150,8 @@ def tri_tri_intersect_batch(ta: np.ndarray, tb: np.ndarray, eps: float = PLANE_E
     apart = (db > 0).all(1) | (db < 0).all(1) | (da > 0).all(1) | (da < 0).all(1)
     line = np.cross(na, nb)
     ll = np.linalg.norm(line, axis=1)
-    flat = ~apart & ((db == 0).all(1) | (da == 0).all(1) | (ll < 1e-9))
+    # Below FLAT_SINE the planes' common line is too ill-conditioned to intersect on.
+    flat = ~apart & ((db == 0).all(1) | (da == 0).all(1) | (ll < FLAT_SINE))
     live = ~apart & ~flat
     if live.any():
         line = line[live] / ll[live][:, None]

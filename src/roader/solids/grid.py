@@ -36,19 +36,28 @@ class Cell:
 
 
 class PlanVertices:
-    """Plan positions shared by all bodies; (s, u) are NaN for vertices not on a road grid."""
+    """Plan positions shared by all bodies; (s, u) are NaN for vertices not on a road grid.
+
+    Grid vertices also record their road, their station-line index (row) and the keys
+    of the u-lines through them, so shading creases and UVs follow the model (FR-AS-3/4).
+    """
 
     def __init__(self) -> None:
         self.x: list[float] = []
         self.y: list[float] = []
         self.s: list[float] = []
         self.u: list[float] = []
+        self.road: list[str | None] = []
+        self.row: list[int] = []
+        self.keys: dict[int, set[str]] = {}
 
-    def add(self, x: float, y: float, s: float = math.nan, u: float = math.nan) -> int:
+    def add(self, x: float, y: float, s: float = math.nan, u: float = math.nan, road: str | None = None, row: int = -1) -> int:
         self.x.append(x)
         self.y.append(y)
         self.s.append(s)
         self.u.append(u)
+        self.road.append(road)
+        self.row.append(row)
         return len(self.x) - 1
 
     def d2(self, a: int, b: int) -> float:
@@ -132,6 +141,7 @@ class RoadGrid:
             for u, _order, key in items:
                 if row and u - last_u <= U_MERGE_M:
                     self.vid[(i, key)] = row[-1]
+                    pv.keys[row[-1]].add(key)
                     continue
                 s = sline.at(u)
                 if s < -1e-9 or s > length + 1e-9:
@@ -141,7 +151,8 @@ class RoadGrid:
                 if 1.0 - k * u < FOLD_MARGIN:
                     raise ValueError(f"road {road.id}: offset u={u:.2f} folds over the centre of curvature at s={s:.2f}")
                 x, y = road.alignment.offset_point(s, u)
-                p = pv.add(x, y, s, u)
+                p = pv.add(x, y, s, u, road.id, i)
+                pv.keys[p] = {key}
                 rank[p] = len(row)
                 row.append(p)
                 self.vid[(i, key)] = p

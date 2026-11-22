@@ -33,6 +33,14 @@ from roader.solids.stations import (
 from roader.solids.terrain import TerrainSampler
 
 MIN_FILL_M = 1e-3
+# Real-time export profile (FR-SV-7, D-038): resting bodies embed into what carries
+# them, and every outline is inset in plan by a per-class amount so faces that touch
+# in the analytic profile end up at least 0.2 mm apart (coplanar means within 0.1 mm).
+REALTIME_EMBED_M = 0.25
+BARRIER_CLEAR_M = 0.025  # off a deck, a barrier stops this far above the pavement keel
+INSET_SUPPORT_M = 2e-4  # embankments, abutments, pier caps, columns
+INSET_ROAD_M = 4e-4  # pavement, deck
+INSET_TOP_M = 6e-4  # barriers, parapets
 MAX_REACH_M = 500.0
 SHAPE_MIN_M = 1e-3
 COLUMN_SIDES = 8
@@ -167,8 +175,12 @@ def _fill_top(road: Road, sign: float, ratio: float) -> Callable[[float, float],
     return top
 
 
-def road_bodies(model: RoadModel, road: Road, sampler: TerrainSampler | None, tol: float, pv: PlanVertices) -> list[Body]:
+def road_bodies(
+    model: RoadModel, road: Road, sampler: TerrainSampler | None, tol: float, pv: PlanVertices, *, realtime: bool = False
+) -> list[Body]:
+    """Bodies of one road. ``realtime`` switches to the real-time profile's levels and insets."""
     xs = road.cross_section
+    embed = REALTIME_EMBED_M if realtime else 0.0
     length = road.length
     if length <= 0.0 or not road.profile.elements:
         raise ValueError(f"road {road.id}: empty alignment or profile")
@@ -259,7 +271,7 @@ def road_bodies(model: RoadModel, road: Road, sampler: TerrainSampler | None, to
     umax = 1.25 * umax + 1.0
     knots = skew_knots(structures, umax)
     base = merge_breakpoints(bps + [(k.s, PRIORITY_OTHER) for k in knots if k.ramp], length)
-    station_lines = [StationLine(s, skew_at(knots, s)) for s in stations(road, base, tol, umax, knots)]
+    station_lines = [StationLine(s, skew_at(knots, s)) for s in stations(road, base, tol, umax, knots, spans)]
     grid = RoadGrid(road, lines, station_lines, pv)
 
     def at(f: Callable[[float, float], float]) -> Callable[[int], float]:
@@ -271,6 +283,9 @@ def road_bodies(model: RoadModel, road: Road, sampler: TerrainSampler | None, to
     def bot_fn(s: float, u: float) -> float:
         return pavement_bottom(road, s, u)
 
+    def keel_fn(s: float, u: float) -> float:
+        return pavement_bottom(road, s, u) - embed
+
     src = road_source(road)
     bodies: list[Body] = []
     pieces = subtract(0.0, length, spans)
@@ -278,7 +293,7 @@ def road_bodies(model: RoadModel, road: Road, sampler: TerrainSampler | None, to
         bodies.append(
             Body(
                 mesh_id(road.id, "pavement", k, len(pieces)), road.id, "L3", "pavement", MAT_PAVEMENT, src,
-                grid.cells_between(a, b, "wr", "wl"), at(bot_fn), at(top_fn), ground=False,
+                grid.cells_between(a, b, "wr", "wl"), at(keel_fn), at(top_fn), ground=False, inset_m=INSET_ROAD_M,
             )
         )
 
@@ -289,12 +304,13 @@ def road_bodies(model: RoadModel, road: Road, sampler: TerrainSampler | None, to
             lo, hi = ("c", toe) if sign > 0 else (toe, "c")
 
             def bottom(p: int) -> float:
-                return sampler(pv.x[p], pv.y[p])  # type: ignore[misc]
+                return sampler(pv.x[p], pv.y[p]) - embed  # type: ignore[misc]
 
             bodies.append(
                 Body(
                     mesh_id(ss.id, "embankment", k, len(ranges)), ss.id, "L4", "embankment", MAT_SOIL, ss.prov.source,
                     grid.cells_between(a, b, lo, hi), bottom, at(fill_top), ground=True,
+                    creases=frozenset({"wl" if sign > 0 else "wr"}), inset_m=INSET_SUPPORT_M,
                 )
             )
 
@@ -307,17 +323,26 @@ def road_bodies(model: RoadModel, road: Road, sampler: TerrainSampler | None, to
         def btop(s: float, u: float, shape=shape, h=b.height_m) -> float:
             return road.surface_z(s, u) + h * shape(abs(u))
 
+        def bbottom(s: float, u: float) -> float:
+            if not realtime:
+                return road.surface_z(s, u)
+            # Off a deck the pavement keel sits on the embankment top: go through both.
+            depth = embed if on_structure(s) else xs.pavement_thickness(s) + embed - BARRIER_CLEAR_M
+            return road.surface_z(s, u) - depth
+
         parapet = b.kind == "parapet" and on_structure(s0) and on_structure(s1)
+        arris = frozenset({f"b:{b.id}:1", f"b:{b.id}:2"}) if n_lines == 4 else frozenset()
         bodies.append(
             Body(
                 mesh_id(b.id, "parapet" if parapet else "barrier", 0, 1), b.id, "L5" if parapet else "L3",
                 "parapet" if parapet else "barrier", MAT_STEEL if b.kind == "guardrail" else MAT_STRUCTURAL,
-                b.prov.source, grid.cells_between(s0, s1, lo, hi), at(top_fn), at(btop), ground=False,
+                b.prov.source, grid.cells_between(s0, s1, lo, hi), at(bbottom), at(btop), ground=False,
+                creases=arris, inset_m=INSET_TOP_M,
             )
         )
 
     for st in structures:
-        bodies.extend(_structure_bodies(st, road, grid, knots, pv, top_fn))
+        bodies.extend(_structure_bodies(st, road, grid, knots, pv, top_fn, embed))
     return bodies
 
 
@@ -328,7 +353,9 @@ def _structure_bodies(
     knots: list,
     pv: PlanVertices,
     top_fn: Callable[[float, float], float],
+    embed: float = 0.0,
 ) -> list[Body]:
+    """Deck, abutments and piers; supports reach ``embed`` up into what they carry."""
     depth = st.deck.depth_m
     if depth <= 0.0:
         raise ValueError(f"structure {st.id}: deck depth must be positive")
@@ -340,10 +367,13 @@ def _structure_bodies(
     def top(p: int) -> float:
         return top_fn(pv.s[p], pv.u[p])
 
+    def support_top(p: int) -> float:
+        return soffit(p) + embed
+
     bodies = [
         Body(
             f"{st.id}:deck", st.id, "L5", "deck", MAT_DECK, least_trusted([st.prov.source, st.deck.prov.source]),
-            grid.cells_between(st.s_start, st.s_end, lo, hi), soffit, top, ground=False,
+            grid.cells_between(st.s_start, st.s_end, lo, hi), soffit, top, ground=False, inset_m=INSET_ROAD_M,
         )
     ]
     for sp in sorted(st.supports, key=lambda sp: (sp.station, sp.id)):
@@ -353,11 +383,11 @@ def _structure_bodies(
             bodies.append(
                 Body(
                     f"{sp.id}:abutment", sp.id, "L5", "abutment", MAT_STRUCTURAL, sp.prov.source,
-                    cells, _const_level(sp.footing_z), soffit,
+                    cells, _const_level(sp.footing_z), support_top, inset_m=INSET_SUPPORT_M,
                 )
             )
             continue
-        bodies.extend(_pier(sp, road, cells, grid, knots, pv, soffit, (lo, hi)))
+        bodies.extend(_pier(sp, road, cells, grid, knots, pv, soffit, (lo, hi), embed))
     return bodies
 
 
@@ -374,6 +404,7 @@ def _pier(
     pv: PlanVertices,
     soffit: Callable[[int], float],
     keys: tuple[str, str],
+    embed: float = 0.0,
 ) -> list[Body]:
     """Pier cap block under the soffit plus n_columns octagonal columns, aligned with the skew (FR-ST-4)."""
     if sp.n_columns < 1 or sp.column_width_m <= 0.0 or sp.cap_depth_m <= 0.0:
@@ -422,14 +453,15 @@ def _pier(
     bodies = [
         Body(
             f"{sp.id}:pier_cap", sp.id, "L5", "pier_cap", MAT_STRUCTURAL, sp.prov.source,
-            cells, _const_level(z_cap), soffit, ground=False, bottom_tris=bottom_tris,
+            cells, _const_level(z_cap), lambda p: soffit(p) + embed, ground=False, bottom_tris=bottom_tris,
+            inset_m=INSET_SUPPORT_M,
         )
     ]
     for k, (loop, fan) in enumerate(zip(columns, fans, strict=True)):
         bodies.append(
             Body(
                 mesh_id(sp.id, "pier_column", k, n), sp.id, "L5", "pier_column", MAT_STRUCTURAL, sp.prov.source,
-                [Cell(loop, fan)], _const_level(sp.footing_z), _const_level(z_cap),
+                [Cell(loop, fan)], _const_level(sp.footing_z), _const_level(z_cap + embed), inset_m=INSET_SUPPORT_M,
             )
         )
     return bodies

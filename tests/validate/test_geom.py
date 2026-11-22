@@ -46,3 +46,15 @@ def test_fr_sv_4_near_coplanar_faces_sharing_a_vertex_do_not_intersect():
     # Rotating B into A's sector makes them overlap.
     c = np.array([a[0], a[0] + 0.5 * (a[1] - a[0]) + 0.5 * (a[2] - a[0]), a[1] + 1e-3 * (a[2] - a[1])])
     assert vertex_overlap(a, c, 0, 0)
+
+
+def test_fr_sv_4_near_coplanar_disjoint_faces_do_not_intersect():
+    """Two bottom faces of a solid on a tilted plane, 0.4 m apart in plan, coplanar to 1e-6.
+
+    Their normals differ by about 1e-8 rad, so the planes' common line is ill
+    conditioned; the pair must take the coplanar path (real-time embankment case).
+    """
+    a = np.array([[[20.61388284, 1.03818804, 97.82934097], [20.5547788, 1.22925534, 97.82853135], [30.10814369, 4.1844574, 97.8578792]]])
+    b = np.array([[[20.43657071, 1.61138993, 97.82691211], [28.66015378, 8.86541513, 97.83804356], [29.9899356, 4.566592, 97.85625997]]])
+    assert not tri_tri_intersect_batch(a, b)[0]
+    assert not tri_tri_touch(a[0], b[0], [])

@@ -1,8 +1,7 @@
 """AC-P2 transitions, AC-P3 / FR-AS-2 triangle budgets, AC-P4 / FR-AS-4 UV stretch.
 
-``Mesh.uv0`` is a milestone 2 contract (lane ``model`` / ``solids``); until the
-dataclass has it, tests set it as an attribute. The generated-mesh UV test skips
-until ``roader.solids.generate`` produces uv0.
+``Mesh.uv0`` is per vertex (N, 2) or per face corner (M, 3, 2); generated solids
+use per-corner UVs (lane ``assets``).
 """
 
 from __future__ import annotations
@@ -28,7 +27,7 @@ from roader.validate.assets import (
 from .meshes import mesh
 
 TRUTH = Provenance(Source.MEASURED, 1.0)
-generate = getattr(roader.solids, "generate", None)
+generate = roader.solids.generate
 
 
 @pytest.fixture
@@ -117,10 +116,9 @@ def test_ac_p3_overpass_includes_substructure(model):
     assert result.passed  # median of (0, 0, 1.17) is 0
 
 
-def test_ac_p3_generated_overpass_meets_budgets(model):
-    if generate is None:
-        pytest.skip("roader.solids.generate not implemented yet")
-    result = check_budgets(model, generate(model))
+@pytest.mark.parametrize("profile", ["analytic", "realtime"])
+def test_ac_p3_generated_overpass_meets_budgets(model, profile):
+    result = check_budgets(model, generate(model, profile=profile))
     print("AC-P3 actuals", result.metrics)
     assert result.passed, _msgs(result)
     assert result.metrics["n_assets"] == 3.0
@@ -183,12 +181,15 @@ def test_ac_p4_without_uv0_is_a_soft_skip():
     assert not result.passed and not result.hard and result.skipped_reason
 
 
+def test_ac_p4_per_corner_uv0_is_accepted():
+    m = _strip(200.0)
+    per_vertex = check_uv_stretch([m]).metrics
+    m.uv0 = m.uv0[m.faces]
+    assert check_uv_stretch([m]).metrics == per_vertex
+
+
 def test_ac_p4_generated_uvs_have_low_stretch(model):
-    if generate is None:
-        pytest.skip("roader.solids.generate not implemented yet")
     meshes = generate(model)
-    if not any(getattr(m, "uv0", None) is not None for m in meshes):
-        pytest.skip("roader.solids.generate does not produce Mesh.uv0 yet (FR-AS-4, milestone 2)")
     result = check_uv_stretch(meshes)
     assert result.passed, _msgs(result)[:10]
     assert math.isfinite(result.metrics["max_stretch_along"])

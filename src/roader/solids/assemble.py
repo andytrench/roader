@@ -23,6 +23,7 @@ from roader.solids.grid import Cell, PlanVertices, Tri, ladder
 from roader.solids.terrain import TerrainSampler
 
 LEVEL_MERGE_M = 1e-6
+TOP, BOTTOM, WALL = 0, 1, 2
 
 Key = tuple[int, float]  # plan vertex id, elevation
 
@@ -40,6 +41,8 @@ class Body:
     top: Callable[[int], float]
     ground: bool | None = None  # None: in contact if the bottom is below terrain everywhere
     bottom_tris: list[Tri] | None = None  # replaces the cell triangulation for the bottom face
+    creases: frozenset[str] = frozenset()  # u-line keys where the top surface has a model crease (FR-AS-3)
+    inset_m: float = 0.0  # real-time profile: plan inset of the outline (FR-SV-7)
     zb: dict[int, float] = field(default_factory=dict)
     zt: dict[int, float] = field(default_factory=dict)
 
@@ -99,16 +102,43 @@ class Levels:
 
 
 @dataclass
+class RawMesh:
+    """One body's triangles before attributes: vertex keys, faces and what each face is."""
+
+    body: Body
+    plan: np.ndarray  # (N,) plan vertex id per mesh vertex
+    vertices: np.ndarray  # (N, 3) plan position and level of each mesh vertex
+    faces: np.ndarray  # (M, 3) indices into vertices
+    kind: np.ndarray  # (M,) TOP, BOTTOM or WALL
+    wall_edge: np.ndarray  # (M, 2) plan edge (a, b) of a wall face along the outline, else (-1, -1)
+
+
+@dataclass
 class Assembly:
-    meshes: list[Mesh]
+    raw: list[RawMesh]
     footprints: list[list[tuple[float, float]]]
     ring: list[tuple[float, float, float]]
 
+    @property
+    def meshes(self) -> list[Mesh]:
+        return [plain_mesh(r, r.vertices) for r in self.raw]
 
-def assemble(bodies: list[Body], pv: PlanVertices, sampler: TerrainSampler | None) -> Assembly:
-    levels = Levels()
+
+Face = tuple[Key, Key, Key]
+
+
+def assemble(bodies: list[Body], pv: PlanVertices, sampler: TerrainSampler | None, *, conforming: bool = True) -> Assembly:
+    """Close every body into a shell.
+
+    conforming (analytic profile): levels and wall cuts are shared, so touching bodies
+    share identical faces (FR-SV-7). Otherwise (real-time profile) each body is closed
+    on its own levels, and the terrain cuts only the walls of ground-contact bodies.
+    """
+    shared = Levels()
+    own = [shared if conforming else Levels() for _ in bodies]
     terrain: dict[int, float] = {}
-    for body in bodies:
+    for n, body in enumerate(bodies):
+        levels = own[n]
         verts, bottom_only = _body_vertices(body)
         for p in verts + bottom_only:
             zb = body.bottom(p)
@@ -122,39 +152,52 @@ def assemble(bodies: list[Body], pv: PlanVertices, sampler: TerrainSampler | Non
             levels.add(p, body.zt[p])
             if sampler is not None and p not in terrain:
                 terrain[p] = sampler(pv.x[p], pv.y[p])
-                levels.add(p, terrain[p])
         if body.ground is None:
             below = [body.zb[p] < terrain[p] for p in verts] if sampler is not None else [False]
             if any(below) and not all(below):
                 raise ValueError(f"{body.mesh_id}: bottom crosses the terrain; set footing below ground")
             body.ground = all(below)
-    levels.finalize()
-    for body in bodies:
-        body.zb = {p: levels.canon(p, z) for p, z in body.zb.items()}
-        body.zt = {p: levels.canon(p, z) for p, z in body.zt.items()}
-    terrain = {p: levels.canon(p, z) for p, z in terrain.items()}
+        if sampler is not None and (conforming or body.ground):
+            for p in verts + bottom_only:
+                levels.add(p, terrain[p])
+    for levels in {id(lv): lv for lv in own}.values():
+        levels.finalize()
+    for n, body in enumerate(bodies):
+        body.zb = {p: own[n].canon(p, z) for p, z in body.zb.items()}
+        body.zt = {p: own[n].canon(p, z) for p, z in body.zt.items()}
+    if conforming:
+        terrain = {p: shared.canon(p, z) for p, z in terrain.items()}
 
-    faces: list[list[tuple[Key, Key, Key]]] = [[] for _ in bodies]
-    walls: dict[tuple[int, int], list[tuple[int, int, int]]] = {}
+    faces: list[list[Face]] = [[] for _ in bodies]
+    kinds: list[list[int]] = [[] for _ in bodies]
+    wall_edges: list[list[tuple[int, int]]] = [[] for _ in bodies]
+    walls: dict[tuple[int, int, int], list[tuple[int, int, int]]] = {}
     for n, body in enumerate(bodies):
         zb, zt = body.zb, body.zt
-        out = faces[n]
+        out, kind = faces[n], kinds[n]
         for cell in body.cells:
             for a, b, c in cell.tris:
                 if zt[a] == zb[a] and zt[b] == zb[b] and zt[c] == zb[c]:
                     raise ValueError(f"{body.mesh_id}: zero thickness over a whole triangle")
                 out.append(((a, zt[a]), (b, zt[b]), (c, zt[c])))
+                kind.append(TOP)
                 if body.bottom_tris is None:
                     out.append(((a, zb[a]), (c, zb[c]), (b, zb[b])))
+                    kind.append(BOTTOM)
         for a, b, c in body.bottom_tris or []:
             out.append(((a, zb[a]), (c, zb[c]), (b, zb[b])))
+            kind.append(BOTTOM)
+        wall_edges[n] = [(-1, -1)] * len(out)
+        group = 0 if conforming else n
         for a, b in boundary_edges(body.cells):
-            walls.setdefault((min(a, b), max(a, b)), []).append((n, a, b))
+            walls.setdefault((group, min(a, b), max(a, b)), []).append((n, a, b))
 
-    for (p, q), entries in walls.items():
-        _walls(p, q, entries, bodies, faces, levels, terrain, pv)
+    for (group, p, q), entries in walls.items():
+        levels = shared if conforming else own[group]
+        cut_terrain = terrain if conforming or bodies[group].ground else {}
+        _walls(p, q, entries, bodies, faces, kinds, wall_edges, levels, cut_terrain, pv)
 
-    meshes = [_mesh(body, out, pv) for body, out in zip(bodies, faces, strict=True)]
+    raw = [_raw(body, out, kind, edges, pv) for body, out, kind, edges in zip(bodies, faces, kinds, wall_edges, strict=True)]
 
     footprints: list[list[tuple[float, float]]] = []
     ground_edges: list[tuple[int, int]] = []
@@ -172,7 +215,7 @@ def assemble(bodies: list[Body], pv: PlanVertices, sampler: TerrainSampler | Non
             if p not in seen:
                 seen.add(p)
                 ring.append((pv.x[p], pv.y[p], terrain[p]))
-    return Assembly(meshes, footprints, ring)
+    return Assembly(raw, footprints, ring)
 
 
 def _body_vertices(body: Body) -> tuple[list[int], list[int]]:
@@ -197,7 +240,9 @@ def _walls(
     q: int,
     entries: list[tuple[int, int, int]],
     bodies: list[Body],
-    faces: list[list[tuple[Key, Key, Key]]],
+    faces: list[list[Face]],
+    kinds: list[list[int]],
+    wall_edges: list[list[tuple[int, int]]],
     levels: Levels,
     terrain: dict[int, float],
     pv: PlanVertices,
@@ -239,6 +284,8 @@ def _walls(
         for k in range(index[bot], index[top]):
             for tri in strips[k]:
                 faces[n].append(tri if _wall_normal_dot(tri, pv, dy, -dx) > 0.0 else (tri[0], tri[2], tri[1]))
+                kinds[n].append(WALL)
+                wall_edges[n].append((a, b))
 
 
 def _wall_normal_dot(tri: tuple[Key, Key, Key], pv: PlanVertices, ox: float, oy: float) -> float:
@@ -250,7 +297,7 @@ def _wall_normal_dot(tri: tuple[Key, Key, Key], pv: PlanVertices, ox: float, oy:
     return nx * ox + ny * oy
 
 
-def _mesh(body: Body, tris: list[tuple[Key, Key, Key]], pv: PlanVertices) -> Mesh:
+def _raw(body: Body, tris: list[Face], kind: list[int], edges: list[tuple[int, int]], pv: PlanVertices) -> RawMesh:
     index: dict[Key, int] = {}
     faces = np.empty((len(tris), 3), dtype=np.int64)
     for n, tri in enumerate(tris):
@@ -260,6 +307,12 @@ def _mesh(body: Body, tris: list[tuple[Key, Key, Key]], pv: PlanVertices) -> Mes
                 idx = index[key] = len(index)
             faces[n, k] = idx
     vertices = np.array([(pv.x[p], pv.y[p], z) for p, z in index], dtype=np.float64).reshape(-1, 3)
+    plan = np.array([p for p, _z in index], dtype=np.int64)
+    return RawMesh(body, plan, vertices, faces, np.array(kind, dtype=np.int64), np.array(edges, dtype=np.int64).reshape(-1, 2))
+
+
+def plain_mesh(raw: RawMesh, vertices: np.ndarray, **attributes: np.ndarray | None) -> Mesh:
+    body = raw.body
     return Mesh(
         id=body.mesh_id,
         element_id=body.element_id,
@@ -268,5 +321,6 @@ def _mesh(body: Body, tris: list[tuple[Key, Key, Key]], pv: PlanVertices) -> Mes
         material=body.material,
         source=body.source,
         vertices=vertices,
-        faces=faces,
+        faces=raw.faces,
+        **attributes,
     )

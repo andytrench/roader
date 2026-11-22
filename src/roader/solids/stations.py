@@ -17,7 +17,9 @@ from itertools import pairwise
 
 from roader.model.schema import Road, Structure, Support
 
-MAX_STATION_SPACING_M = 10.0
+MAX_STATION_SPACING_M = 10.0  # at the finest chord tolerance (D-028)
+SPACING_REF_TOL_M = 0.01
+STRUCTURE_TOL_M = 0.01  # chord tolerance cap along a structure span, every LOD
 STATION_MERGE_M = 0.01
 RAMP_FACTOR = 2.4
 RAMP_MIN_M = 1.0
@@ -120,13 +122,21 @@ def merge_breakpoints(points: list[tuple[float, int]], length: float) -> list[fl
     return [min(cluster, key=lambda item: (item[1], item[0]))[0] for cluster in clusters]
 
 
+def spacing_cap(tol: float) -> float:
+    """Longest station spacing: 10 m at 1 cm, growing with sqrt(tol) for coarser LODs (FR-AS-1).
+
+    The square root keeps the cap in step with the curvature limit sqrt(8 tol R).
+    """
+    return MAX_STATION_SPACING_M * math.sqrt(max(tol, SPACING_REF_TOL_M) / SPACING_REF_TOL_M)
+
+
 def max_step(road: Road, a: float, b: float, tol: float, umax: float) -> float:
     """Longest station spacing in (a, b) that keeps chord deviation under tol (FR-SG-2).
 
     (a, b) contains no parameter change, so curvature, grade change and cross-slope
     rate are linear or constant inside it.
     """
-    step = MAX_STATION_SPACING_M
+    step = spacing_cap(tol)
     eps = 1e-6 * (b - a)
     sa, sb = a + eps, b - eps
     k = max(abs(road.alignment.evaluate(sa)[3]), abs(road.alignment.evaluate(sb)[3]))
@@ -165,17 +175,32 @@ def kinks(road: Road, umax: float) -> list[tuple[float, float]]:
     return out
 
 
-def stations(road: Road, breakpoints: list[float], tol: float, umax: float, knots: list[SkewKnot]) -> list[float]:
+def stations(
+    road: Road,
+    breakpoints: list[float],
+    tol: float,
+    umax: float,
+    knots: list[SkewKnot],
+    spans: list[tuple[float, float]] = (),  # type: ignore[assignment]
+) -> list[float]:
+    """Sweep stations; inside ``spans`` (structures) the tolerance never exceeds STRUCTURE_TOL_M.
+
+    A deck on a crest curve sags below the model by up to the chord tolerance, so
+    structures keep their finest tessellation at every LOD: the deck top and soffit,
+    and the void under them, are preserved (FR-AS-1).
+    """
     skewed = [k for k in knots if k.t != 0.0]
     kinked = kinks(road, umax) if skewed else []
     reach = max((abs(k.t) for k in skewed), default=0.0) * umax
     out = [breakpoints[0]]
     for a, b in pairwise(breakpoints):
-        step = max_step(road, a, b, tol, umax)
+        mid = 0.5 * (a + b)
+        tol_ab = min(tol, STRUCTURE_TOL_M) if any(s0 <= mid <= s1 for s0, s1 in spans) else tol
+        step = max_step(road, a, b, tol_ab, umax)
         if skewed and (abs(skew_at(knots, a)) > 0.0 or abs(skew_at(knots, b)) > 0.0):
             for s, jump in kinked:
                 if a - reach <= s <= b + reach:
-                    step = min(step, 4.0 * tol / jump)
+                    step = min(step, 4.0 * tol_ab / jump)
         n = max(1, math.ceil((b - a) / step - 1e-9))
         out.extend(a + (b - a) * k / n for k in range(1, n))
         out.append(b)

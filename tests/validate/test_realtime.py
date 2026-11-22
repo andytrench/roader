@@ -1,12 +1,10 @@
 """FR-SV-7 in the real-time export profile: embed by the declared minimum, no coplanar overlap.
 
-``roader.solids.generate(model, profile="realtime")`` is a milestone 2 contract
-(lane ``solids``); the end-to-end test skips until ``generate`` takes ``profile``.
+``roader.solids.generate(model, profile="realtime")`` is the milestone 2 contract
+(lane ``assets``) exercised end to end at the bottom.
 """
 
 from __future__ import annotations
-
-import inspect
 
 import numpy as np
 import pytest
@@ -98,17 +96,9 @@ def test_check_solids_selects_the_profile(tmp_path):
 # ---------------------------------------------------------------- generated (contract)
 
 
-def _realtime_generate():
-    generate = getattr(roader.solids, "generate", None)
-    if generate is None or "profile" not in inspect.signature(generate).parameters:
-        pytest.skip('roader.solids.generate(model, profile="realtime") not implemented yet (lane solids, milestone 2)')
-    return generate
-
-
 def test_generated_realtime_profile_passes():
-    generate = _realtime_generate()
     model = overpass_model()
-    meshes = generate(model, chord_tol_m=0.01, profile="realtime")
+    meshes = roader.solids.generate(model, chord_tol_m=0.01, profile="realtime")
     result = check_solids(meshes, profile="realtime")
     native = [v for v in result.violations if not v.message.startswith("val3dity")]
     assert native == [], [f"{v.req} {v.element_id}: {v.message}" for v in native[:20]]

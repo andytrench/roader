@@ -23,7 +23,8 @@ The target is met when the median ratio actual / budget is at most 1; any asset
 over ``DEFECT_FACTOR`` times its budget is a defect.
 
 AC-P4 contract (lane ``solids``): ``Mesh.uv0`` is an optional (N, 2) array of
-(station m, offset m). Per triangle the affine map from uv0 to 3D gives the 3D
+(station m, offset m), or (M, 3, 2) per face corner (generated solids, which need
+UV seams at creases without splitting shared vertices). Per triangle the affine map from uv0 to 3D gives the 3D
 length of a unit step in station and in offset; stretch is how far each is from
 1. A triangle whose uv0 image has no area while its 3D area is positive has
 unbounded stretch.
@@ -185,11 +186,15 @@ def check_budgets(model: RoadModel, meshes: Sequence[Mesh]) -> GateResult:
 
 def uv_stretch(mesh: Mesh) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     """Per triangle: (along stretch, across stretch, degenerate uv) for a mesh with uv0."""
-    uv = np.asarray(mesh.uv0, dtype=np.float64).reshape(-1, 2)
-    if len(uv) != len(mesh.vertices):
-        raise ValueError(f"{mesh.id}: uv0 has {len(uv)} rows for {len(mesh.vertices)} vertices")
+    uv = np.asarray(mesh.uv0, dtype=np.float64)
+    if uv.shape == (len(mesh.faces), 3, 2):
+        q = uv
+    else:
+        uv = uv.reshape(-1, 2)
+        if len(uv) != len(mesh.vertices):
+            raise ValueError(f"{mesh.id}: uv0 has {len(uv)} rows for {len(mesh.vertices)} vertices")
+        q = uv[mesh.faces]
     p = mesh.vertices[mesh.faces]
-    q = uv[mesh.faces]
     e = np.stack([p[:, 1] - p[:, 0], p[:, 2] - p[:, 0]], axis=2)  # (M, 3, 2)
     d = np.stack([q[:, 1] - q[:, 0], q[:, 2] - q[:, 0]], axis=2)  # (M, 2, 2)
     area3 = 0.5 * np.linalg.norm(np.cross(p[:, 1] - p[:, 0], p[:, 2] - p[:, 0]), axis=1)

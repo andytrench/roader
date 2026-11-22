@@ -1,7 +1,7 @@
 """FR-AS-1 LOD chain checks: levels, validity per level, voids, deck elevation, triangle counts.
 
-``roader.solids.generate_lods(model)`` is a milestone 2 contract (lane
-``solids``); its end-to-end test skips until it exists. The other tests use the
+``roader.solids.generate_lods(model)`` is the milestone 2 contract (lane
+``assets``) exercised end to end at the bottom. The other tests use the
 synthetic overpass structure generated at each level's chord tolerance as a
 stand-in chain (structure meshes only, to keep the per-level FR-SV checks fast).
 """
@@ -19,15 +19,11 @@ from roader.validate.lod import LOD_CHORD_TOL, check_lods
 
 from .meshes import box
 
-generate = getattr(roader.solids, "generate", None)
-
 
 @pytest.fixture(scope="module")
 def scene():
-    if generate is None:
-        pytest.skip("roader.solids.generate not implemented yet")
     model = overpass_model()
-    lods = {k: [m for m in generate(model, chord_tol_m=tol) if m.layer == "L5"] for k, tol in LOD_CHORD_TOL.items()}
+    lods = {k: [m for m in roader.solids.generate(model, chord_tol_m=tol) if m.layer == "L5"] for k, tol in LOD_CHORD_TOL.items()}
     return model, lods
 
 
@@ -133,10 +129,8 @@ def test_non_proxy_block_at_coarsest_level_still_tests_voids(scene):
 # ---------------------------------------------------------------- generated (contract)
 
 
-def test_generated_lod_chain_passes():
-    generate_lods = getattr(roader.solids, "generate_lods", None)
-    if generate_lods is None:
-        pytest.skip("roader.solids.generate_lods(model) not implemented yet (lane solids, milestone 2)")
+@pytest.mark.parametrize("profile", ["analytic", "realtime"])
+def test_generated_lod_chain_passes(profile):
     model = overpass_model()
-    result = check_lods(model, generate_lods(model))
+    result = check_lods(model, roader.solids.generate_lods(model, profile=profile))
     assert result.passed, _messages(result)[:20]
