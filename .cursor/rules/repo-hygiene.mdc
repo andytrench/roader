@@ -1,0 +1,21 @@
+---
+description: Keep Roader self-contained and safe to publish
+alwaysApply: true
+---
+
+# Repository hygiene
+
+Roader is a public, self-contained repository.
+
+1. **Do not** import, symlink, vendor, or copy files from outside this
+   repository. Third-party code comes in only as a declared dependency
+   (see `licenses.mdc`).
+2. **Do not** commit absolute local paths. Use paths relative to the repo
+   root, config values, or environment variables.
+3. **Do not** commit secrets, credentials, API keys, or account-specific
+   configs. Users supply their own (e.g. AWS credentials for requester-pays
+   NAIP) via environment variables or untracked config files.
+4. Personal configs live in untracked `configs/*.toml`; commit only
+   `*.example` templates.
+5. When another tool must consume Roader output, define a **file/API
+   contract** (GeoPackage, GeoJSON, CityJSON, glTF) — not a shared package.

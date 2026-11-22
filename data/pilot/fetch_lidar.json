@@ -1,0 +1,20 @@
+{
+  "pipeline": [
+    {
+      "type": "readers.ept",
+      "filename": "https://s3-us-west-2.amazonaws.com/usgs-lidar-public/MA_CentralEastern_1_2021/ept.json",
+      "bounds": "([-7920382.0, -7917598.0], [5236626.0, 5238740.0])",
+      "resolution": 1.0
+    },
+    {
+      "type": "filters.reprojection",
+      "out_srs": "EPSG:26986"
+    },
+    {
+      "type": "writers.las",
+      "filename": "data/pilot/lidar.laz",
+      "compression": "laszip",
+      "forward": "all"
+    }
+  ]
+}

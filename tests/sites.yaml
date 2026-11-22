@@ -1,0 +1,92 @@
+# Test sites, one or more per spec section 9 test-site class.
+#
+# Inputs are pinned by sha256 (FR-PL-3, D-008). scripts/fetch_fixtures.py downloads
+# them into data/fixtures/<id>/ and writes the hashes back into this file; never edit
+# a hash by hand. Point clouds and vector extracts are not committed.
+#
+# aoi_lonlat is [west, south, east, north] in WGS84 degrees.
+# lidar.density_pts_m2 is all returns in the AOI after noise/withheld removal.
+
+classes:
+  - class: simple_overpass_rural_freeway
+    status: assigned
+    sites: [wboylston_laurel_i190]
+  - class: cloverleaf_interchange
+    status: assigned
+    sites: [woburn_i93_i95]
+  - class: four_or_five_level_stack
+    status: unassigned
+  - class: long_urban_viaduct
+    status: unassigned
+  - class: twin_carriageways_different_elevations
+    status: unassigned
+  - class: major_river_crossing_truss_or_arch
+    status: unassigned
+  - class: mountain_cuts_fills_walls
+    status: unassigned
+  - class: dense_tree_canopy
+    status: unassigned
+  - class: ql3_or_older_lidar
+    status: unassigned
+  - class: construction_mismatch
+    status: unassigned
+  - class: tunnel_portal
+    status: unassigned
+  - class: wrong_or_missing_vector_tags
+    status: unassigned
+
+sites:
+  - id: wboylston_laurel_i190
+    class: simple_overpass_rural_freeway
+    milestone: 1
+    description: >-
+      Laurel Street (two-lane secondary road, OSM way 183371679, bridge=yes) crossing
+      over I-190 (two lanes each way, twin carriageways) in West Boylston, MA. Wooded
+      rural setting, about 22 buildings in the AOI, no interchange ramps within 500 m
+      of the crossing, no railway, one small stream. One 101 m bridge (OSM) spans both
+      carriageways, which sit about 54 m apart across a wide median, skew about 32 deg.
+      Deck about 7.2 m (SB) and 7.4 m (NB) above the freeway pavement.
+      Runner-up: Sugar Road over I-495, Bolton MA (crossing -71.58143, 42.45018),
+      25 pts/m2, class 17 present, three lanes each way, more streams.
+    aoi_lonlat: [-71.81975, 42.38636, -71.81245, 42.39176]
+    crossing_lonlat: [-71.8161, 42.38906]
+    lidar:
+      project: MA_CentralEastern_1_2021
+      ept: https://s3-us-west-2.amazonaws.com/usgs-lidar-public/MA_CentralEastern_1_2021/ept.json
+      year: 2021
+      quality_level: QL1
+      horizontal_crs: EPSG:3857
+      vertical_crs: NAVD88 (assumed; not declared in the EPT/LAS header)
+      density_pts_m2: 22.5
+      classes_seen: [1, 2, 3, 4, 5, 6, 7, 17, 18]
+      class_17_points: 18044
+    vectors:
+      source: osm
+      license: ODbL-1.0
+      path: data/fixtures/wboylston_laurel_i190/osm.json
+    lidar_path: data/fixtures/wboylston_laurel_i190/lidar.laz
+    crossings: tests/sites/wboylston_laurel_i190/crossings.yaml
+    lidar_sha256: "02240e071dfa40323b54995f2f4dfd152ef58853a65319818cde60ec5a538352"
+    vector_sha256: "fc4eb5d5f9b016e63d2fd6dc73cf0f08595e36ebbbdbf6e025cc1d40f112084c"
+
+  - id: woburn_i93_i95
+    class: cloverleaf_interchange
+    milestone: 2
+    description: >-
+      I-93 / I-95 (MA 128) cloverleaf interchange in Woburn, MA. The pre-spec pilot AOI.
+    aoi_lonlat: [-71.150, 42.503, -71.125, 42.517]
+    lidar:
+      project: MA_CentralEastern_1_2021
+      ept: https://s3-us-west-2.amazonaws.com/usgs-lidar-public/MA_CentralEastern_1_2021/ept.json
+      year: 2021
+      quality_level: QL1
+      horizontal_crs: EPSG:3857
+      vertical_crs: NAVD88 (assumed; not declared in the EPT/LAS header)
+      density_pts_m2: null
+    vectors:
+      source: osm
+      license: ODbL-1.0
+      path: data/fixtures/woburn_i93_i95/osm.json
+    lidar_path: data/fixtures/woburn_i93_i95/lidar.laz
+    lidar_sha256: ""
+    vector_sha256: ""

@@ -1,0 +1,20 @@
+# Pavement (spec section 8). Finite slab thickness for pavement solids (FR-SG-4).
+family = "pavement"
+
+[[rule]]
+id = "pavement.thickness.asphalt"
+typical = 0.3
+low = 0.15
+high = 0.6
+unit = "m"
+origin = "placeholder: engineering judgement, unverified"
+placeholder = true
+
+[[rule]]
+id = "pavement.thickness.concrete"
+typical = 0.28
+low = 0.2
+high = 0.4
+unit = "m"
+origin = "placeholder: engineering judgement, unverified"
+placeholder = true

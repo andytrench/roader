@@ -1,0 +1,17 @@
+---
+description: Commercial-use-friendly dependencies only
+alwaysApply: true
+---
+
+# Licenses
+
+Before adding a dependency:
+
+1. Confirm the license allows commercial use (MIT, BSD-2/3, Apache-2.0, or
+   equivalent). Prefer those.
+2. Add a row to `docs/THIRD_PARTY.md` (name, license, role).
+3. Do not add GPL/AGPL/copyleft libraries to `src/roader` without an explicit
+   decision recorded in `docs/THIRD_PARTY.md`.
+
+Data sources (OSM ODbL, NAIP, 3DEP) are not the same as code licenses —
+document attribution requirements in `docs/THIRD_PARTY.md` as well.

@@ -1,0 +1,45 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "roader"
+version = "0.1.0"
+description = "Road object reconstruction from LiDAR and NAIP (R&D)"
+readme = "README.md"
+license = { text = "Apache-2.0" }
+requires-python = ">=3.11"
+authors = [{ name = "Andy Trench" }]
+dependencies = [
+  "numpy>=1.26",
+  "scipy>=1.11",
+  "shapely>=2.0",
+  "pyproj>=3.6",
+  "geopandas>=0.14",
+  "rasterio>=1.3",
+  "laspy[lazrs]>=2.5",
+  "osmnx>=1.9",
+  "networkx>=3.2",
+  "click>=8.1",
+  "pyyaml>=6.0",
+  "requests>=2.31",
+  "matplotlib>=3.8",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0", "ruff>=0.6", "boto3>=1.34"]
+pdal = ["pdal>=3.4"]
+naip = ["boto3>=1.34"]
+
+[project.scripts]
+roader = "roader.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+"roader.rules" = ["data/*.toml"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]

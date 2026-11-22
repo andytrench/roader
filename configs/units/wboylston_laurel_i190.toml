@@ -1,0 +1,20 @@
+# Milestone 1 unit: Laurel Street over I-190, West Boylston, MA (tests/sites.yaml).
+# Hashes are the pins written by scripts/fetch_fixtures.py (FR-PL-3, D-008).
+
+[unit]
+site_id = "wboylston_laurel_i190"
+aoi_lonlat = [-71.81975, 42.38636, -71.81245, 42.39176]
+imagery_enabled = false
+
+[lidar]
+path = "data/fixtures/wboylston_laurel_i190/lidar.laz"
+name = "MA_CentralEastern_1_2021"
+year = 2021
+quality_level = "QL1"
+sha256 = "02240e071dfa40323b54995f2f4dfd152ef58853a65319818cde60ec5a538352"
+
+[vectors.osm]
+enabled = true
+path = "data/fixtures/wboylston_laurel_i190/osm.json"
+license = "ODbL-1.0"
+sha256 = "fc4eb5d5f9b016e63d2fd6dc73cf0f08595e36ebbbdbf6e025cc1d40f112084c"

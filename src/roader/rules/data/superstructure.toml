@@ -1,0 +1,58 @@
+# Superstructure (spec section 8). Depth ratio is overall superstructure depth / span.
+family = "superstructure"
+
+[[rule]]
+id = "superstructure.depth_ratio.slab"
+typical = 0.05
+low = 0.035
+high = 0.07
+unit = "ratio"
+origin = "placeholder: engineering judgement, unverified"
+placeholder = true
+
+[[rule]]
+id = "superstructure.depth_ratio.multi_girder"
+typical = 0.045
+low = 0.04
+high = 0.05
+unit = "ratio"
+origin = "placeholder: indicative scale from ROADWAY_MODEL_SPEC.md section 8"
+placeholder = true
+note = "Span/25 to span/20."
+
+[[rule]]
+id = "superstructure.depth_ratio.box_girder"
+typical = 0.04
+low = 0.03
+high = 0.05
+unit = "ratio"
+origin = "placeholder: engineering judgement, unverified"
+placeholder = true
+
+[[rule]]
+id = "deck.slab_thickness"
+typical = 0.2
+low = 0.18
+high = 0.3
+unit = "m"
+origin = "placeholder: engineering judgement, unverified"
+placeholder = true
+
+[[rule]]
+id = "deck.overhang"
+typical = 1.0
+low = 0.5
+high = 1.8
+unit = "m"
+origin = "placeholder: engineering judgement, unverified"
+placeholder = true
+note = "Outer girder centerline to deck edge."
+
+[[rule]]
+id = "girder.spacing"
+typical = 2.7
+low = 1.5
+high = 3.7
+unit = "m"
+origin = "placeholder: engineering judgement, unverified"
+placeholder = true

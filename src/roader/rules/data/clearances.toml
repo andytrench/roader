@@ -1,0 +1,55 @@
+# Clearances under structures (spec section 8). Vertical clearance is from the lower
+# road surface to the soffit above (FR-OC-2, AC-P1).
+family = "clearances"
+
+[[rule]]
+id = "clearance.vertical.rural"
+road_class = "motorway"
+typical = 4.877
+low = 4.877
+high = 6.0
+unit = "m"
+origin = "FHWA, as confirmed in ROADWAY_MODEL_SPEC.md section 8"
+placeholder = false
+note = "Interstate, 16 ft: rural areas and one urban routing. low is the confirmed minimum; high is a plausibility bound, not from the standard."
+
+[[rule]]
+id = "clearance.vertical.rural"
+typical = 4.877
+low = 4.3
+high = 6.0
+unit = "m"
+origin = "placeholder: engineering judgement, unverified"
+placeholder = true
+note = "Non-Interstate roads."
+
+[[rule]]
+id = "clearance.vertical.urban"
+road_class = "motorway"
+typical = 4.267
+low = 4.267
+high = 6.0
+unit = "m"
+origin = "FHWA, as confirmed in ROADWAY_MODEL_SPEC.md section 8"
+placeholder = false
+note = "Interstate, 14 ft: urban routes other than the one 16 ft routing. low is the confirmed minimum; high is a plausibility bound, not from the standard."
+
+[[rule]]
+id = "clearance.vertical.urban"
+typical = 4.3
+low = 4.1
+high = 6.0
+unit = "m"
+origin = "placeholder: engineering judgement, unverified"
+placeholder = true
+note = "Non-Interstate roads."
+
+[[rule]]
+id = "clearance.lateral.support"
+typical = 1.2
+low = 0.6
+high = 9.0
+unit = "m"
+origin = "placeholder: engineering judgement, unverified"
+placeholder = true
+note = "Offset from the outer shoulder edge to the face of a support (FR-ST-3)."

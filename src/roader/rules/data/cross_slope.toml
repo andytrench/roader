@@ -1,0 +1,62 @@
+# Cross slope and banking (spec section 8). Slopes are |dz/du| magnitudes.
+family = "cross_slope_and_banking"
+
+[[rule]]
+id = "cross_slope.crown"
+typical = 0.02
+low = 0.015
+high = 0.025
+unit = "ratio"
+origin = "placeholder: indicative scale from ROADWAY_MODEL_SPEC.md section 8"
+placeholder = true
+note = "Normal crown on tangents, magnitude per side."
+
+[[rule]]
+id = "superelevation.rate"
+typical = 0.06
+low = 0.0
+high = 0.08
+unit = "ratio"
+origin = "placeholder: indicative scale from ROADWAY_MODEL_SPEC.md section 8"
+placeholder = true
+note = "Banking magnitude. typical is the design maximum used to fill a fully banked curve; high is the absolute maximum."
+
+[[rule]]
+id = "superelevation.radius_crown"
+typical = 600.0
+low = 300.0
+high = 3000.0
+unit = "m"
+origin = "placeholder: engineering judgement, unverified"
+placeholder = true
+note = "Curves straighter than this keep normal crown when banking is filled by rule (legacy R_TANGENT_M)."
+
+[[rule]]
+id = "superelevation.radius_full"
+typical = 70.0
+low = 30.0
+high = 1000.0
+unit = "m"
+origin = "placeholder: engineering judgement, unverified"
+placeholder = true
+note = "Curves tighter than this take superelevation.rate typical when banking is filled by rule (legacy R_FULL_M)."
+
+[[rule]]
+id = "superelevation.relative_gradient"
+typical = 0.004
+low = 0.0
+high = 0.0065
+unit = "ratio"
+origin = "placeholder: engineering judgement, unverified"
+placeholder = true
+note = "Slope of the pavement edge relative to the profile grade line during a banking transition."
+
+[[rule]]
+id = "superelevation.runoff_length"
+typical = 45.0
+low = 20.0
+high = 200.0
+unit = "m"
+origin = "placeholder: engineering judgement, unverified"
+placeholder = true
+note = "Length of a banking transition; low is the minimum (AC-P2: never zero)."

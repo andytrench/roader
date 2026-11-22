@@ -1,0 +1,39 @@
+.venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+dist/
+build/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.DS_Store
+data/pilot/**
+!data/pilot/.gitkeep
+!data/pilot/README.md
+!data/pilot/fetch_lidar.json
+data/cache/
+data/areas/
+data/fixtures/
+cache/
+*.laz
+*.las
+*.tif
+*.tiff
+*.gpkg
+*.parquet
+!scripts/**
+.idea/
+.vscode/
+# Local configs (copy from *.example)
+configs/*.toml
+!configs/*.toml.example
+# Secrets
+.env
+.env.*
+*.pem
+*.key
+.aws/
+# Re-ignore bytecode that !scripts/** re-included
+scripts/**/__pycache__/

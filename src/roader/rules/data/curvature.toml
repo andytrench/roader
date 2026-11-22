@@ -1,0 +1,33 @@
+# Horizontal curvature (spec section 8). Radius of circular elements; low is the minimum.
+family = "horizontal_curvature"
+
+[[rule]]
+id = "curve.radius"
+road_class = "motorway"
+typical = 900.0
+low = 500.0
+high = 100000.0
+unit = "m"
+origin = "placeholder: engineering judgement, unverified"
+placeholder = true
+note = "Assumes a mainline design speed near 110 km/h with banking near 8%."
+
+[[rule]]
+id = "curve.radius"
+road_class = "motorway_link"
+typical = 150.0
+low = 40.0
+high = 100000.0
+unit = "m"
+origin = "placeholder: engineering judgement, unverified"
+placeholder = true
+note = "Low covers cloverleaf loops."
+
+[[rule]]
+id = "curve.radius"
+typical = 300.0
+low = 30.0
+high = 100000.0
+unit = "m"
+origin = "placeholder: engineering judgement, unverified"
+placeholder = true

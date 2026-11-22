@@ -1,0 +1,23 @@
+# Structure defaults when no inventory record matches (FR-ST-2, FR-ST-6).
+# These rules are thresholds: typical is the threshold used, the range bounds tuning.
+family = "structure_defaults"
+
+[[rule]]
+id = "structure.slab_max_span"
+typical = 12.0
+low = 9.0
+high = 15.0
+unit = "m"
+origin = "placeholder: engineering judgement, unverified"
+placeholder = true
+note = "Maximum span below which the default family is slab; multi_girder otherwise."
+
+[[rule]]
+id = "structure.review_span"
+typical = 150.0
+low = 100.0
+high = 300.0
+unit = "m"
+origin = "placeholder: engineering judgement, unverified"
+placeholder = true
+note = "Maximum span at or above which a structure goes to the review queue (FR-ST-6)."

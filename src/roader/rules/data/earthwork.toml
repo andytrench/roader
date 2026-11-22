@@ -1,0 +1,31 @@
+# Earthwork (spec section 8). Slope ratios are horizontal per vertical (3.0 means 3H:1V).
+family = "earthwork"
+
+[[rule]]
+id = "slope.fill_h_per_v"
+typical = 3.0
+low = 2.0
+high = 6.0
+unit = "h_per_v"
+origin = "placeholder: indicative scale from ROADWAY_MODEL_SPEC.md section 8"
+placeholder = true
+
+[[rule]]
+id = "slope.cut_h_per_v"
+typical = 2.0
+low = 2.0
+high = 6.0
+unit = "h_per_v"
+origin = "placeholder: indicative scale from ROADWAY_MODEL_SPEC.md section 8"
+placeholder = true
+note = "Rock cuts are steeper; a measured steeper cut is kept and flagged."
+
+[[rule]]
+id = "slope.max_height"
+typical = 6.0
+low = 3.0
+high = 15.0
+unit = "m"
+origin = "placeholder: engineering judgement, unverified"
+placeholder = true
+note = "Slope height above which a retaining wall replaces the slope (L4)."

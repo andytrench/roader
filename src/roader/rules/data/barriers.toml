@@ -1,0 +1,69 @@
+# Barriers and rails (spec section 8). Concrete parapet on structures and barrier on grade.
+family = "barriers_and_rails"
+
+[[rule]]
+id = "parapet.height"
+era = "pre1970"
+typical = 0.8
+low = 0.6
+high = 1.0
+unit = "m"
+origin = "placeholder: engineering judgement, unverified"
+placeholder = true
+
+[[rule]]
+id = "parapet.height"
+era = "1970_1994"
+typical = 0.81
+low = 0.7
+high = 1.1
+unit = "m"
+origin = "placeholder: engineering judgement, unverified"
+placeholder = true
+
+[[rule]]
+id = "parapet.height"
+era = "1995_plus"
+typical = 1.07
+low = 0.8
+high = 1.2
+unit = "m"
+origin = "placeholder: engineering judgement, unverified"
+placeholder = true
+
+[[rule]]
+id = "parapet.height"
+typical = 0.9
+low = 0.8
+high = 1.1
+unit = "m"
+origin = "placeholder: indicative scale from ROADWAY_MODEL_SPEC.md section 8"
+placeholder = true
+
+[[rule]]
+id = "parapet.base_width"
+era = "pre1970"
+typical = 0.45
+low = 0.3
+high = 0.7
+unit = "m"
+origin = "placeholder: engineering judgement, unverified"
+placeholder = true
+
+[[rule]]
+id = "parapet.base_width"
+typical = 0.55
+low = 0.38
+high = 0.9
+unit = "m"
+origin = "placeholder: engineering judgement, unverified"
+placeholder = true
+
+[[rule]]
+id = "parapet.top_width"
+typical = 0.2
+low = 0.15
+high = 0.3
+unit = "m"
+origin = "placeholder: engineering judgement, unverified"
+placeholder = true

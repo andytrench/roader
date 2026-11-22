@@ -1,0 +1,103 @@
+# Lanes and shoulders (spec section 8). Milestone 1 subset (D-006).
+family = "lanes_and_shoulders"
+
+[[rule]]
+id = "lane.width"
+road_class = "motorway"
+typical = 3.658
+low = 3.658
+high = 4.0
+unit = "m"
+origin = "FHWA, as confirmed in ROADWAY_MODEL_SPEC.md section 8"
+placeholder = false
+note = "Interstate travel lane at least 12 ft. low is the confirmed minimum; high is a plausibility bound, not from the standard."
+
+[[rule]]
+id = "lane.width"
+road_class = "motorway_link"
+typical = 4.0
+low = 3.6
+high = 5.5
+unit = "m"
+origin = "placeholder: engineering judgement, unverified"
+placeholder = true
+note = "Single-lane ramps are usually wider than mainline lanes."
+
+[[rule]]
+id = "lane.width"
+road_class = "primary"
+typical = 3.6
+low = 3.0
+high = 3.9
+unit = "m"
+origin = "placeholder: indicative scale from ROADWAY_MODEL_SPEC.md section 8"
+placeholder = true
+
+[[rule]]
+id = "lane.width"
+typical = 3.6
+low = 3.0
+high = 4.0
+unit = "m"
+origin = "placeholder: indicative scale from ROADWAY_MODEL_SPEC.md section 8"
+placeholder = true
+
+[[rule]]
+id = "shoulder.right.width"
+road_class = "motorway"
+typical = 3.0
+low = 1.8
+high = 3.7
+unit = "m"
+origin = "placeholder: indicative scale from ROADWAY_MODEL_SPEC.md section 8"
+placeholder = true
+note = "Spec family is by lane count; milestone 1 keys by class only."
+
+[[rule]]
+id = "shoulder.right.width"
+road_class = "motorway_link"
+typical = 2.4
+low = 1.2
+high = 3.0
+unit = "m"
+origin = "placeholder: engineering judgement, unverified"
+placeholder = true
+
+[[rule]]
+id = "shoulder.right.width"
+typical = 2.4
+low = 0.0
+high = 3.7
+unit = "m"
+origin = "placeholder: engineering judgement, unverified"
+placeholder = true
+
+[[rule]]
+id = "shoulder.left.width"
+road_class = "motorway"
+typical = 1.2
+low = 0.6
+high = 3.7
+unit = "m"
+origin = "placeholder: engineering judgement, unverified"
+placeholder = true
+note = "Median-side shoulder; wider on six-lane and larger sections."
+
+[[rule]]
+id = "shoulder.left.width"
+road_class = "motorway_link"
+typical = 1.0
+low = 0.6
+high = 1.8
+unit = "m"
+origin = "placeholder: engineering judgement, unverified"
+placeholder = true
+
+[[rule]]
+id = "shoulder.left.width"
+typical = 0.6
+low = 0.0
+high = 3.0
+unit = "m"
+origin = "placeholder: engineering judgement, unverified"
+placeholder = true

@@ -1,0 +1,37 @@
+# AC-H2 hand-labeled crossing list for wboylston_laurel_i190 (Laurel Street over I-190).
+#
+# status: draft, needs human review. Drafted 2026-11-22 from the pinned fixture
+# (lidar_sha256 02240e07..., vector_sha256 fc4eb5d5...), not from a site visit or
+# plans. Method: plan intersections of the OSM centerlines in the unit frame; upper
+# surface = median z of returns within 1.5 m of the crossing point (all class 17);
+# lower surface = linear interpolation of the median z of returns within 1.5 m of the
+# lower centerline at -15 m and +15 m along it (outside the deck shadow). Heights are
+# NAVD88 (assumed), meters. dz is upper surface minus lower surface (FR-CR-1), given
+# to 0.1 m; AC-A4 compares against the measured value, so treat these as checks on
+# order and magnitude only.
+#
+# Review checklist: confirm the vertical order, confirm one structure spans both
+# carriageways (class 17 is continuous along Laurel Street between the two crossings,
+# about 64 m apart along the bridge), and look for a median pier.
+
+site_id: wboylston_laurel_i190
+status: draft, needs human review
+crossings:
+  - id: laurel_over_i190_sb
+    upper: {osm_way: 183371679, name: Laurel Street, highway: secondary}
+    lower: {osm_way: 9364739, name: I-190 southbound, highway: motorway}
+    lonlat: [-71.816853, 42.388901]
+    upper_z_m: 181.2
+    lower_z_m: 174.0
+    dz_m: 7.2
+    skew_deg: 32  # from perpendicular, between the OSM centerlines
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+  - id: laurel_over_i190_nb
+    upper: {osm_way: 183371679, name: Laurel Street, highway: secondary}
+    lower: {osm_way: 398785088, name: I-190 northbound, highway: motorway}
+    lonlat: [-71.816097, 42.389058]
+    upper_z_m: 180.0
+    lower_z_m: 172.7
+    dz_m: 7.4
+    skew_deg: 32
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}

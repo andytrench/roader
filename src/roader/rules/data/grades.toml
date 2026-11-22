@@ -1,0 +1,101 @@
+# Grades and vertical curves (spec section 8).
+# "grade" is |dz/ds|; high is the class maximum. K is curve length per percent of
+# algebraic grade change (m per %), low is the minimum.
+family = "grades_and_vertical_curves"
+
+[[rule]]
+id = "grade"
+road_class = "motorway"
+typical = 0.02
+low = 0.0
+high = 0.06
+unit = "ratio"
+origin = "placeholder: indicative scale from ROADWAY_MODEL_SPEC.md section 8"
+placeholder = true
+
+[[rule]]
+id = "grade"
+road_class = "motorway_link"
+typical = 0.03
+low = 0.0
+high = 0.08
+unit = "ratio"
+origin = "placeholder: engineering judgement, unverified"
+placeholder = true
+
+[[rule]]
+id = "grade"
+road_class = "primary"
+typical = 0.03
+low = 0.0
+high = 0.06
+unit = "ratio"
+origin = "placeholder: engineering judgement, unverified"
+placeholder = true
+
+[[rule]]
+id = "grade"
+typical = 0.03
+low = 0.0
+high = 0.12
+unit = "ratio"
+origin = "placeholder: engineering judgement, unverified"
+placeholder = true
+
+[[rule]]
+id = "vcurve.k_crest"
+road_class = "motorway"
+typical = 100.0
+low = 50.0
+high = 10000.0
+unit = "m_per_pct"
+origin = "placeholder: engineering judgement, unverified"
+placeholder = true
+
+[[rule]]
+id = "vcurve.k_crest"
+road_class = "motorway_link"
+typical = 30.0
+low = 8.0
+high = 10000.0
+unit = "m_per_pct"
+origin = "placeholder: engineering judgement, unverified"
+placeholder = true
+
+[[rule]]
+id = "vcurve.k_crest"
+typical = 50.0
+low = 8.0
+high = 10000.0
+unit = "m_per_pct"
+origin = "placeholder: engineering judgement, unverified"
+placeholder = true
+
+[[rule]]
+id = "vcurve.k_sag"
+road_class = "motorway"
+typical = 70.0
+low = 40.0
+high = 10000.0
+unit = "m_per_pct"
+origin = "placeholder: engineering judgement, unverified"
+placeholder = true
+
+[[rule]]
+id = "vcurve.k_sag"
+road_class = "motorway_link"
+typical = 25.0
+low = 10.0
+high = 10000.0
+unit = "m_per_pct"
+origin = "placeholder: engineering judgement, unverified"
+placeholder = true
+
+[[rule]]
+id = "vcurve.k_sag"
+typical = 40.0
+low = 10.0
+high = 10000.0
+unit = "m_per_pct"
+origin = "placeholder: engineering judgement, unverified"
+placeholder = true
