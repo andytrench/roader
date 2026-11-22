@@ -16,7 +16,13 @@ from dataclasses import dataclass
 import numpy as np
 
 from roader.conflate.polyline import Polyline
-from roader.conflate.register import Profiles
+from roader.conflate.register import (
+    MAX_WIDTH_M,
+    WIDTH_DEV_M,
+    WIDTH_DEV_REL,
+    WIDTH_WINDOW_M,
+    Profiles,
+)
 from roader.evidence import Evidence
 from roader.fit.piecewise import fit_piecewise, hat_basis, knot_stations, simplify
 from roader.model.geometry import Knot, Piecewise
@@ -27,6 +33,7 @@ from roader.rules import RuleBook
 
 WIDTH_KNOT_M = 50.0
 WIDTH_TOL_M = 0.15
+MIN_SIDE_M = 0.5  # the reference line lies on its pavement, so each edge is at least this far to its side
 SLOPE_KNOT_M = 40.0
 SLOPE_TOL = 0.003
 SLOPE_PRIOR_WEIGHT = 5.0  # pulls thinly observed knots toward the crown rule, in units of points
@@ -47,29 +54,62 @@ class EdgeFit:
     observed_fraction: float
 
 
+def side_valid(prof: Profiles, values: np.ndarray) -> np.ndarray:
+    """Stations where one side's edge distance is usable on its own.
+
+    The edge must be found, on its own side of the centerline by ``MIN_SIDE_M``, and
+    close to that side's local median, so an edge that ran into a driveway, a gore or
+    a neighbouring pavement is left out while the other side still counts.
+    """
+    ok = np.isfinite(values) & (values >= MIN_SIDE_M) & (values <= MAX_WIDTH_M)
+    if ok.sum() < 3:
+        return ok
+    vs, ss = values[ok], prof.s[ok]
+    lo = np.searchsorted(ss, prof.s - WIDTH_WINDOW_M, side="left")
+    hi = np.searchsorted(ss, prof.s + WIDTH_WINDOW_M, side="right")
+    local = np.array([np.median(vs[a:b]) if b > a else np.nan for a, b in zip(lo, hi, strict=True)])
+    return ok & (np.abs(values - local) <= np.maximum(WIDTH_DEV_M, WIDTH_DEV_REL * local))
+
+
+def supported_knots(knots: np.ndarray, s: np.ndarray, reach: float) -> np.ndarray:
+    """Knots with data within ``reach``: a knot without its own data is set by its
+    neighbour's data alone and swings far beyond any measured value (FR-OC-1 tapers instead)."""
+    if len(s) == 0:
+        return knots[:1]
+    s = np.sort(s)
+    pos = np.clip(np.searchsorted(s, knots), 1, len(s) - 1) if len(s) > 1 else np.zeros(len(knots), dtype=np.int64)
+    near = np.minimum(np.abs(knots - s[pos - 1 if len(s) > 1 else 0]), np.abs(knots - s[pos])) <= reach
+    return knots[near] if near.any() else knots[:1]
+
+
 def fit_edges(prof: Profiles, length: float, gaps: list[tuple[float, float]]) -> EdgeFit | None:
-    valid = prof.valid
-    if valid.sum() < 3:
-        return None
-    s = prof.s[valid]
+    """Edge lines per side (FR-XS-1), each from the stations where that side's edge is usable."""
+    sides = []
+    for values in (prof.left, -prof.right):
+        ok = side_valid(prof, values)
+        if ok.sum() < 3:
+            return None
+        sides.append((prof.s[ok], values[ok]))
     knots = knot_stations(length, WIDTH_KNOT_M, gaps)
     out = []
     residuals = []
-    for values in (prof.left[valid], -prof.right[valid]):
-        v, r = fit_piecewise(s, values, knots, min_sigma=0.05)
+    for s, values in sides:
+        kn = supported_knots(knots, s, 0.5 * WIDTH_KNOT_M)
+        v, r = fit_piecewise(s, values, kn, min_sigma=0.05)
         residuals.append(r)
-        k2, v2 = simplify(knots, v, WIDTH_TOL_M)
+        k2, v2 = simplify(kn, v, WIDTH_TOL_M)
         out.append((k2, v2))
     res = np.concatenate(residuals)
     ok = np.abs(res) < 2.0
+    n = max(len(sides[0][0]), len(sides[1][0]))
     return EdgeFit(
         out[0][0],
         out[0][1],
         out[1][0],
         out[1][1],
         float(np.sqrt(np.mean(res[ok] ** 2))) if ok.any() else math.nan,
-        int(valid.sum()),
-        float(valid.mean()),
+        n,
+        float(min(len(sides[0][0]), len(sides[1][0])) / max(len(prof.s), 1)),
     )
 
 

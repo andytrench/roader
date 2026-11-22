@@ -32,6 +32,7 @@ from dataclasses import dataclass
 import shapely
 
 from roader.conflate.graph import RoadSeed
+from roader.conflate.register import Neighbour
 from roader.fit.road import RoadFit, fit_road
 from roader.model.provenance import Provenance, Source
 from roader.model.schema import Crossing, Flag, Link, Road
@@ -115,8 +116,21 @@ def fit_network(seeds: list[RoadSeed], ev, rules, *, strip_factor: float = 1.0) 
                 if abs(math.remainder(hc - cand, 2.0 * math.pi)) <= PIN_HEADING_MAX:
                     heading, curvature = math.remainder(cand, 2.0 * math.pi), k
             anchors[0 if j.end == "start" else 1] = (x, y, heading, curvature)
-        fitted[sid] = fit_road(seed, ev, rules, strip_factor=strip_factor, anchors=tuple(anchors))
+        neighbours = [Neighbour(other.line, least_half_width(other, rules)) for other in seeds if other.id != sid]
+        fitted[sid] = fit_road(seed, ev, rules, strip_factor=strip_factor, anchors=tuple(anchors), neighbours=neighbours)
     return [fitted[s.id] for s in seeds], js
+
+
+def least_half_width(seed: RoadSeed, rules) -> float:
+    """Half the narrowest pavement the road can have: tagged (or least) lane count at the rule's least lane width."""
+    counts = []
+    for span in seed.spans:
+        try:
+            counts.append(int(span.tags.get("lanes", "")))
+        except ValueError:
+            continue
+    lanes = min(counts) if counts else (1 if seed.oneway else 2)
+    return 0.5 * max(lanes, 1) * rules.get("lane.width", road_class=seed.road_class).low
 
 
 def _input_heading(seed: RoadSeed, end: str) -> float:

@@ -33,6 +33,7 @@ WIDTH_DEV_M = 1.0
 WIDTH_DEV_REL = 0.1
 SMOOTH_SIGMA_M = 10.0  # along-road kernel for the lateral correction
 XY_SIGMA_M = 15.0  # plan smoothing of measured midpoints; local quadratic, so arcs are not biased
+XY_BLEND_SIGMAS = 1.0
 STATION_DRIFT_M = 5.0  # a smoothed center this far along the line from its station is re-stationed
 HEIGHT_BAND_M = 0.3
 # Layer probabilities blur at the edge, where one cell holds pavement and verge,
@@ -140,8 +141,15 @@ def cross_profiles(
     center_prior=None,
     intensity_ref: float | None = None,
     search_u: float = SEARCH_U_M,
+    limits=None,
 ) -> Profiles:
-    """Pavement edges at stations every ``step``; ``surface_z(s)`` is the road's height near u = 0."""
+    """Pavement edges at stations every ``step``; ``surface_z(s)`` is the road's height near u = 0.
+
+    ``limits(stations) -> (left_max, right_max)``: the farthest offset on each side
+    that still belongs to this road's corridor (``corridor_limits``). An edge found
+    beyond it lies on a neighbouring road's pavement and is not this road's edge, so
+    it is NaN (FR-VC-3, FR-XS-1).
+    """
     n_st = max(2, int(np.ceil(length / step)) + 1)
     stations = np.linspace(0.0, length, n_st)
     n_bins = round(2 * search_u / BIN_M)
@@ -242,7 +250,65 @@ def cross_profiles(
             refined = _refine_edge(pu[sel], pdz[sel], pint[sel], pprob[sel], edge, direction, slope, c0, intensity_ref, band_pt)
             edges[direction] = np.nan if censored else refined
         left[i], right[i], center[i] = edges[1], edges[-1], uc[start]
+    if limits is not None:
+        left_max, right_max = limits(stations)
+        left = np.where(left > left_max, np.nan, left)
+        right = np.where(-right > right_max, np.nan, right)
     return Profiles(stations, left, right, center, sl, sr, count, float(intensity_ref))
+
+
+@dataclass
+class Neighbour:
+    """Another road's input centerline and the least half-width its pavement can have."""
+
+    line: Polyline
+    half_width_m: float
+
+
+NEIGHBOUR_STEP_M = 2.0
+NEIGHBOUR_WINDOW_M = 5.0
+NEIGHBOUR_PARALLEL_DEG = 35.0  # a neighbour crossing at a steeper angle is a grade separation, not shared pavement
+NEIGHBOUR_ON_M = 1.0
+
+
+def corridor_limits(line: Polyline, neighbours, search_u: float = SEARCH_U_M):
+    """``limits`` for ``cross_profiles``: per station, how far each side may reach before a neighbour's pavement.
+
+    A neighbour running alongside (within ``NEIGHBOUR_PARALLEL_DEG``) at offset u
+    with least half-width h bounds that side at |u| - h. Where this line lies on the
+    neighbour's pavement (|u| < h + ``NEIGHBOUR_ON_M``: the shared pavement at a gore
+    or a taper) neither side is this road's alone, so both are bounded at 0.
+    """
+    pts_s, pts_left, pts_right = [], [], []
+    for nb in neighbours:
+        st = np.arange(0.0, nb.line.length, NEIGHBOUR_STEP_M)
+        if len(st) == 0:
+            continue
+        s, u, ok = line.project(nb.line.point(st), max_dist=search_u + nb.half_width_m)
+        if not ok.any():
+            continue
+        h_nb = nb.line.heading(st[ok])
+        h_own = line.heading(np.clip(s[ok], 0.0, line.length))
+        parallel = np.abs(np.cos(h_nb - h_own)) >= np.cos(np.radians(NEIGHBOUR_PARALLEL_DEG))
+        s, u = s[ok][parallel], u[ok][parallel]
+        on = np.abs(u) < nb.half_width_m + NEIGHBOUR_ON_M
+        pts_s.append(s)
+        pts_left.append(np.where(on, 0.0, np.where(u > 0, u - nb.half_width_m, np.inf)))
+        pts_right.append(np.where(on, 0.0, np.where(u < 0, -u - nb.half_width_m, np.inf)))
+    if not pts_s:
+        return None
+    ps, pl, pr = np.concatenate(pts_s), np.concatenate(pts_left), np.concatenate(pts_right)
+    order = np.argsort(ps, kind="stable")
+    ps, pl, pr = ps[order], pl[order], pr[order]
+
+    def limits(stations: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+        lo = np.searchsorted(ps, stations - NEIGHBOUR_WINDOW_M, side="left")
+        hi = np.searchsorted(ps, stations + NEIGHBOUR_WINDOW_M, side="right")
+        left = np.array([pl[a:b].min() if b > a else np.inf for a, b in zip(lo, hi, strict=True)])
+        right = np.array([pr[a:b].min() if b > a else np.inf for a, b in zip(lo, hi, strict=True)])
+        return left, right
+
+    return limits
 
 
 def _refine_edge(u, dz, inten, prob, edge, direction, slope, c0, iref, band) -> float:
@@ -333,7 +399,10 @@ def register_line(line: Polyline, prof: Profiles) -> tuple[Polyline, np.ndarray,
     pts = np.column_stack([sx, sy])
     sv = prof.s[has]
     dist = np.min(np.abs(prof.s[:, None] - sv[None, :]), axis=1)
-    blend = np.clip(1.0 - (dist - 3.0 * XY_SIGMA_M) / XY_SIGMA_M, 0.0, 1.0)[:, None]
+    # The local quadratic plan fit is trusted only within XY_BLEND_SIGMAS of a measured
+    # center, and never past the first or last one, where it is an extrapolation.
+    blend = np.clip(1.0 - (dist - XY_BLEND_SIGMAS * XY_SIGMA_M) / XY_SIGMA_M, 0.0, 1.0)
+    blend = np.where((prof.s < prof.s[has][0]) | (prof.s > prof.s[has][-1]), 0.0, blend)[:, None]
     fallback = line.offset_point(prof.s, offsets)
     pts = blend * pts + (1.0 - blend) * fallback
     # Away from measured centers the plan fit is an extrapolation, and with only a
