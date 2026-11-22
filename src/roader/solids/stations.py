@@ -12,6 +12,7 @@ Skew convention: a support with skew_rad k lies along s = station + tan(k) * u.
 from __future__ import annotations
 
 import math
+from collections.abc import Callable
 from dataclasses import dataclass
 from itertools import pairwise
 
@@ -130,20 +131,25 @@ def spacing_cap(tol: float) -> float:
     return MAX_STATION_SPACING_M * math.sqrt(max(tol, SPACING_REF_TOL_M) / SPACING_REF_TOL_M)
 
 
-def max_step(road: Road, a: float, b: float, tol: float, umax: float) -> float:
+def max_step(road: Road, a: float, b: float, tol: float, umax: float, sides: Callable[[float, float], tuple[float, float]] | None = None) -> float:
     """Longest station spacing in (a, b) that keeps chord deviation under tol (FR-SG-2).
 
     (a, b) contains no parameter change, so curvature, grade change and cross-slope
-    rate are linear or constant inside it.
+    rate are linear or constant inside it. ``sides``: lateral reach on the left and
+    the right of the lines over (a, b); only the side toward the centre of curvature
+    can fold over it.
     """
     step = spacing_cap(tol)
     eps = 1e-6 * (b - a)
     sa, sb = a + eps, b - eps
-    k = max(abs(road.alignment.evaluate(sa)[3]), abs(road.alignment.evaluate(sb)[3]))
+    ks = [road.alignment.evaluate(sa)[3], road.alignment.evaluate(sb)[3]]
+    k = max(abs(v) for v in ks)
     if k > 1e-12:
-        denom = 1.0 - k * umax
+        reach = sides(a, b) if sides is not None else (umax, umax)
+        inner = max(reach[0] if v > 0.0 else reach[1] for v in ks)
+        denom = 1.0 - k * inner
         if denom < 0.05:
-            raise ValueError(f"road {road.id}: lateral extent {umax:.1f} m reaches the centre of curvature near s={a:.1f}")
+            raise ValueError(f"road {road.id}: lateral extent {inner:.1f} m reaches the centre of curvature near s={a:.1f}")
         step = min(step, math.sqrt(8.0 * tol * denom / k))
     zpp = abs(road.profile.grade(sb) - road.profile.grade(sa)) / (sb - sa)
     xs = road.cross_section
@@ -182,6 +188,7 @@ def stations(
     umax: float,
     knots: list[SkewKnot],
     spans: list[tuple[float, float]] = (),  # type: ignore[assignment]
+    sides: Callable[[float, float], tuple[float, float]] | None = None,
 ) -> list[float]:
     """Sweep stations; inside ``spans`` (structures) the tolerance never exceeds STRUCTURE_TOL_M.
 
@@ -196,7 +203,7 @@ def stations(
     for a, b in pairwise(breakpoints):
         mid = 0.5 * (a + b)
         tol_ab = min(tol, STRUCTURE_TOL_M) if any(s0 <= mid <= s1 for s0, s1 in spans) else tol
-        step = max_step(road, a, b, tol_ab, umax)
+        step = max_step(road, a, b, tol_ab, umax, sides)
         if skewed and (abs(skew_at(knots, a)) > 0.0 or abs(skew_at(knots, b)) > 0.0):
             for s, jump in kinked:
                 if a - reach <= s <= b + reach:

@@ -263,15 +263,34 @@ def road_bodies(
     for line in lines:
         bps += [(line.s0, PRIORITY_OTHER), (line.s1, PRIORITY_OTHER)]
     base = merge_breakpoints(bps, length)
-    umax = 0.0
+    reach = {1.0: 0.0, -1.0: 0.0}  # farthest offset on each side
     for line in lines:
         for s in base:
             if line.s0 - STATION_MERGE_M <= s <= line.s1 + STATION_MERGE_M:
-                umax = max(umax, abs(line.func(min(max(s, line.s0), line.s1))))
-    umax = 1.25 * umax + 1.0
+                u = line.func(min(max(s, line.s0), line.s1))
+                side = 1.0 if u >= 0.0 else -1.0
+                reach[side] = max(reach[side], abs(u))
+    umax = 1.25 * max(reach.values()) + 1.0
+
+    seen: dict[tuple[int, float], float] = {}
+
+    def sides(a: float, b: float) -> tuple[float, float]:
+        """Lateral reach on the left and the right of the lines active over [a, b]."""
+        near = {1.0: 0.0, -1.0: 0.0}
+        for n, line in enumerate(lines):
+            if line.s1 < a - STATION_MERGE_M or line.s0 > b + STATION_MERGE_M:
+                continue
+            for s in (a, 0.5 * (a + b), b):
+                key = (n, s)
+                if key not in seen:
+                    seen[key] = line.func(min(max(s, line.s0), line.s1))
+                u = seen[key]
+                side = 1.0 if u >= 0.0 else -1.0
+                near[side] = max(near[side], abs(u))
+        return 1.25 * near[1.0] + 1.0, 1.25 * near[-1.0] + 1.0
     knots = skew_knots(structures, umax)
     base = merge_breakpoints(bps + [(k.s, PRIORITY_OTHER) for k in knots if k.ramp], length)
-    station_lines = [StationLine(s, skew_at(knots, s)) for s in stations(road, base, tol, umax, knots, spans)]
+    station_lines = [StationLine(s, skew_at(knots, s)) for s in stations(road, base, tol, umax, knots, spans, sides)]
     grid = RoadGrid(road, lines, station_lines, pv)
 
     def at(f: Callable[[float, float], float]) -> Callable[[int], float]:
