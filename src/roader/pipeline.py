@@ -153,6 +153,8 @@ def run_pipeline(
         extents.append(StructureExtent(c.upper_road, a, b, "rule", None, None))
         flags.append(Flag("FR-VC-4:not_found", c.id, "FR-VC-4", "no structure ends found in the data; span set from the crossed road and lateral clearance rule"))
     extents = chain_extents(extents, drops, {f.road.id: f.road.length for f in fits})
+    extents, xflags = _over_something(extents, crossings)
+    flags.extend(xflags)
 
     barriers = {}
     for f in fits:
@@ -251,6 +253,24 @@ def build_model(
 ) -> RoadModel:
     """The section 5 model of one unit. ``holdout``: boolean per point, True = withheld (D-018)."""
     return run_pipeline(points, vectors, frame, unit, rules, holdout=holdout).model
+
+
+def _over_something(extents: list[StructureExtent], crossings) -> tuple[list[StructureExtent], list[Flag]]:
+    """A structure carries its road over something (FR-VC-4, section 1 scope).
+
+    An extent with no crossing under it and no deck-class returns on it is a ground
+    drop beside the road (a steep embankment, a wall, the deck of a road above), not
+    a bridge: it is flagged and dropped. Deck-class returns keep an extent, since a
+    ramp leaving on a deck rides that deck without crossing anything itself.
+    """
+    keep, flags = [], []
+    for e in extents:
+        over = any(c.upper_road == e.road_id and e.s_start - 1.0 <= c.upper_s <= e.s_end + 1.0 for c in crossings)
+        if over or e.method in ("class17", "class17_only") or e.method == "rule":
+            keep.append(e)
+            continue
+        flags.append(Flag("FR-VC-4:over_nothing", e.road_id, "FR-VC-4", f"{e.method} run s={e.s_start:.1f}-{e.s_end:.1f}{' (one side)' if e.one_sided else ''} crosses no road and has no deck-class returns; no structure"))
+    return keep, flags
 
 
 def _clip_parapets(barriers, structures) -> None:
