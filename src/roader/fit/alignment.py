@@ -21,6 +21,7 @@ import numpy as np
 from scipy.optimize import least_squares
 
 from roader.conflate.polyline import Polyline
+from roader.fit.piecewise import hat_basis
 from roader.fit.priors import curvature_penalty
 from roader.model.geometry import AlignElement, Alignment
 from roader.model.provenance import Provenance, Source
@@ -39,6 +40,7 @@ END_WEIGHT = 10.0
 ANCHOR_WEIGHT = 100.0
 PIN_HEADING_M = 20.0  # a heading error at a pinned end weighs as its lateral offset this far along
 KAPPA_WINDOW_M = 10.0
+KMAX_RULE_FACTOR = 2.0  # hard curvature bound, in units of the rule's least radius (FR-AF-4 stays the soft prior)
 SUPPORT_M = 10.0  # FR-AF-1 deviation is checked where measured centerline samples are this close
 
 
@@ -75,7 +77,7 @@ class _Chain:
         return s, np.column_stack([x, y]), h
 
 
-def _pieces_from(params: np.ndarray, m: int, length: float, ties: dict) -> _Chain:
+def _pieces_from(params: np.ndarray, m: int, length: float, ties: dict, kmax: float = math.inf) -> _Chain:
     x0, y0, h0 = params[:3]
     # Total length is free within +-5%: with both ends anchored, a fixed length
     # would force lateral bulges to absorb millimetres of length error.
@@ -100,7 +102,7 @@ def _pieces_from(params: np.ndarray, m: int, length: float, ties: dict) -> _Chai
         tie = ties.get(i)
         if isinstance(tie, int) and not isinstance(tie, bool):
             kappa[i] = kappa[tie]
-    return _Chain(float(x0), float(y0), float(h0), knots, kappa)
+    return _Chain(float(x0), float(y0), float(h0), knots, np.clip(kappa, -kmax, kmax))
 
 
 def _n_free(m: int, ties: dict) -> int:
@@ -108,7 +110,7 @@ def _n_free(m: int, ties: dict) -> int:
 
 
 def _residuals(params, m, length, ties, s_data, xy_data, w_data, rules, road_class, ends):
-    chain = _pieces_from(params, m, length, ties)
+    chain = _pieces_from(params, m, length, ties, ends[3])
     s, pts, h = chain.sample()
     sd = np.clip(s_data, 0.0, chain.knots[-1])
     px = np.interp(sd, s, pts[:, 0])
@@ -137,6 +139,9 @@ def _residuals(params, m, length, ties, s_data, xy_data, w_data, rules, road_cla
     # Keep pieces from collapsing.
     lengths = np.diff(chain.knots)
     res.append(np.maximum(0.0, MIN_PIECE_M - lengths) * 10.0)
+    # The chain is as long as the line it follows; a free length lets an end with no
+    # samples curl into a loop.
+    res.append(np.array([END_WEIGHT * (chain.knots[-1] - length)]))
     return np.concatenate(res)
 
 
@@ -153,8 +158,8 @@ def _fit(m, length, ties, init, s_data, xy_data, w_data, rules, road_class, ends
     return sol.x
 
 
-def _curvature_signal(check_xy: np.ndarray) -> tuple[np.ndarray, np.ndarray, float]:
-    """Stations, curvature and initial heading of the registered centerline (local linear fit of heading)."""
+def _curvature_signal(check_xy: np.ndarray) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Stations, curvature and heading of the registered centerline (local linear fit of heading)."""
     line = Polyline(check_xy, step=0.5)
     n = max(3, int(line.length / 2.0) + 1)
     s = np.linspace(0.0, line.length, n)
@@ -164,7 +169,7 @@ def _curvature_signal(check_xy: np.ndarray) -> tuple[np.ndarray, np.ndarray, flo
         win = np.abs(s - s[i]) <= KAPPA_WINDOW_M
         if win.sum() >= 3:
             k[i] = np.polyfit(s[win], h[win], 1)[0]
-    return s, k, float(h[0])
+    return s, k, h
 
 
 def _segment(s: np.ndarray, k: np.ndarray, m: int) -> np.ndarray:
@@ -185,14 +190,24 @@ def _segment(s: np.ndarray, k: np.ndarray, m: int) -> np.ndarray:
 
 
 def _initial(m: int, length: float, check_xy: np.ndarray, ties: dict) -> np.ndarray:
-    s, k, h0 = _curvature_signal(check_xy)
+    s, k, h = _curvature_signal(check_xy)
     idx = _segment(s, k, m)
     m_eff = len(idx) - 1
     knots = s[idx] * (length / s[-1])
     lengths = np.diff(knots)
     a = np.log(np.maximum(lengths, 1e-6) / max(lengths[0], 1e-6))[1:]
     a = np.concatenate([a, np.zeros(m - m_eff)])
-    kap = list(k[idx]) + [k[idx][-1]] * (m - m_eff)
+    # Start heading and knot curvatures by least squares on the heading itself, so the
+    # integrated heading of the start chain follows the line: point samples of a noisy
+    # curvature signal (a hook read at a line end) integrate into a chain that coils
+    # far outside the basin of the robust fit.
+    basis = hat_basis(s, s[idx])
+    ds = np.diff(s)[:, None]
+    integral = np.vstack([np.zeros((1, len(idx))), np.cumsum(0.5 * (basis[1:] + basis[:-1]) * ds, axis=0)])
+    design = np.hstack([np.ones((len(s), 1)), integral])
+    sol = np.linalg.lstsq(design.T @ design + 1e-9 * np.eye(len(idx) + 1), design.T @ h, rcond=None)[0]
+    h0, kap_fit = float(sol[0]), sol[1:]
+    kap = list(kap_fit) + [kap_fit[-1]] * (m - m_eff)
     free = [kap[i] for i in range(m + 1) if i not in ties]
     return np.concatenate([[check_xy[0, 0], check_xy[0, 1], h0, 0.0], a, free])
 
@@ -259,7 +274,10 @@ def fit_alignment(
     check_sup = check_xy[supported] if supported.sum() >= 2 else check_xy
     w = np.asarray(weights, dtype=np.float64)
     max_pieces = max_pieces or max(2, min(12, math.ceil(length / 60.0)))
-    ends = (check_xy[0], check_xy[-1], tuple(pins))
+    # Curvature is bounded at KMAX_RULE_FACTOR / minimum radius of the class: tighter
+    # pieces only appear where an end has too few samples to hold it.
+    kmax = KMAX_RULE_FACTOR / rules.get("curve.radius", road_class).low if rules is not None else math.inf
+    ends = (check_xy[0], check_xy[-1], tuple(pins), kmax)
     best = None
     for m in range(1, max_pieces + 1):
         ties: dict = {}
@@ -267,7 +285,7 @@ def fit_alignment(
         s_fit = s_data.copy()
         for _ in range(PROJECTION_PASSES):
             params = _fit(m, length, ties, params, s_fit, xy, w, rules, road_class, ends)
-            chain = _pieces_from(params, m, length, ties)
+            chain = _pieces_from(params, m, length, ties, kmax)
             s_fit = _reproject(chain, xy)
         dev, rms = _deviation(chain, check_sup)
         snapped = _snap(chain, m, length, s_fit, xy, w, rules, road_class, check_sup, max_dev, ends)
@@ -297,7 +315,7 @@ def _snap(chain, m, length, s_fit, xy, w, rules, road_class, check_xy, max_dev, 
         return None
     params = _params_with_ties(chain, m, ties, length)
     params = _fit(m, length, ties, params, s_fit, xy, w, rules, road_class, ends)
-    snapped = _pieces_from(params, m, length, ties)
+    snapped = _pieces_from(params, m, length, ties, ends[3])
     dev, rms = _deviation(snapped, check_xy)
     if dev <= max_dev:
         return snapped, dev, rms

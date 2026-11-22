@@ -30,6 +30,7 @@ from roader.conflate.polyline import Polyline
 from roader.conflate.register import (
     LinePoints,
     Profiles,
+    corridor_limits,
     cross_profiles,
     near_points,
     register_line,
@@ -141,8 +142,12 @@ def _pin(data_xy: np.ndarray, check_xy: np.ndarray, anchors) -> tuple[np.ndarray
     return data, check
 
 
-def fit_road(seed: RoadSeed, ev: Evidence, rules: RuleBook, *, strip_factor: float = 1.0, anchors=(None, None)) -> RoadFit:
-    """``anchors``: per end, None or (x, y, heading or None) the alignment is pinned to (a junction node, FR-AF-3)."""
+def fit_road(seed: RoadSeed, ev: Evidence, rules: RuleBook, *, strip_factor: float = 1.0, anchors=(None, None), neighbours=()) -> RoadFit:
+    """``anchors``: per end, None or (x, y, heading or None) the alignment is pinned to (a junction node, FR-AF-3).
+
+    ``neighbours``: other roads' input centerlines (``Neighbour``); edges found on
+    their pavement are not this road's edges (FR-VC-3, FR-XS-1).
+    """
     flags: list[Flag] = []
     line = seed.line
     track = track_line(line, ev)
@@ -151,7 +156,7 @@ def fit_road(seed: RoadSeed, ev: Evidence, rules: RuleBook, *, strip_factor: flo
     rejected, bridged = 0, False
     for _ in range(REGISTER_PASSES):
         lp = near_points(line, ev)
-        prof = cross_profiles(lp, track.z_at, line.length)
+        prof = cross_profiles(lp, track.z_at, line.length, limits=corridor_limits(line, neighbours))
         reg, _st, mid, weight = register_line(line, prof)
         has = weight > 0
         guarded = _guard(reg, seed.line)
@@ -173,13 +178,14 @@ def fit_road(seed: RoadSeed, ev: Evidence, rules: RuleBook, *, strip_factor: flo
         flags.append(
             Flag("FR-VC-3:off_vector", seed.id, "FR-VC-3", f"registered line strayed over {REGISTER_MAX_M:.0f} m off the input vector; bridged, {rejected} measured centers ignored")
         )
-        if data_xy is not None:
-            # The bridged line stands in, weakly, where no measured center is left (a vector hint).
-            hint = check_xy[:: int(HINT_STEP_M / 0.5)]
-            d, _i = cKDTree(data_xy).query(hint)
-            fill = d > fa.SUPPORT_M
-            data_xy = np.vstack([data_xy, hint[fill]])
-            data_w = np.concatenate([data_w, np.full(int(fill.sum()), HINT_WEIGHT)])
+    if data_xy is not None:
+        # The registered line stands in, weakly, wherever no measured center is near
+        # (a vector hint): a stretch with no samples leaves the chain unconstrained.
+        hint = check_xy[:: int(HINT_STEP_M / 0.5)]
+        d, _i = cKDTree(data_xy).query(hint)
+        fill = d > fa.SUPPORT_M
+        data_xy = np.vstack([data_xy, hint[fill]])
+        data_w = np.concatenate([data_w, np.full(int(fill.sum()), HINT_WEIGHT)])
     if data_xy is None:
         flags.append(Flag("FR-VC-2:unsupported", seed.id, "FR-VC-2", "no pavement edges measured; alignment follows the input vector"))
         data_xy = seed.line.xy[::10]
@@ -196,7 +202,7 @@ def fit_road(seed: RoadSeed, ev: Evidence, rules: RuleBook, *, strip_factor: flo
     length = alignment.length
     track = track_line(aline, ev)
     lp = near_points(aline, ev)
-    prof = cross_profiles(lp, track.z_at, length)
+    prof = cross_profiles(lp, track.z_at, length, limits=corridor_limits(aline, neighbours))
     gaps = [(iv.s0, iv.s1) for iv in track.intervals(length) if iv.kind != "observed"]
 
     edges = fit_edges(prof, length, gaps)
@@ -212,10 +218,13 @@ def fit_road(seed: RoadSeed, ev: Evidence, rules: RuleBook, *, strip_factor: flo
     inside = (lp.u <= wl - EDGE_MARGIN_M) & (lp.u >= -wr + EDGE_MARGIN_M)
     crown, _ = rules.fill("cross_slope.crown", road_class=seed.road_class)
     sel = inside & (np.abs(lp.u) <= 1.5) & (np.abs(lp.z - zt) <= 0.3)
-    vert, _pfit, _bins = fp.fit_profile(lp.s[sel], lp.z[sel], length, rules=rules, road_class=seed.road_class)
+    fitted = _fit_profile(lp.s[sel], lp.z[sel], length, rules, seed.road_class)
     slopes_l = (np.array([0.0]), np.array([-crown]))
     slopes_r = (np.array([0.0]), np.array([crown]))
-    for _ in range(2):
+    slope_rms = math.nan
+    zc = lp.z
+    for _ in range(2 if fitted is not None else 0):
+        vert, _pfit, _bins = fitted
         pz = vert.z(lp.s)
         slope = np.where(lp.u >= 0, np.interp(lp.s, *slopes_l), np.interp(lp.s, *slopes_r))
         band = SURFACE_BAND_M + 0.02 * np.abs(lp.u)
@@ -224,13 +233,20 @@ def fit_road(seed: RoadSeed, ev: Evidence, rules: RuleBook, *, strip_factor: flo
         slope = np.where(lp.u >= 0, np.interp(lp.s, *slopes_l), np.interp(lp.s, *slopes_r))
         zc = lp.z - slope * lp.u
         sel = inside & (np.abs(zc - pz) <= band)
-        vert, _pfit, _bins = fp.fit_profile(lp.s[sel], zc[sel], length, rules=rules, road_class=seed.road_class)
+        fitted = _fit_profile(lp.s[sel], zc[sel], length, rules, seed.road_class) or fitted
     s_pts, z_pts = lp.s[sel], zc[sel]
     surface = (lp.s[sel].copy(), lp.u[sel].copy(), lp.z[sel].copy())
 
     # ---------------------------------------------------------------- provenance
     paved = float(np.median(np.interp(prof.s, edges.knots_left, edges.left) + np.interp(prof.s, edges.knots_right, edges.right)))
-    vprovs, pflags = profile_provenance(seed.id, seed.road_class, vert, length, s_pts, z_pts, _bins[0], gaps, paved, rules, strip_factor)
+    if fitted is not None:
+        vert, _pfit, _bins = fitted
+        vprovs, pflags = profile_provenance(seed.id, seed.road_class, vert, length, s_pts, z_pts, _bins[0], gaps, paved, rules, strip_factor)
+    else:
+        vert, vprov, flag = _fallback_profile(seed, track, lp, length, rules)
+        vprovs, pflags = [vprov] * len(fp.element_ranges(vert, length)), []
+        flags.append(flag)
+        surface = (np.zeros(0), np.zeros(0), np.zeros(0))
     profile = fp.to_profile(vert, length, vprovs)
 
     aprovs = []
@@ -263,7 +279,11 @@ def fit_road(seed: RoadSeed, ev: Evidence, rules: RuleBook, *, strip_factor: flo
         observed_fraction=edges.observed_fraction,
         rule_id=None if edges.n else "lane.width",
     )
-    sprov = Provenance(Source.MEASURED, confidence(float(prof.valid.mean()), slope_rms, strip_factor), rms_m=slope_rms if math.isfinite(slope_rms) else None, n_points=int(sel.sum()))
+    if fitted is not None:
+        sprov = Provenance(Source.MEASURED, confidence(float(prof.valid.mean()), slope_rms, strip_factor), rms_m=slope_rms if math.isfinite(slope_rms) else None, n_points=int(sel.sum()))
+    else:
+        _c, cprov = rules.fill("cross_slope.crown", road_class=seed.road_class)
+        sprov = Provenance(Source.RULE, cprov.confidence, rule_id="cross_slope.crown", flags=["FR-AF-2:profile_fallback"])
     for side, (kn, vals) in (("left", slopes_l), ("right", slopes_r)):
         for v in vals:
             ok, rule = rules.evaluate("superelevation.rate", abs(float(v)), road_class=seed.road_class)
@@ -298,6 +318,36 @@ def fit_road(seed: RoadSeed, ev: Evidence, rules: RuleBook, *, strip_factor: flo
         if iv.kind == "unsupported":
             flags.append(Flag("FR-VC-2:unsupported", seed.id, "FR-VC-2", f"no supporting sheet over s={iv.s0:.1f}-{iv.s1:.1f}"))
     return RoadFit(seed, road, aline, track, prof, lp, edges, vert, flags, gaps, surface, strip_factor, pflags)
+
+
+def _fit_profile(s, z, length, rules, road_class):
+    """``fp.fit_profile``, or None when there are too few samples to fit (FR-AF-2)."""
+    try:
+        return fp.fit_profile(s, z, length, rules=rules, road_class=road_class)
+    except ValueError:
+        return None
+
+
+def _fallback_profile(seed: RoadSeed, track: Track, lp: LinePoints, length: float, rules: RuleBook):
+    """A single straight grade where the surface returns are too few to fit L2 (FR-AF-2, FR-VC-2).
+
+    The line through the tracked surface heights when at least two stations were
+    tracked, else level at the median height of the returns near the line (0 when
+    there are none). Its provenance is the grade rule, at the rule fill confidence.
+    """
+    ok = np.isfinite(track.z)
+    if ok.sum() >= 2 and np.ptp(track.s[ok]) > 0.0:
+        grade, z0 = np.polyfit(track.s[ok], track.z[ok], 1)
+        how = f"line through {int(ok.sum())} tracked surface heights"
+    else:
+        grade, z0 = 0.0, float(np.median(lp.z)) if len(lp.z) else 0.0
+        how = "level at the median height of the returns near the line" if len(lp.z) else "level at 0 m, no returns near the line"
+    _ok, rule = rules.evaluate("grade", abs(float(grade)), road_class=seed.road_class)
+    _v, rprov = rules.fill("grade", road_class=seed.road_class)
+    vert = fp._Vert(float(z0), np.array([float(grade)]), np.zeros(0), np.zeros(0))
+    prov = Provenance(Source.RULE, rprov.confidence, rule_id=rule.id, flags=["FR-AF-2:profile_fallback", "FR-VC-2"])
+    flag = Flag("FR-AF-2:profile_fallback", seed.id, "FR-AF-2", f"too few surface returns to fit the profile; {how}, grade {grade:.4f} (rule {rule.id})")
+    return vert, prov, flag
 
 
 def profile_provenance(
