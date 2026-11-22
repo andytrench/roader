@@ -222,6 +222,94 @@ def overpass_model() -> RoadModel:
     )
 
 
+# ---------------------------------------------------------------- synthetic diverge (FR-SG-3)
+
+DIVERGE_GRADE = 0.005
+RAMP_RADIUS = 300.0
+RAMP_START_U = -2.75  # ramp reference line starts in the freeway's right lane
+RAMP_HALF = 2.5
+
+
+def diverge_model(with_junctions: bool = True) -> RoadModel:
+    """An exit ramp leaving a freeway carriageway, both on fill over flat terrain.
+
+    The freeway runs along +x from x = -200 on a 0.5% grade; the ramp starts at
+    x = 0 inside its right lane, runs straight for 10 m, then curves right on a
+    300 m radius. Its profile follows the freeway's right half until the gore, so
+    the two surfaces agree where they overlap. Side slopes stay off the gore, where
+    the two embankments would overlap beyond the junction area.
+    """
+    fwy = Road(
+        id=stable_id("rd", "synthetic", "fwy"),
+        name="Freeway",
+        road_class="motorway",
+        kind="mainline",
+        oneway=True,
+        alignment=_line(-200.0, 0.0, 0.0, 400.0),
+        profile=Profile([VerticalElement(0.0, 400.0, MAINLINE_Z, DIVERGE_GRADE, DIVERGE_GRADE, TRUTH)]),
+        cross_section=_section(5.5, 5.5, 2, 0.3),
+        vector_refs=[VectorRef("synthetic", "fwy", {"highway": "motorway"})],
+    )
+    arc = 150.0
+    k = -1.0 / RAMP_RADIUS
+    first = AlignElement("line", 0.0, 10.0, 0.0, RAMP_START_U, 0.0, 0.0, 0.0, TRUTH)
+    x1, y1, h1, _k1 = first.end_state()
+    second = AlignElement("arc", 10.0, arc, x1, y1, h1, k, k, TRUTH)
+    # z = freeway plane at the ramp's reference line: 0.02 * y with y = RAMP_START_U - (s - 10)^2 / (2 R).
+    z0 = MAINLINE_Z + DIVERGE_GRADE * 200.0 + 0.02 * RAMP_START_U
+    vc = 80.0
+    g1 = DIVERGE_GRADE - 0.02 * vc / RAMP_RADIUS
+    z1 = z0 + DIVERGE_GRADE * 10.0
+    z2 = z1 + 0.5 * (DIVERGE_GRADE + g1) * vc
+    xs = _section(RAMP_HALF, RAMP_HALF, 1, 0.3)
+    xs.slope_left = constant(0.02, TRUTH)
+    xs.lanes = [LaneGroup("right", 0.0, 1e9, 1, 3.66, 0.0, 1.34, RULE)]
+    ramp = Road(
+        id=stable_id("rd", "synthetic", "ramp"),
+        name="Exit ramp",
+        road_class="motorway_link",
+        kind="ramp",
+        oneway=True,
+        alignment=Alignment([first, second]),
+        profile=Profile(
+            [
+                VerticalElement(0.0, 10.0, z0, DIVERGE_GRADE, DIVERGE_GRADE, TRUTH),
+                VerticalElement(10.0, vc, z1, DIVERGE_GRADE, g1, TRUTH),
+                VerticalElement(10.0 + vc, arc - vc, z2, g1, g1, TRUTH),
+            ]
+        ),
+        cross_section=xs,
+        vector_refs=[VectorRef("synthetic", "ramp", {"highway": "motorway_link"})],
+    )
+    slopes = [
+        SideSlope(stable_id("ss", fwy.id, "left"), fwy.id, "left", 0.0, fwy.length, "fill", 4.0, RULE),
+        SideSlope(stable_id("ss", fwy.id, "right"), fwy.id, "right", 0.0, 150.0, "fill", 4.0, RULE),
+        SideSlope(stable_id("ss", ramp.id, "right"), ramp.id, "right", 0.0, ramp.length, "fill", 2.0, RULE),
+        SideSlope(stable_id("ss", ramp.id, "left"), ramp.id, "left", 130.0, ramp.length, "fill", 2.0, RULE),
+    ]
+    cell = 2.0
+    nx, ny = 221, 121
+    terrain = TerrainPatch(-220.0, -120.0, cell, nx, ny, [TERRAIN_Z] * (nx * ny), TRUTH)
+    unit = UnitRecord(
+        unit_id="synthetic_diverge",
+        aoi_lonlat=(-72.003, 41.999, -71.997, 42.001),
+        software_version="test",
+        lidar=[LidarCollection("synthetic", 2021, "QL1", 8.0, "unit-frame", "NAVD88")],
+        vectors=[VectorSourceRecord("synthetic", "test-only", True)],
+    )
+    frame = Frame(proj="+proj=tmerc +lat_0=42 +lon_0=-72 +k=1 +x_0=0 +y_0=0 +ellps=GRS80 +units=m", anchor_lon=-72.0, anchor_lat=42.0)
+    model = RoadModel(unit=unit, frame=frame, roads=[fwy, ramp], side_slopes=slopes, terrain=terrain)
+    if with_junctions:
+        from roader.complete.junctions import build_junctions
+        from roader.model.serialize import dumps, loads
+
+        # Lift from the canonical (rounded) roads so the outline matches their sweeps exactly (D-043).
+        model = loads(dumps(model))
+        model.junctions, model.flags = build_junctions(model)
+        model = loads(dumps(model))
+    return model
+
+
 # ---------------------------------------------------------------- synthetic lidar
 
 

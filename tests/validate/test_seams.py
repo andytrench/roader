@@ -1,9 +1,8 @@
 """AC-H4 extension: link and junction-area seams, mainline curvature continuity (D-020).
 
 Links with seam stations and junction areas with a surface are milestone 2
-contracts (lane ``model``). Until ``Link`` and ``JunctionArea`` carry them, the
-checks run on test-local stand-ins with the same fields; the contract tests at
-the end skip until the schema has them.
+contracts. Most checks run on test-local stand-ins with the same fields; the
+contract tests at the end run on the schema and the synthetic diverge (D-045).
 """
 
 from __future__ import annotations
@@ -23,8 +22,13 @@ from roader.model.geometry import (
     constant,
 )
 from roader.model.provenance import Provenance, Source
-from roader.model.schema import CrossSection, JunctionArea, Road
-from roader.model.synthetic import MAINLINE_Z, MEDIAN_HALF, overpass_model
+from roader.model.schema import CrossSection, JunctionArea, JunctionSeam, Road
+from roader.model.synthetic import (
+    MAINLINE_Z,
+    MEDIAN_HALF,
+    diverge_model,
+    overpass_model,
+)
 from roader.validate.gates import check_continuity
 from roader.validate.seams import junction_violations, link_violations
 
@@ -231,14 +235,15 @@ def test_junction_side_from_outline_at_road_start(model):
     assert n > 0 and not violations, violations
 
 
-def test_junction_without_surface_contract_fails(model):
-    eb = model.roads[0]
-    model.junctions.append(JunctionArea("jn", [eb.id], [(0.0, 0.0), (1.0, 0.0), (1.0, 1.0)], TRUTH))
-    if hasattr(JunctionArea, "surface_z"):
-        pytest.skip("JunctionArea has its L6 surface now; covered by the contract test below")
+def test_junction_without_lifted_surface_fails(model):
+    """A JunctionArea from before the D-045 patches has seams but no surface: its seams fail."""
+    eb, x, y, _h = _eb_end(model)
+    outline = [(x - 20.0, y - 6.0), (x, y - 6.0), (x, y + 6.0), (x - 20.0, y + 6.0)]
+    seam = JunctionSeam(eb.id, eb.length - 20.0, -5.5, 5.5, side=1)
+    model.junctions.append(JunctionArea("jn", [eb.id], outline, TRUTH, seams=[seam]))
     result = check_continuity(model)
     assert not result.passed
-    assert any("L6 contract" in v.message for v in result.violations)
+    assert any("no surface" in v.message for v in result.violations)
 
 
 def test_junction_surface_missing_at_seam_fails(model):
@@ -292,11 +297,10 @@ def test_link_schema_has_seam_stations():
     assert link.from_s is None and link.to_s is None
 
 
-def test_junction_area_schema_has_seams_and_surface(model):
-    if not hasattr(JunctionArea, "surface_z") or "seams" not in {f.name for f in dataclasses.fields(JunctionArea)}:
-        pytest.skip("JunctionArea.seams / JunctionArea.surface_z (L6 geometry) not in the schema yet (lane model, milestone 2)")
-    junctions = getattr(model, "junctions", [])
-    if not junctions:
-        pytest.skip("no junction areas in the synthetic model yet")
+def test_junction_area_schema_has_seams_and_surface():
+    assert hasattr(JunctionArea, "surface_z") and "seams" in {f.name for f in dataclasses.fields(JunctionArea)}
+    model = diverge_model()
+    assert model.junctions
     result = check_continuity(model)
     assert result.passed, result.violations
+    assert result.metrics["n_junctions"] == 1.0

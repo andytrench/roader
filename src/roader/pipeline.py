@@ -9,8 +9,8 @@ Order: vector graph (FR-VC-1) -> evidence on the corridor (FR-PN-2/3, FR-RS-1..4
 -> per road: sheet tracking, registration, L1, L2, L3 (FR-VC-2/3, FR-AF-1..5,
 FR-XS-1..3) -> crossings (FR-CR-1/2) -> structure ends (FR-VC-4, FR-CR-3) ->
 barriers and structures (FR-RS-4, FR-ST-2..6, FR-XS-5) -> completion and
-clearance (FR-OC-1..3) -> earthwork and terrain (L4, L7) -> unmatched sheets
-(FR-VC-5).
+clearance (FR-OC-1..3) -> earthwork and terrain (L4, L7) -> junction areas
+(L6, FR-SG-3) -> unmatched sheets (FR-VC-5).
 
 Not yet: joint fitting across links (FR-AF-3; no links in milestone 1),
 inventory matching (FR-ST-1), observed piers, median classification (FR-XS-4),
@@ -20,6 +20,7 @@ multiple collections (FR-IN-4).
 from __future__ import annotations
 
 import copy
+import dataclasses
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 
@@ -33,6 +34,7 @@ from roader.complete import (
     side_slopes,
     split_at_structures,
 )
+from roader.complete.junctions import build_junctions
 from roader.conflate.crossings import CrossingMeasure, find_crossings
 from roader.conflate.graph import data_extent, select_roads
 from roader.conflate.register import cross_profiles, near_points
@@ -183,6 +185,9 @@ def run_pipeline(
     # Stage 8 terrain after the clearance refit, so caps and soffits are final (FR-OC-3).
     model.terrain = complete_terrain(fit_points, model, rules)
     seat_supports(model, rules)
+    # L6 areas lifted from the canonical roads, so they match the sweeps of the saved model (FR-SG-3, D-043, D-045).
+    model.junctions, junction_flags = build_junctions(loads(dumps(dataclasses.replace(model, terrain=None))))
+    flags.extend(junction_flags)
     flags.extend(_unmatched_sheets(ev, fits))
     model.flags = sorted(flags, key=lambda f: (f.req, f.code, f.element_id, f.message))
     # The canonical form (D-011): a model built here and the same model read back
