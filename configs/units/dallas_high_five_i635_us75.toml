@@ -1,0 +1,20 @@
+# Milestone 2 unit: I-635 / US 75 High Five stack, Dallas, TX (tests/sites.yaml).
+# Hashes are the pins written by scripts/fetch_fixtures.py (FR-PL-3, D-008).
+
+[unit]
+site_id = "dallas_high_five_i635_us75"
+aoi_lonlat = [-96.7766, 32.9148, -96.7405, 32.9310]
+imagery_enabled = false
+
+[lidar]
+path = "data/fixtures/dallas_high_five_i635_us75/lidar.laz"
+name = "TX_Pecos_Dallas_B3_2018"
+year = 2019
+quality_level = "QL2"
+sha256 = "1534bf766c32363b00b5ba754ac8cd9123d697a1757591f34cecf7bd59c7a4d7"
+
+[vectors.osm]
+enabled = true
+path = "data/fixtures/dallas_high_five_i635_us75/osm.json"
+license = "ODbL-1.0"
+sha256 = "772220bb78dd53b31d47e416b02fc74402cdefd74fcc1df4c83cf5e591892d4c"

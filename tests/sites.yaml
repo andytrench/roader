@@ -19,7 +19,7 @@ classes:
     status: assigned
     sites: [woburn_i93_i95]
   - class: four_or_five_level_stack
-    status: shortlisted
+    status: assigned
     sites: [dallas_high_five_i635_us75]
   - class: long_urban_viaduct
     status: unassigned
@@ -116,17 +116,24 @@ sites:
   - id: dallas_high_five_i635_us75
     class: four_or_five_level_stack
     milestone: 2
-    status: shortlisted
     description: >-
       The High Five: I-635 (LBJ Freeway, with TEXpress managed lanes) / US 75 (Central
       Expressway) five-level stack in Dallas, TX. OSM tags direct connectors at layers 3
-      to 5 over the two mainlines and the frontage roads. The AOI is the extent of the
-      elevated connectors (layer >= 3) of this interchange plus margin; the TEXpress
-      connectors running further southeast along I-635 are outside.
+      to 5 over the two mainlines and the frontage roads. The AOI holds both gores of
+      each of the eight general-purpose direct connectors between I-635 and US 75
+      (outermost gores at lon -96.7756 / -96.7439, lat 32.9167 / 32.9301) and every
+      elevated level, with at least 90 m margin. The east gores sit inside the I-635 /
+      Greenville Avenue interchange, so the east and south edges are pushed out until
+      every plan crossing there is at least 100 m inside. Outside: the far ends of the
+      TEXpress connectors (on the TEXpress lanes about -96.739 and -96.778, and the
+      US 75 southbound collector north of lat 32.9313, where the layer-5 connector
+      diverges), Midpark Road over US 75 (lat 32.9346) and Coit Road over I-635
+      (lon -96.781). The shortlist AOI [-96.7740, 32.9180, -96.7550, 32.9300] was the
+      extent of layers >= 3 only and missed every connector gore.
       Runner-up: Judge Harry Pregerson Interchange, I-105 / I-110, Los Angeles CA
       (-118.2806, 33.9288), EPT CA_LosAngeles_1_B23 (WESM CA_LosAngeles_B23, QL1,
       collected 2023-01-08 to 2024-01-07), 15.9 pts/m2 over a 300 m window, class 17 present.
-    aoi_lonlat: [-96.7740, 32.9180, -96.7550, 32.9300]
+    aoi_lonlat: [-96.7766, 32.9148, -96.7405, 32.9310]
     crossing_lonlat: [-96.7655, 32.9240]
     lidar:
       project: TX_Pecos_Dallas_B3_2018
@@ -137,13 +144,16 @@ sites:
       vertical_crs: NAVD88 (assumed; not declared in the EPT metadata)
       collected: 2019-03-16 to 2019-07-12 (USGS WESM, TX_Pecos_Dallas_2018_D19)
       ept_points: 42113131074
-      density_pts_m2: 8.9  # 300 m x 300 m window at crossing_lonlat, classes 7 and 18 removed
-      classes_seen: [1, 2, 7, 17, 18]  # same window
-      class_17_points: 216548  # same window
+      density_pts_m2: 7.5
+      classes_seen: [1, 2, 7, 9, 17, 18, 20]
+      class_17_points: 1349328
+      point_count: 45595389
+      laz_bytes: 228353997
     vectors:
       source: osm
       license: ODbL-1.0
       path: data/fixtures/dallas_high_five_i635_us75/osm.json
     lidar_path: data/fixtures/dallas_high_five_i635_us75/lidar.laz
-    lidar_sha256: ""
-    vector_sha256: ""
+    crossings: tests/sites/dallas_high_five_i635_us75/crossings.yaml
+    lidar_sha256: "1534bf766c32363b00b5ba754ac8cd9123d697a1757591f34cecf7bd59c7a4d7"
+    vector_sha256: "772220bb78dd53b31d47e416b02fc74402cdefd74fcc1df4c83cf5e591892d4c"

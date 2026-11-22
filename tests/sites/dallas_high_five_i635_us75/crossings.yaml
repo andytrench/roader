@@ -1,0 +1,3796 @@
+# AC-H2 hand-labeled crossing list for dallas_high_five_i635_us75 (I-635 / US 75 High Five
+# stack, Dallas TX, plus Coit Road, Churchill Way, Greenville Avenue and the I-635 / US 75
+# frontage roads within the AOI).
+#
+# status: draft, needs human review. Drafted 2026-11-22 from the pinned fixture
+# (lidar_sha256 1534bf76..., vector_sha256 772220bb...), not from a site visit or plans.
+# Crossings are every plan intersection inside the AOI, without a shared node, between
+# in-scope OSM edges (roader.io.in_scope) where at least one edge is limited-access
+# (D-037): 327 way pairs, each crossing once. Footways and cycleways are in scope under
+# roader.io.in_scope and are listed. Every crossing is at least 100 m inside the AOI.
+#
+# Class 17 (bridge deck) is present in this collection: 1,349,328 returns in the AOI.
+#
+# Method (unit frame, heights NAVD88 assumed, meters; classes 2 and 17 only). Each way is
+# traced along its OSM centerline, extended through the least-deflected continuing way
+# (under 40 deg) up to 1.5 km each side. Every 2 m the returns within 1.5 m are split
+# into height clusters and one surface is tracked through them with a 6 % grade limit,
+# so a deck above or below is not taken for the road. At a crossing each way's height is
+# interpolated from its tracked stations outside the other way's footprint (half width
+# by OSM class plus 4 m); the higher way is the upper. upper_z_m is the upper way's own
+# returns at the crossing when they agree with that profile, else the interpolation
+# (stack decks above it hide it). lower_z_m is the interpolation, or the lower way's own
+# returns under the deck when they exist. `evidence` says which, and the span of the
+# lower interpolation. dz is upper minus lower (FR-CR-1), to 0.1 m. skew_deg is from
+# perpendicular, between the traced centerlines.
+#
+# Construction mismatch. The lidar was collected in 2019; OSM is from 2026. Around the
+# I-635 / Greenville Avenue interchange (east of lon -96.747) and along the TEXpress
+# connector ways 1559139703 and 1559139707, OSM bridges have no deck in the lidar:
+# Greenville Avenue is level with I-635 where OSM has it on a bridge over it, and the two
+# TEXpress connectors are absent. This looks like TxDOT's LBJ East rebuild of I-635 east
+# of US 75 after the collection (not confirmed). Those crossings cannot be drafted from
+# this collection and are listed under `unresolved` with the reason, not as crossings.
+# The newer TX_2022NorthCentral_1_D25 EPT has no ept.json in the USGS bucket yet.
+#
+# Review checklist: confirm the vertical order of each crossing, starting with the
+# `review` notes and the uppers marked occluded; decide whether footway and cycleway
+# crossings belong in the AC-H2 list; resolve the `unresolved` entries (construction
+# date of the Greenville / TEXpress work, or a newer collection); confirm the structure
+# grouping and the deck ends.
+
+site_id: dallas_high_five_i635_us75
+status: draft, needs human review
+crossings:
+  - id: ramp4652037_over_us75frontage
+    upper: {osm_way: 4652037, name: ramp, highway: motorway_link}
+    lower: {osm_way: 39609947, name: US 75 frontage, highway: secondary}
+    lonlat: [-96.761359, 32.92644]
+    upper_z_m: 180.1
+    lower_z_m: 165.8
+    dz_m: 14.3
+    skew_deg: 62
+    structure: st01_ramp4652037
+    tags: {upper_layer: "4", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 48 m"
+  - id: ramp4652037_over_cycleway104746707
+    upper: {osm_way: 4652037, name: ramp, highway: motorway_link}
+    lower: {osm_way: 104746707, name: Cottonwood Creek Trail, highway: cycleway}
+    lonlat: [-96.761335, 32.925857]
+    upper_z_m: 182.8
+    lower_z_m: 162.9
+    dz_m: 19.9
+    skew_deg: 70
+    structure: st01_ramp4652037
+    tags: {upper_layer: "4", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 74 m"
+  - id: ramp4652037_over_ramp138669827
+    upper: {osm_way: 4652037, name: ramp, highway: motorway_link}
+    lower: {osm_way: 138669827, name: ramp to Midpark Road, highway: motorway_link}
+    lonlat: [-96.761173, 32.926923]
+    upper_z_m: 177.3
+    lower_z_m: 166.0
+    dz_m: 11.3
+    skew_deg: 74
+    structure: st01_ramp4652037
+    tags: {upper_layer: "4", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 102 m"
+  - id: ramp4652037_over_ramp182141558
+    upper: {osm_way: 4652037, name: ramp, highway: motorway_link}
+    lower: {osm_way: 182141558, name: ramp to Coit Road, highway: motorway_link}
+    lonlat: [-96.760527, 32.924881]
+    upper_z_m: 186.8
+    lower_z_m: 168.1
+    dz_m: 18.7
+    skew_deg: 65
+    structure: st01_ramp4652037
+    tags: {upper_layer: "4", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 54 m"
+  - id: ramp4652037_over_footway272210117
+    upper: {osm_way: 4652037, name: ramp, highway: motorway_link}
+    lower: {osm_way: 272210117, name: footway, highway: footway}
+    lonlat: [-96.760764, 32.925039]
+    upper_z_m: 186.1
+    lower_z_m: 168.1
+    dz_m: 18.0
+    skew_deg: 48
+    structure: st01_ramp4652037
+    tags: {upper_layer: "4", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 32 m"
+  - id: ramp4652037_over_lbjfrontage
+    upper: {osm_way: 4652037, name: ramp, highway: motorway_link}
+    lower: {osm_way: 912687011, name: I-635 frontage, highway: secondary}
+    lonlat: [-96.760651, 32.924959]
+    upper_z_m: 186.5
+    lower_z_m: 168.0
+    dz_m: 18.5
+    skew_deg: 53
+    structure: st01_ramp4652037
+    tags: {upper_layer: "4", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 36 m"
+  - id: ramp9941850_over_us75frontage
+    upper: {osm_way: 9941850, name: ramp, highway: motorway_link}
+    lower: {osm_way: 27936019, name: US 75 frontage, highway: secondary}
+    lonlat: [-96.764852, 32.923928]
+    upper_z_m: 187.4
+    lower_z_m: 171.7
+    dz_m: 15.7
+    skew_deg: 31
+    structure: st02_ramp9941850
+    tags: {upper_layer: "3", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 30 m"
+    review: another deck 10 m above the upper road here
+  - id: ramp9941850_over_i635
+    upper: {osm_way: 9941850, name: ramp, highway: motorway_link}
+    lower: {osm_way: 27936304, name: I-635, highway: motorway}
+    lonlat: [-96.764843, 32.923916]
+    upper_z_m: 187.3
+    lower_z_m: 178.7
+    dz_m: 8.6
+    skew_deg: 31
+    structure: st02_ramp9941850
+    tags: {upper_layer: "3", upper_bridge: "yes", lower_layer: "2"}
+    evidence: "upper measured; lower measured"
+    review: another deck 10 m above the upper road here
+  - id: ramp9941850_over_lbjfrontage
+    upper: {osm_way: 9941850, name: ramp, highway: motorway_link}
+    lower: {osm_way: 39610461, name: I-635 frontage, highway: secondary}
+    lonlat: [-96.764604, 32.923401]
+    upper_z_m: 185.2
+    lower_z_m: 170.2
+    dz_m: 15.0
+    skew_deg: 14
+    structure: st03_ramp9941850
+    tags: {upper_layer: "3", upper_bridge: "yes", lower_layer: "1"}
+    evidence: "upper measured; lower measured"
+  - id: ramp9941850_over_us75
+    upper: {osm_way: 9941850, name: ramp, highway: motorway_link}
+    lower: {osm_way: 118182267, name: US 75, highway: motorway}
+    lonlat: [-96.764523, 32.922769]
+    upper_z_m: 181.0
+    lower_z_m: 162.4
+    dz_m: 18.6
+    skew_deg: 70
+    structure: st04_ramp9941850
+    tags: {upper_layer: "3", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower measured"
+  - id: ramp9941850_over_i635tex
+    upper: {osm_way: 9941850, name: ramp, highway: motorway_link}
+    lower: {osm_way: 159236756, name: I-635 TEXpress, highway: motorway}
+    lonlat: [-96.765022, 32.924122]
+    upper_z_m: 188.0
+    lower_z_m: 178.9
+    dz_m: 9.1
+    skew_deg: 40
+    structure: st02_ramp9941850
+    tags: {upper_layer: "3", upper_bridge: "yes", lower_layer: "2"}
+    evidence: "upper measured; lower interpolated over 28 m"
+  - id: ramp9941850_over_i635tex_2
+    upper: {osm_way: 9941850, name: ramp, highway: motorway_link}
+    lower: {osm_way: 159236772, name: I-635 TEXpress, highway: motorway}
+    lonlat: [-96.765168, 32.924241]
+    upper_z_m: 188.3
+    lower_z_m: 179.0
+    dz_m: 9.3
+    skew_deg: 50
+    structure: st02_ramp9941850
+    tags: {upper_layer: "3", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 34 m"
+  - id: ramp9941850_over_i635_2
+    upper: {osm_way: 9941850, name: ramp, highway: motorway_link}
+    lower: {osm_way: 498113749, name: I-635, highway: motorway}
+    lonlat: [-96.765512, 32.924439]
+    upper_z_m: 188.4
+    lower_z_m: 178.5
+    dz_m: 9.9
+    skew_deg: 61
+    structure: st02_ramp9941850
+    tags: {upper_layer: "3", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 46 m"
+  - id: ramp9941850_over_us75_2
+    upper: {osm_way: 9941850, name: ramp, highway: motorway_link}
+    lower: {osm_way: 556550344, name: US 75, highway: motorway}
+    lonlat: [-96.764583, 32.923318]
+    upper_z_m: 184.8
+    lower_z_m: 162.6
+    dz_m: 22.2
+    skew_deg: 54
+    structure: st03_ramp9941850
+    tags: {upper_layer: "3", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 40 m"
+  - id: ramp9986763_over_cycleway104746707
+    upper: {osm_way: 9986763, name: ramp, highway: motorway_link}
+    lower: {osm_way: 104746707, name: Cottonwood Creek Trail, highway: cycleway}
+    lonlat: [-96.762663, 32.923399]
+    upper_z_m: 181.7
+    lower_z_m: 160.4
+    dz_m: 21.3
+    skew_deg: 57
+    structure: st04_ramp9941850
+    tags: {upper_layer: "3", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 38 m"
+  - id: ramp9986763_over_ramp161501979
+    upper: {osm_way: 9986763, name: ramp, highway: motorway_link}
+    lower: {osm_way: 161501979, name: ramp, highway: motorway_link}
+    lonlat: [-96.76508, 32.92104]
+    upper_z_m: 172.8
+    lower_z_m: 162.0
+    dz_m: 10.8
+    skew_deg: 80
+    structure: st04_ramp9941850
+    tags: {upper_layer: "3", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 168 m"
+  - id: ramp9986763_over_lbjfrontage
+    upper: {osm_way: 9986763, name: ramp, highway: motorway_link}
+    lower: {osm_way: 182141539, name: I-635 frontage, highway: secondary}
+    lonlat: [-96.762775, 32.923366]
+    upper_z_m: 181.6
+    lower_z_m: 166.2
+    dz_m: 15.4
+    skew_deg: 69
+    structure: st04_ramp9941850
+    tags: {upper_layer: "3", upper_bridge: "yes", lower_layer: "1"}
+    evidence: "upper measured; lower interpolated over 60 m"
+  - id: ramp9986763_over_us75frontage
+    upper: {osm_way: 9986763, name: ramp, highway: motorway_link}
+    lower: {osm_way: 557627441, name: US 75 frontage, highway: secondary}
+    lonlat: [-96.764047, 32.922605]
+    upper_z_m: 179.3
+    lower_z_m: 166.0
+    dz_m: 13.3
+    skew_deg: 76
+    structure: st04_ramp9941850
+    tags: {upper_layer: "3", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower measured"
+  - id: i635_over_us75frontage
+    upper: {osm_way: 10003052, name: I-635, highway: motorway}
+    lower: {osm_way: 26390462, name: US 75 frontage, highway: secondary}
+    lonlat: [-96.762834, 32.924462]
+    upper_z_m: 179.0
+    lower_z_m: 170.3
+    dz_m: 8.7
+    skew_deg: 30
+    structure: st05_i635
+    tags: {upper_layer: "2", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 40 m"
+    review: another deck 17 m above the upper road here
+  - id: i635_over_us75frontage_2
+    upper: {osm_way: 10003052, name: I-635, highway: motorway}
+    lower: {osm_way: 27936019, name: US 75 frontage, highway: secondary}
+    lonlat: [-96.76453, 32.924451]
+    upper_z_m: 179.8
+    lower_z_m: 172.6
+    dz_m: 7.2
+    skew_deg: 30
+    structure: st05_i635
+    tags: {upper_layer: "2", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 40 m"
+  - id: i635_over_cycleway104746707
+    upper: {osm_way: 10003052, name: I-635, highway: motorway}
+    lower: {osm_way: 104746707, name: Cottonwood Creek Trail, highway: cycleway}
+    lonlat: [-96.761639, 32.924427]
+    upper_z_m: 175.9
+    lower_z_m: 159.8
+    dz_m: 16.1
+    skew_deg: 25
+    structure: st05_i635
+    tags: {upper_layer: "2", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 38 m"
+  - id: i635_over_us75
+    upper: {osm_way: 10003052, name: I-635, highway: motorway}
+    lower: {osm_way: 118182267, name: US 75, highway: motorway}
+    lonlat: [-96.763514, 32.924457]
+    upper_z_m: 179.9
+    lower_z_m: 163.1
+    dz_m: 16.8
+    skew_deg: 32
+    structure: st05_i635
+    tags: {upper_layer: "2", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 68 m"
+    review: another deck 18 m above the upper road here
+  - id: i635_over_frontageramp138669820
+    upper: {osm_way: 10003052, name: I-635, highway: motorway}
+    lower: {osm_way: 138669820, name: frontage ramp, highway: secondary_link}
+    lonlat: [-96.762668, 32.92446]
+    upper_z_m: 178.7
+    lower_z_m: 170.1
+    dz_m: 8.6
+    skew_deg: 28
+    structure: st05_i635
+    tags: {upper_layer: "2", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 38 m"
+    review: another deck 8 m above the upper road here
+  - id: i635_over_us75_2
+    upper: {osm_way: 10003052, name: I-635, highway: motorway}
+    lower: {osm_way: 1482805416, name: US 75, highway: motorway}
+    lonlat: [-96.763879, 32.924455]
+    upper_z_m: 180.0
+    lower_z_m: 163.4
+    dz_m: 16.6
+    skew_deg: 32
+    structure: st05_i635
+    tags: {upper_layer: "2", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 38 m"
+    review: another deck 18 m above the upper road here
+  - id: i635_over_ramp1483197511
+    upper: {osm_way: 10003052, name: I-635, highway: motorway}
+    lower: {osm_way: 1483197511, name: ramp, highway: motorway_link}
+    lonlat: [-96.763891, 32.924455]
+    upper_z_m: 180.0
+    lower_z_m: 163.4
+    dz_m: 16.6
+    skew_deg: 29
+    structure: st05_i635
+    tags: {upper_layer: "2", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 38 m"
+    review: another deck 18 m above the upper road here
+  - id: ramp26390456_over_ramp9941850
+    upper: {osm_way: 26390456, name: ramp, highway: motorway_link}
+    lower: {osm_way: 9941850, name: ramp, highway: motorway_link}
+    lonlat: [-96.764672, 32.923599]
+    upper_z_m: 195.0
+    lower_z_m: 186.3
+    dz_m: 8.7
+    skew_deg: 30
+    structure: st01_ramp4652037
+    tags: {upper_layer: "4", upper_bridge: "yes", lower_layer: "3"}
+    evidence: "upper measured; lower measured"
+  - id: ramp26390456_over_i635
+    upper: {osm_way: 26390456, name: ramp, highway: motorway_link}
+    lower: {osm_way: 10003052, name: I-635, highway: motorway}
+    lonlat: [-96.763149, 32.92446]
+    upper_z_m: 196.2
+    lower_z_m: 179.5
+    dz_m: 16.7
+    skew_deg: 69
+    structure: st01_ramp4652037
+    tags: {upper_layer: "4", upper_bridge: "yes", lower_layer: "2"}
+    evidence: "upper measured; lower measured"
+  - id: ramp26390456_over_us75frontage
+    upper: {osm_way: 26390456, name: ramp, highway: motorway_link}
+    lower: {osm_way: 26390462, name: US 75 frontage, highway: secondary}
+    lonlat: [-96.762757, 32.924575]
+    upper_z_m: 195.3
+    lower_z_m: 170.4
+    dz_m: 24.9
+    skew_deg: 47
+    structure: st01_ramp4652037
+    tags: {upper_layer: "4", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower measured"
+  - id: ramp26390456_over_i635_2
+    upper: {osm_way: 26390456, name: ramp, highway: motorway_link}
+    lower: {osm_way: 27936304, name: I-635, highway: motorway}
+    lonlat: [-96.764262, 32.923917]
+    upper_z_m: 196.3
+    lower_z_m: 179.1
+    dz_m: 17.2
+    skew_deg: 52
+    structure: st01_ramp4652037
+    tags: {upper_layer: "4", upper_bridge: "yes", lower_layer: "2"}
+    evidence: "upper measured; lower measured"
+  - id: ramp26390456_over_lbjfrontage
+    upper: {osm_way: 26390456, name: ramp, highway: motorway_link}
+    lower: {osm_way: 39610461, name: I-635 frontage, highway: secondary}
+    lonlat: [-96.764869, 32.923401]
+    upper_z_m: 194.0
+    lower_z_m: 170.5
+    dz_m: 23.5
+    skew_deg: 38
+    structure: st01_ramp4652037
+    tags: {upper_layer: "4", upper_bridge: "yes", lower_layer: "1"}
+    evidence: "upper measured; lower measured"
+  - id: ramp26390456_over_cycleway104746707
+    upper: {osm_way: 26390456, name: ramp, highway: motorway_link}
+    lower: {osm_way: 104746707, name: Cottonwood Creek Trail, highway: cycleway}
+    lonlat: [-96.761478, 32.92469]
+    upper_z_m: 191.4
+    lower_z_m: 160.3
+    dz_m: 31.1
+    skew_deg: 17
+    structure: st01_ramp4652037
+    tags: {upper_layer: "4", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 24 m"
+  - id: ramp26390456_over_us75
+    upper: {osm_way: 26390456, name: ramp, highway: motorway_link}
+    lower: {osm_way: 118182267, name: US 75, highway: motorway}
+    lonlat: [-96.763654, 32.924259]
+    upper_z_m: 196.8
+    lower_z_m: 162.9
+    dz_m: 33.9
+    skew_deg: 57
+    structure: st01_ramp4652037
+    tags: {upper_layer: "4", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 64 m"
+  - id: ramp26390456_over_frontageramp138669816
+    upper: {osm_way: 26390456, name: ramp, highway: motorway_link}
+    lower: {osm_way: 138669816, name: frontage ramp, highway: secondary_link}
+    lonlat: [-96.764974, 32.923278]
+    upper_z_m: 193.7
+    lower_z_m: 170.3
+    dz_m: 23.4
+    skew_deg: 34
+    structure: st01_ramp4652037
+    tags: {upper_layer: "4", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower measured"
+  - id: ramp26390456_over_frontageramp138669820
+    upper: {osm_way: 26390456, name: ramp, highway: motorway_link}
+    lower: {osm_way: 138669820, name: frontage ramp, highway: secondary_link}
+    lonlat: [-96.762561, 32.92462]
+    upper_z_m: 194.8
+    lower_z_m: 170.2
+    dz_m: 24.6
+    skew_deg: 43
+    structure: st01_ramp4652037
+    tags: {upper_layer: "4", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower measured"
+  - id: ramp26390456_over_ramp138669826
+    upper: {osm_way: 26390456, name: ramp, highway: motorway_link}
+    lower: {osm_way: 138669826, name: ramp to Churchill Way / Forest Lane, highway: motorway_link}
+    lonlat: [-96.765728, 32.921213]
+    upper_z_m: 177.7
+    lower_z_m: 163.6
+    dz_m: 14.1
+    skew_deg: 81
+    structure: st06_ramp26390456
+    tags: {upper_layer: "4", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 128 m"
+  - id: ramp26390456_over_i635tex
+    upper: {osm_way: 26390456, name: ramp, highway: motorway_link}
+    lower: {osm_way: 159236756, name: I-635 TEXpress, highway: motorway}
+    lonlat: [-96.763895, 32.924138]
+    upper_z_m: 196.7
+    lower_z_m: 179.6
+    dz_m: 17.1
+    skew_deg: 58
+    structure: st01_ramp4652037
+    tags: {upper_layer: "4", upper_bridge: "yes", lower_layer: "2"}
+    evidence: "upper measured; lower measured"
+  - id: ramp26390456_over_i635tex_2
+    upper: {osm_way: 26390456, name: ramp, highway: motorway_link}
+    lower: {osm_way: 159236769, name: I-635 TEXpress, highway: motorway}
+    lonlat: [-96.763702, 32.924237]
+    upper_z_m: 196.8
+    lower_z_m: 179.5
+    dz_m: 17.3
+    skew_deg: 61
+    structure: st01_ramp4652037
+    tags: {upper_layer: "4", upper_bridge: "yes", lower_layer: "2"}
+    evidence: "upper measured; lower measured"
+  - id: ramp26390456_over_ramp498113739
+    upper: {osm_way: 26390456, name: ramp, highway: motorway_link}
+    lower: {osm_way: 498113739, name: ramp, highway: motorway_link}
+    lonlat: [-96.762686, 32.924593]
+    upper_z_m: 195.2
+    lower_z_m: 186.5
+    dz_m: 8.7
+    skew_deg: 12
+    structure: st01_ramp4652037
+    tags: {upper_layer: "4", upper_bridge: "yes", lower_layer: "3"}
+    evidence: "upper measured; lower measured"
+  - id: ramp26390456_over_us75_2
+    upper: {osm_way: 26390456, name: ramp, highway: motorway_link}
+    lower: {osm_way: 556550344, name: US 75, highway: motorway}
+    lonlat: [-96.764218, 32.923947]
+    upper_z_m: 196.4
+    lower_z_m: 162.9
+    dz_m: 33.5
+    skew_deg: 66
+    structure: st01_ramp4652037
+    tags: {upper_layer: "4", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 68 m"
+  - id: ramp26392600_over_tiboulevard
+    upper: {osm_way: 26392600, name: ramp, highway: motorway_link}
+    lower: {osm_way: 161503420, name: TI Boulevard, highway: tertiary}
+    lonlat: [-96.750673, 32.920423]
+    upper_z_m: 182.1
+    lower_z_m: 171.7
+    dz_m: 10.4
+    skew_deg: 7
+    structure: st07_i635
+    tags: {upper_layer: "3", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 22 m"
+  - id: ramp26392600_over_ramp498323889
+    upper: {osm_way: 26392600, name: ramp, highway: motorway_link}
+    lower: {osm_way: 498323889, name: ramp, highway: motorway_link}
+    lonlat: [-96.748802, 32.919352]
+    upper_z_m: 186.2
+    lower_z_m: 177.7
+    dz_m: 8.5
+    skew_deg: 84
+    structure: st07_i635
+    tags: {upper_layer: "3", upper_bridge: "yes", lower_layer: "2"}
+    evidence: "upper measured; lower interpolated over 210 m"
+  - id: ramp26392600_over_footway753815398
+    upper: {osm_way: 26392600, name: ramp, highway: motorway_link}
+    lower: {osm_way: 753815398, name: footway, highway: footway}
+    lonlat: [-96.750618, 32.920391]
+    upper_z_m: 182.4
+    lower_z_m: 171.7
+    dz_m: 10.7
+    skew_deg: 6
+    structure: st07_i635
+    tags: {upper_layer: "3", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 22 m"
+  - id: ramp26392600_over_tiboulevard_2
+    upper: {osm_way: 26392600, name: ramp, highway: motorway_link}
+    lower: {osm_way: 1161827577, name: TI Boulevard, highway: tertiary}
+    lonlat: [-96.75076, 32.920474]
+    upper_z_m: 181.6
+    lower_z_m: 171.8
+    dz_m: 9.8
+    skew_deg: 33
+    structure: st07_i635
+    tags: {upper_layer: "3", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 24 m"
+  - id: ramp26454377_over_ramp9941850
+    upper: {osm_way: 26454377, name: ramp to McKinney, highway: motorway_link}
+    lower: {osm_way: 9941850, name: ramp, highway: motorway_link}
+    lonlat: [-96.764812, 32.923869]
+    upper_z_m: 197.5
+    lower_z_m: 187.0
+    dz_m: 10.5
+    skew_deg: 8
+    structure: st01_ramp4652037
+    tags: {upper_layer: "4", upper_bridge: "yes", lower_layer: "3"}
+    evidence: "upper measured; lower measured"
+  - id: ramp26454377_over_i635
+    upper: {osm_way: 26454377, name: ramp to McKinney, highway: motorway_link}
+    lower: {osm_way: 10003052, name: I-635, highway: motorway}
+    lonlat: [-96.763541, 32.924457]
+    upper_z_m: 197.8
+    lower_z_m: 179.9
+    dz_m: 17.9
+    skew_deg: 52
+    structure: st01_ramp4652037
+    tags: {upper_layer: "4", upper_bridge: "yes", lower_layer: "2"}
+    evidence: "upper measured; lower interpolated over 36 m"
+  - id: ramp26454377_over_us75frontage
+    upper: {osm_way: 26454377, name: ramp to McKinney, highway: motorway_link}
+    lower: {osm_way: 27936019, name: US 75 frontage, highway: secondary}
+    lonlat: [-96.764902, 32.923842]
+    upper_z_m: 197.2
+    lower_z_m: 171.5
+    dz_m: 25.7
+    skew_deg: 44
+    structure: st01_ramp4652037
+    tags: {upper_layer: "4", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 34 m"
+  - id: ramp26454377_over_i635_2
+    upper: {osm_way: 26454377, name: ramp to McKinney, highway: motorway_link}
+    lower: {osm_way: 27936304, name: I-635, highway: motorway}
+    lonlat: [-96.764674, 32.923916]
+    upper_z_m: 197.7
+    lower_z_m: 178.9
+    dz_m: 18.8
+    skew_deg: 67
+    structure: st01_ramp4652037
+    tags: {upper_layer: "4", upper_bridge: "yes", lower_layer: "2"}
+    evidence: "upper measured; lower measured"
+  - id: ramp26454377_over_lbjfrontage
+    upper: {osm_way: 26454377, name: ramp to McKinney, highway: motorway_link}
+    lower: {osm_way: 39610462, name: I-635 frontage, highway: secondary}
+    lonlat: [-96.762877, 32.92498]
+    upper_z_m: 195.0
+    lower_z_m: 170.8
+    dz_m: 24.2
+    skew_deg: 42
+    structure: st01_ramp4652037
+    tags: {upper_layer: "4", upper_bridge: "yes", lower_layer: "1"}
+    evidence: "upper measured; lower measured"
+  - id: ramp26454377_over_us75
+    upper: {osm_way: 26454377, name: ramp to McKinney, highway: motorway_link}
+    lower: {osm_way: 118182267, name: US 75, highway: motorway}
+    lonlat: [-96.763488, 32.924493]
+    upper_z_m: 197.7
+    lower_z_m: 163.1
+    dz_m: 34.6
+    skew_deg: 70
+    structure: st01_ramp4652037
+    tags: {upper_layer: "4", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 88 m"
+  - id: ramp26454377_over_ramp138669827
+    upper: {osm_way: 26454377, name: ramp to McKinney, highway: motorway_link}
+    lower: {osm_way: 138669827, name: ramp to Midpark Road, highway: motorway_link}
+    lonlat: [-96.761705, 32.926453]
+    upper_z_m: 182.8
+    lower_z_m: 165.2
+    dz_m: 17.6
+    skew_deg: 78
+    structure: st01_ramp4652037
+    tags: {upper_layer: "4", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 142 m"
+  - id: ramp26454377_over_frontageramp138669828
+    upper: {osm_way: 26454377, name: ramp to McKinney, highway: motorway_link}
+    lower: {osm_way: 138669828, name: frontage ramp, highway: secondary_link}
+    lonlat: [-96.762743, 32.925108]
+    upper_z_m: 194.1
+    lower_z_m: 170.1
+    dz_m: 24.0
+    skew_deg: 40
+    structure: st01_ramp4652037
+    tags: {upper_layer: "4", upper_bridge: "yes", lower_layer: "1"}
+    evidence: "upper measured; lower measured"
+  - id: ramp26454377_over_i635tex
+    upper: {osm_way: 26454377, name: ramp to McKinney, highway: motorway_link}
+    lower: {osm_way: 159236756, name: I-635 TEXpress, highway: motorway}
+    lonlat: [-96.764125, 32.924138]
+    upper_z_m: 198.3
+    lower_z_m: 179.6
+    dz_m: 18.7
+    skew_deg: 61
+    structure: st01_ramp4652037
+    tags: {upper_layer: "4", upper_bridge: "yes", lower_layer: "2"}
+    evidence: "upper measured; lower measured"
+  - id: ramp26454377_over_i635tex_2
+    upper: {osm_way: 26454377, name: ramp to McKinney, highway: motorway_link}
+    lower: {osm_way: 159236769, name: I-635 TEXpress, highway: motorway}
+    lonlat: [-96.763925, 32.924237]
+    upper_z_m: 198.2
+    lower_z_m: 179.7
+    dz_m: 18.5
+    skew_deg: 58
+    structure: st01_ramp4652037
+    tags: {upper_layer: "4", upper_bridge: "yes", lower_layer: "2"}
+    evidence: "upper measured; lower measured"
+  - id: ramp26454377_over_ramp498113739
+    upper: {osm_way: 26454377, name: ramp to McKinney, highway: motorway_link}
+    lower: {osm_way: 498113739, name: ramp, highway: motorway_link}
+    lonlat: [-96.762862, 32.924994]
+    upper_z_m: 195.0
+    lower_z_m: 186.0
+    dz_m: 9.0
+    skew_deg: 35
+    structure: st01_ramp4652037
+    tags: {upper_layer: "4", upper_bridge: "yes", lower_layer: "3"}
+    evidence: "upper measured; lower interpolated over 26 m"
+  - id: ramp26454377_over_us75_2
+    upper: {osm_way: 26454377, name: ramp to McKinney, highway: motorway_link}
+    lower: {osm_way: 556550344, name: US 75, highway: motorway}
+    lonlat: [-96.764085, 32.924157]
+    upper_z_m: 198.3
+    lower_z_m: 163.1
+    dz_m: 35.2
+    skew_deg: 58
+    structure: st01_ramp4652037
+    tags: {upper_layer: "4", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 40 m"
+  - id: coitroad_over_ramp39551574
+    upper: {osm_way: 26454383, name: Coit Road, highway: secondary}
+    lower: {osm_way: 39551574, name: ramp, highway: motorway_link}
+    lonlat: [-96.769309, 32.923763]
+    upper_z_m: 174.6
+    lower_z_m: 167.4
+    dz_m: 7.2
+    skew_deg: 2
+    structure: st08_coitroad
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 128 m"
+    review: another deck 13 m above the upper road here
+  - id: coitroad_over_i635
+    upper: {osm_way: 26454383, name: Coit Road, highway: secondary}
+    lower: {osm_way: 39610465, name: I-635, highway: motorway}
+    lonlat: [-96.769297, 32.924408]
+    upper_z_m: 176.1
+    lower_z_m: 167.7
+    dz_m: 8.4
+    skew_deg: 1
+    structure: st08_coitroad
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 62 m"
+  - id: coitroad_over_i635_2
+    upper: {osm_way: 26454383, name: Coit Road, highway: secondary}
+    lower: {osm_way: 122886328, name: I-635, highway: motorway}
+    lonlat: [-96.769306, 32.923958]
+    upper_z_m: 175.1
+    lower_z_m: 167.3
+    dz_m: 7.8
+    skew_deg: 0
+    structure: st08_coitroad
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 60 m"
+  - id: coitroad_over_i635tex
+    upper: {osm_way: 26454383, name: Coit Road, highway: secondary}
+    lower: {osm_way: 159236772, name: I-635 TEXpress, highway: motorway}
+    lonlat: [-96.7693, 32.924253]
+    upper_z_m: 175.8
+    lower_z_m: 168.0
+    dz_m: 7.8
+    skew_deg: 1
+    structure: st08_coitroad
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 62 m"
+  - id: coitroad_over_ramp498113751
+    upper: {osm_way: 26454383, name: Coit Road, highway: secondary}
+    lower: {osm_way: 498113751, name: ramp to Park Central Drive / Hillcrest Road, highway: motorway_link}
+    lonlat: [-96.769293, 32.924638]
+    upper_z_m: 176.4
+    lower_z_m: 169.6
+    dz_m: 6.8
+    skew_deg: 4
+    structure: st08_coitroad
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper interpolated (occluded by a deck above); lower interpolated over 146 m"
+    review: another deck 7 m above the upper road here
+  - id: coitroad_over_i635tex_2
+    upper: {osm_way: 26454383, name: Coit Road, highway: secondary}
+    lower: {osm_way: 938314886, name: I-635 TEXpress, highway: motorway}
+    lonlat: [-96.769303, 32.924104]
+    upper_z_m: 175.5
+    lower_z_m: 167.6
+    dz_m: 7.9
+    skew_deg: 1
+    structure: st08_coitroad
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 60 m"
+  - id: coitroad_over_ramp39551574_2
+    upper: {osm_way: 26454384, name: Coit Road, highway: secondary}
+    lower: {osm_way: 39551574, name: ramp, highway: motorway_link}
+    lonlat: [-96.769029, 32.923769]
+    upper_z_m: 174.6
+    lower_z_m: 167.7
+    dz_m: 6.9
+    skew_deg: 2
+    structure: st08_coitroad
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper interpolated (occluded by a deck above); lower interpolated over 128 m"
+    review: another deck 14 m above the upper road here
+  - id: coitroad_over_i635_3
+    upper: {osm_way: 26454384, name: Coit Road, highway: secondary}
+    lower: {osm_way: 39610465, name: I-635, highway: motorway}
+    lonlat: [-96.769018, 32.924409]
+    upper_z_m: 176.1
+    lower_z_m: 167.9
+    dz_m: 8.2
+    skew_deg: 1
+    structure: st08_coitroad
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 62 m"
+  - id: coitroad_over_i635_4
+    upper: {osm_way: 26454384, name: Coit Road, highway: secondary}
+    lower: {osm_way: 122886328, name: I-635, highway: motorway}
+    lonlat: [-96.769026, 32.923953]
+    upper_z_m: 175.1
+    lower_z_m: 167.5
+    dz_m: 7.6
+    skew_deg: 1
+    structure: st08_coitroad
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 60 m"
+  - id: coitroad_over_i635tex_3
+    upper: {osm_way: 26454384, name: Coit Road, highway: secondary}
+    lower: {osm_way: 159236772, name: I-635 TEXpress, highway: motorway}
+    lonlat: [-96.769021, 32.924254]
+    upper_z_m: 175.7
+    lower_z_m: 168.2
+    dz_m: 7.5
+    skew_deg: 1
+    structure: st08_coitroad
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 62 m"
+  - id: coitroad_over_ramp498113751_2
+    upper: {osm_way: 26454384, name: Coit Road, highway: secondary}
+    lower: {osm_way: 498113751, name: ramp to Park Central Drive / Hillcrest Road, highway: motorway_link}
+    lonlat: [-96.769015, 32.924617]
+    upper_z_m: 176.4
+    lower_z_m: 169.6
+    dz_m: 6.8
+    skew_deg: 4
+    structure: st08_coitroad
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper interpolated (occluded by a deck above); lower interpolated over 146 m"
+    review: another deck 8 m above the upper road here
+  - id: coitroad_over_i635tex_4
+    upper: {osm_way: 26454384, name: Coit Road, highway: secondary}
+    lower: {osm_way: 938314886, name: I-635 TEXpress, highway: motorway}
+    lonlat: [-96.769023, 32.924102]
+    upper_z_m: 175.4
+    lower_z_m: 167.8
+    dz_m: 7.6
+    skew_deg: 1
+    structure: st08_coitroad
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 60 m"
+  - id: greenvilleaven_over_i635tex
+    upper: {osm_way: 27935630, name: Greenville Avenue, highway: secondary}
+    lower: {osm_way: 1565100675, name: I-635 TEXpress, highway: motorway}
+    lonlat: [-96.74329, 32.916764]
+    upper_z_m: 183.6
+    lower_z_m: 177.3
+    dz_m: 6.3
+    skew_deg: 16
+    structure: st09_greenvilleaven
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 36 m"
+  - id: greenvilleaven_over_i635tex_2
+    upper: {osm_way: 27935630, name: Greenville Avenue, highway: secondary}
+    lower: {osm_way: 1565100725, name: I-635 TEXpress, highway: motorway}
+    lonlat: [-96.743347, 32.916654]
+    upper_z_m: 183.7
+    lower_z_m: 177.2
+    dz_m: 6.5
+    skew_deg: 14
+    structure: st09_greenvilleaven
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 36 m"
+  - id: frontageramp27935751_over_i635
+    upper: {osm_way: 27935751, name: frontage ramp, highway: secondary_link}
+    lower: {osm_way: 498323870, name: I-635, highway: motorway}
+    lonlat: [-96.743444, 32.917134]
+    upper_z_m: 183.6
+    lower_z_m: 179.0
+    dz_m: 4.6
+    skew_deg: 14
+    structure: st09_greenvilleaven
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower measured"
+  - id: frontageramp27935751_over_i635tex
+    upper: {osm_way: 27935751, name: frontage ramp, highway: secondary_link}
+    lower: {osm_way: 1565100675, name: I-635 TEXpress, highway: motorway}
+    lonlat: [-96.743545, 32.916937]
+    upper_z_m: 183.8
+    lower_z_m: 176.9
+    dz_m: 6.9
+    skew_deg: 15
+    structure: st09_greenvilleaven
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower measured"
+  - id: frontageramp27935751_over_i635tex_2
+    upper: {osm_way: 27935751, name: frontage ramp, highway: secondary_link}
+    lower: {osm_way: 1565100725, name: I-635 TEXpress, highway: motorway}
+    lonlat: [-96.743605, 32.916821]
+    upper_z_m: 183.9
+    lower_z_m: 176.8
+    dz_m: 7.1
+    skew_deg: 14
+    structure: st09_greenvilleaven
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower measured"
+  - id: greenvilleaven_over_i635
+    upper: {osm_way: 27935767, name: Greenville Avenue, highway: secondary}
+    lower: {osm_way: 498323870, name: I-635, highway: motorway}
+    lonlat: [-96.743323, 32.917056]
+    upper_z_m: 183.5
+    lower_z_m: 179.2
+    dz_m: 4.3
+    skew_deg: 15
+    structure: st09_greenvilleaven
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 38 m"
+  - id: greenvilleaven_over_i635tex_3
+    upper: {osm_way: 27935767, name: Greenville Avenue, highway: secondary}
+    lower: {osm_way: 1565100675, name: I-635 TEXpress, highway: motorway}
+    lonlat: [-96.743421, 32.916852]
+    upper_z_m: 183.6
+    lower_z_m: 177.1
+    dz_m: 6.5
+    skew_deg: 17
+    structure: st09_greenvilleaven
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 38 m"
+  - id: greenvilleaven_over_i635tex_4
+    upper: {osm_way: 27935767, name: Greenville Avenue, highway: secondary}
+    lower: {osm_way: 1565100725, name: I-635 TEXpress, highway: motorway}
+    lonlat: [-96.743476, 32.916737]
+    upper_z_m: 183.7
+    lower_z_m: 177.0
+    dz_m: 6.7
+    skew_deg: 15
+    structure: st09_greenvilleaven
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 38 m"
+  - id: ramp27935854_over_tiboulevard
+    upper: {osm_way: 27935854, name: ramp to Greenville Avenue / Abrams Road, highway: motorway_link}
+    lower: {osm_way: 539771794, name: TI Boulevard, highway: tertiary}
+    lonlat: [-96.750883, 32.920161]
+    upper_z_m: 180.4
+    lower_z_m: 171.7
+    dz_m: 8.7
+    skew_deg: 1
+    structure: st07_i635
+    tags: {upper_layer: "3", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 34 m"
+  - id: ramp27935854_over_footway753815398
+    upper: {osm_way: 27935854, name: ramp to Greenville Avenue / Abrams Road, highway: motorway_link}
+    lower: {osm_way: 753815398, name: footway, highway: footway}
+    lonlat: [-96.750795, 32.920118]
+    upper_z_m: 180.5
+    lower_z_m: 171.7
+    dz_m: 8.8
+    skew_deg: 1
+    structure: st07_i635
+    tags: {upper_layer: "3", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower measured"
+  - id: i635_over_us75frontage_3
+    upper: {osm_way: 27936304, name: I-635, highway: motorway}
+    lower: {osm_way: 27936019, name: US 75 frontage, highway: secondary}
+    lonlat: [-96.764859, 32.923916]
+    upper_z_m: 178.7
+    lower_z_m: 171.6
+    dz_m: 7.1
+    skew_deg: 26
+    structure: st05_i635
+    tags: {upper_layer: "2", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 38 m"
+    review: another deck 18 m above the upper road here
+  - id: i635_over_cycleway104746707_2
+    upper: {osm_way: 27936304, name: I-635, highway: motorway}
+    lower: {osm_way: 104746707, name: Cottonwood Creek Trail, highway: cycleway}
+    lonlat: [-96.762164, 32.92392]
+    upper_z_m: 176.2
+    lower_z_m: 161.3
+    dz_m: 14.9
+    skew_deg: 41
+    structure: st05_i635
+    tags: {upper_layer: "2", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 44 m"
+  - id: i635_over_us75_3
+    upper: {osm_way: 27936304, name: I-635, highway: motorway}
+    lower: {osm_way: 118182267, name: US 75, highway: motorway}
+    lonlat: [-96.763871, 32.923917]
+    upper_z_m: 179.1
+    lower_z_m: 162.6
+    dz_m: 16.5
+    skew_deg: 28
+    structure: st05_i635
+    tags: {upper_layer: "2", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 40 m"
+  - id: i635_over_frontageramp138669820_2
+    upper: {osm_way: 27936304, name: I-635, highway: motorway}
+    lower: {osm_way: 138669820, name: frontage ramp, highway: secondary_link}
+    lonlat: [-96.763028, 32.923919]
+    upper_z_m: 178.2
+    lower_z_m: 168.7
+    dz_m: 9.5
+    skew_deg: 29
+    structure: st05_i635
+    tags: {upper_layer: "2", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 38 m"
+  - id: i635_over_us75_4
+    upper: {osm_way: 27936304, name: I-635, highway: motorway}
+    lower: {osm_way: 556550344, name: US 75, highway: motorway}
+    lonlat: [-96.764236, 32.923917]
+    upper_z_m: 179.1
+    lower_z_m: 162.9
+    dz_m: 16.2
+    skew_deg: 28
+    structure: st05_i635
+    tags: {upper_layer: "2", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 38 m"
+    review: another deck 18 m above the upper road here
+  - id: i635_over_us75frontage_4
+    upper: {osm_way: 27936304, name: I-635, highway: motorway}
+    lower: {osm_way: 1029503827, name: US 75 frontage, highway: secondary}
+    lonlat: [-96.7632, 32.923918]
+    upper_z_m: 178.4
+    lower_z_m: 169.0
+    dz_m: 9.4
+    skew_deg: 30
+    structure: st05_i635
+    tags: {upper_layer: "2", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 40 m"
+  - id: frontageramp39609949_over_i635tex
+    upper: {osm_way: 39609949, name: frontage ramp, highway: secondary_link}
+    lower: {osm_way: 159236703, name: I-635 TEXpress, highway: motorway}
+    lonlat: [-96.757178, 32.923682]
+    upper_z_m: 182.0
+    lower_z_m: 174.0
+    dz_m: 8.0
+    skew_deg: 0
+    structure: st10_frontageramp39609949
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 44 m"
+  - id: frontageramp39609949_over_ramp159236838
+    upper: {osm_way: 39609949, name: frontage ramp, highway: secondary_link}
+    lower: {osm_way: 159236838, name: ramp, highway: motorway_link}
+    lonlat: [-96.75718, 32.923674]
+    upper_z_m: 182.0
+    lower_z_m: 174.0
+    dz_m: 8.0
+    skew_deg: 6
+    structure: st10_frontageramp39609949
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 44 m"
+  - id: frontageramp39609949_over_ramp159236840
+    upper: {osm_way: 39609949, name: frontage ramp, highway: secondary_link}
+    lower: {osm_way: 159236840, name: ramp, highway: motorway_link}
+    lonlat: [-96.757208, 32.923573]
+    upper_z_m: 181.5
+    lower_z_m: 173.5
+    dz_m: 8.0
+    skew_deg: 0
+    structure: st10_frontageramp39609949
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 44 m"
+  - id: frontageramp39609949_over_i635
+    upper: {osm_way: 39609949, name: frontage ramp, highway: secondary_link}
+    lower: {osm_way: 498323863, name: I-635, highway: motorway}
+    lonlat: [-96.757128, 32.923864]
+    upper_z_m: 182.5
+    lower_z_m: 174.6
+    dz_m: 7.9
+    skew_deg: 0
+    structure: st10_frontageramp39609949
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 44 m"
+  - id: frontageramp39609949_over_i635_2
+    upper: {osm_way: 39609949, name: frontage ramp, highway: secondary_link}
+    lower: {osm_way: 498323903, name: I-635, highway: motorway}
+    lonlat: [-96.757259, 32.923385]
+    upper_z_m: 180.7
+    lower_z_m: 173.2
+    dz_m: 7.5
+    skew_deg: 3
+    structure: st10_frontageramp39609949
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 44 m"
+  - id: frontageramp39609949_over_i635tex_2
+    upper: {osm_way: 39609949, name: frontage ramp, highway: secondary_link}
+    lower: {osm_way: 1163407441, name: I-635 TEXpress, highway: motorway}
+    lonlat: [-96.75721, 32.923564]
+    upper_z_m: 181.4
+    lower_z_m: 173.4
+    dz_m: 8.0
+    skew_deg: 4
+    structure: st10_frontageramp39609949
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 44 m"
+  - id: lbjfrontage_over_us75
+    upper: {osm_way: 39610461, name: I-635 frontage, highway: secondary}
+    lower: {osm_way: 556550344, name: US 75, highway: motorway}
+    lonlat: [-96.764538, 32.923401]
+    upper_z_m: 170.1
+    lower_z_m: 162.6
+    dz_m: 7.5
+    skew_deg: 25
+    structure: st11_lbjfrontage
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 36 m"
+    review: another deck 15 m above the upper road here
+  - id: lbjfrontage_over_ramp138669827
+    upper: {osm_way: 39610462, name: I-635 frontage, highway: secondary}
+    lower: {osm_way: 138669827, name: ramp to Midpark Road, highway: motorway_link}
+    lonlat: [-96.763067, 32.924981]
+    upper_z_m: 171.1
+    lower_z_m: 163.5
+    dz_m: 7.6
+    skew_deg: 43
+    structure: st12_lbjfrontage
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 42 m"
+  - id: lbjfrontage_over_us75_2
+    upper: {osm_way: 39610462, name: I-635 frontage, highway: secondary}
+    lower: {osm_way: 556550345, name: US 75, highway: motorway}
+    lonlat: [-96.763134, 32.924981]
+    upper_z_m: 171.2
+    lower_z_m: 163.6
+    dz_m: 7.6
+    skew_deg: 30
+    structure: st12_lbjfrontage
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 36 m"
+  - id: lbjfrontage_over_us75_3
+    upper: {osm_way: 39610462, name: I-635 frontage, highway: secondary}
+    lower: {osm_way: 1482805416, name: US 75, highway: motorway}
+    lonlat: [-96.763474, 32.924983]
+    upper_z_m: 171.4
+    lower_z_m: 163.8
+    dz_m: 7.6
+    skew_deg: 32
+    structure: st12_lbjfrontage
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 38 m"
+  - id: lbjfrontage_over_ramp1483197511
+    upper: {osm_way: 39610462, name: I-635 frontage, highway: secondary}
+    lower: {osm_way: 1483197511, name: ramp, highway: motorway_link}
+    lonlat: [-96.763547, 32.924983]
+    upper_z_m: 171.4
+    lower_z_m: 164.0
+    dz_m: 7.4
+    skew_deg: 28
+    structure: st12_lbjfrontage
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 36 m"
+  - id: i635_over_tiboulevard
+    upper: {osm_way: 39656718, name: I-635, highway: motorway}
+    lower: {osm_way: 161503418, name: TI Boulevard, highway: tertiary}
+    lonlat: [-96.750396, 32.921087]
+    upper_z_m: 181.5
+    lower_z_m: 173.3
+    dz_m: 8.2
+    skew_deg: 6
+    structure: st07_i635
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 42 m"
+  - id: i635_over_tiboulevard_2
+    upper: {osm_way: 39656718, name: I-635, highway: motorway}
+    lower: {osm_way: 161503420, name: TI Boulevard, highway: tertiary}
+    lonlat: [-96.750289, 32.921026]
+    upper_z_m: 181.6
+    lower_z_m: 173.1
+    dz_m: 8.5
+    skew_deg: 7
+    structure: st07_i635
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 42 m"
+  - id: i635_over_footway753815398
+    upper: {osm_way: 39656718, name: I-635, highway: motorway}
+    lower: {osm_way: 753815398, name: footway, highway: footway}
+    lonlat: [-96.750235, 32.920995]
+    upper_z_m: 181.6
+    lower_z_m: 173.1
+    dz_m: 8.5
+    skew_deg: 6
+    structure: st07_i635
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 40 m"
+  - id: ramp39656719_over_tiboulevard
+    upper: {osm_way: 39656719, name: ramp, highway: motorway_link}
+    lower: {osm_way: 161503418, name: TI Boulevard, highway: tertiary}
+    lonlat: [-96.750156, 32.921471]
+    upper_z_m: 183.8
+    lower_z_m: 173.8
+    dz_m: 10.0
+    skew_deg: 3
+    structure: st13_ramp39656719
+    tags: {upper_layer: "4", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 38 m"
+  - id: ramp39656719_over_footway753815398
+    upper: {osm_way: 39656719, name: ramp, highway: motorway_link}
+    lower: {osm_way: 753815398, name: footway, highway: footway}
+    lonlat: [-96.749987, 32.921384]
+    upper_z_m: 182.7
+    lower_z_m: 173.9
+    dz_m: 8.8
+    skew_deg: 3
+    structure: st13_ramp39656719
+    tags: {upper_layer: "4", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower measured"
+  - id: ramp39656719_over_tiboulevard_2
+    upper: {osm_way: 39656719, name: ramp, highway: motorway_link}
+    lower: {osm_way: 932812782, name: TI Boulevard, highway: tertiary}
+    lonlat: [-96.75005, 32.921416]
+    upper_z_m: 183.1
+    lower_z_m: 174.0
+    dz_m: 9.1
+    skew_deg: 4
+    structure: st13_ramp39656719
+    tags: {upper_layer: "4", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower measured"
+  - id: i635_over_tiboulevard_3
+    upper: {osm_way: 39656727, name: I-635, highway: motorway}
+    lower: {osm_way: 161503420, name: TI Boulevard, highway: tertiary}
+    lonlat: [-96.750551, 32.920601]
+    upper_z_m: 181.0
+    lower_z_m: 172.0
+    dz_m: 9.0
+    skew_deg: 5
+    structure: st07_i635
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 54 m"
+  - id: i635_over_footway753815398_2
+    upper: {osm_way: 39656727, name: I-635, highway: motorway}
+    lower: {osm_way: 753815398, name: footway, highway: footway}
+    lonlat: [-96.750502, 32.920574]
+    upper_z_m: 181.0
+    lower_z_m: 172.1
+    dz_m: 8.9
+    skew_deg: 5
+    structure: st07_i635
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 52 m"
+  - id: i635_over_tiboulevard_4
+    upper: {osm_way: 39656727, name: I-635, highway: motorway}
+    lower: {osm_way: 1161827577, name: TI Boulevard, highway: tertiary}
+    lonlat: [-96.750663, 32.920661]
+    upper_z_m: 180.9
+    lower_z_m: 172.2
+    dz_m: 8.7
+    skew_deg: 5
+    structure: st07_i635
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 54 m"
+  - id: frontageramp138669821_over_us75
+    upper: {osm_way: 138669821, name: frontage ramp, highway: secondary_link}
+    lower: {osm_way: 118182267, name: US 75, highway: motorway}
+    lonlat: [-96.76425, 32.923278]
+    upper_z_m: 169.3
+    lower_z_m: 162.4
+    dz_m: 6.9
+    skew_deg: 26
+    structure: st11_lbjfrontage
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 38 m"
+  - id: frontageramp138669821_over_us75_2
+    upper: {osm_way: 138669821, name: frontage ramp, highway: secondary_link}
+    lower: {osm_way: 556550344, name: US 75, highway: motorway}
+    lonlat: [-96.764605, 32.923278]
+    upper_z_m: 169.9
+    lower_z_m: 162.6
+    dz_m: 7.3
+    skew_deg: 25
+    structure: st11_lbjfrontage
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 40 m"
+  - id: frontageramp138669828_over_ramp138669827
+    upper: {osm_way: 138669828, name: frontage ramp, highway: secondary_link}
+    lower: {osm_way: 138669827, name: ramp to Midpark Road, highway: motorway_link}
+    lonlat: [-96.762949, 32.925108]
+    upper_z_m: 170.6
+    lower_z_m: 163.6
+    dz_m: 7.0
+    skew_deg: 31
+    structure: st12_lbjfrontage
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 44 m"
+    review: another deck 16 m above the upper road here
+  - id: frontageramp138669828_over_us75
+    upper: {osm_way: 138669828, name: frontage ramp, highway: secondary_link}
+    lower: {osm_way: 556550345, name: US 75, highway: motorway}
+    lonlat: [-96.763047, 32.925108]
+    upper_z_m: 170.8
+    lower_z_m: 163.7
+    dz_m: 7.1
+    skew_deg: 30
+    structure: st12_lbjfrontage
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 40 m"
+  - id: frontageramp138669828_over_us75_2
+    upper: {osm_way: 138669828, name: frontage ramp, highway: secondary_link}
+    lower: {osm_way: 1482805416, name: US 75, highway: motorway}
+    lonlat: [-96.763374, 32.925108]
+    upper_z_m: 171.1
+    lower_z_m: 163.9
+    dz_m: 7.2
+    skew_deg: 35
+    structure: st12_lbjfrontage
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 42 m"
+  - id: frontageramp138669828_over_ramp1483197511
+    upper: {osm_way: 138669828, name: frontage ramp, highway: secondary_link}
+    lower: {osm_way: 1483197511, name: ramp, highway: motorway_link}
+    lonlat: [-96.763466, 32.925108]
+    upper_z_m: 171.1
+    lower_z_m: 164.2
+    dz_m: 6.9
+    skew_deg: 29
+    structure: st12_lbjfrontage
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower measured"
+  - id: i635tex_over_us75frontage
+    upper: {osm_way: 159236756, name: I-635 TEXpress, highway: motorway}
+    lower: {osm_way: 27936019, name: US 75 frontage, highway: secondary}
+    lonlat: [-96.764735, 32.924131]
+    upper_z_m: 179.3
+    lower_z_m: 172.1
+    dz_m: 7.2
+    skew_deg: 27
+    structure: st05_i635
+    tags: {upper_layer: "2", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 62 m"
+  - id: i635tex_over_cycleway104746707
+    upper: {osm_way: 159236756, name: I-635 TEXpress, highway: motorway}
+    lower: {osm_way: 104746707, name: Cottonwood Creek Trail, highway: cycleway}
+    lonlat: [-96.761923, 32.924142]
+    upper_z_m: 176.3
+    lower_z_m: 160.3
+    dz_m: 16.0
+    skew_deg: 46
+    structure: st05_i635
+    tags: {upper_layer: "2", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 76 m"
+  - id: i635tex_over_us75
+    upper: {osm_way: 159236756, name: I-635 TEXpress, highway: motorway}
+    lower: {osm_way: 118182267, name: US 75, highway: motorway}
+    lonlat: [-96.763732, 32.924139]
+    upper_z_m: 179.5
+    lower_z_m: 162.8
+    dz_m: 16.7
+    skew_deg: 29
+    structure: st05_i635
+    tags: {upper_layer: "2", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 68 m"
+    review: another deck 17 m above the upper road here
+  - id: i635tex_over_frontageramp138669820
+    upper: {osm_way: 159236756, name: I-635 TEXpress, highway: motorway}
+    lower: {osm_way: 138669820, name: frontage ramp, highway: secondary_link}
+    lonlat: [-96.76288, 32.924141]
+    upper_z_m: 178.5
+    lower_z_m: 169.5
+    dz_m: 9.0
+    skew_deg: 29
+    structure: st05_i635
+    tags: {upper_layer: "2", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 64 m"
+  - id: i635tex_over_us75_2
+    upper: {osm_way: 159236756, name: I-635 TEXpress, highway: motorway}
+    lower: {osm_way: 556550344, name: US 75, highway: motorway}
+    lonlat: [-96.764097, 32.924138]
+    upper_z_m: 179.6
+    lower_z_m: 163.1
+    dz_m: 16.5
+    skew_deg: 29
+    structure: st05_i635
+    tags: {upper_layer: "2", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 64 m"
+    review: another deck 19 m above the upper road here
+  - id: i635tex_over_us75frontage_2
+    upper: {osm_way: 159236756, name: I-635 TEXpress, highway: motorway}
+    lower: {osm_way: 1029503827, name: US 75 frontage, highway: secondary}
+    lonlat: [-96.763051, 32.924141]
+    upper_z_m: 178.8
+    lower_z_m: 169.7
+    dz_m: 9.1
+    skew_deg: 30
+    structure: st05_i635
+    tags: {upper_layer: "2", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 64 m"
+  - id: i635tex_over_us75frontage_3
+    upper: {osm_way: 159236769, name: I-635 TEXpress, highway: motorway}
+    lower: {osm_way: 27936019, name: US 75 frontage, highway: secondary}
+    lonlat: [-96.764669, 32.924238]
+    upper_z_m: 179.5
+    lower_z_m: 172.2
+    dz_m: 7.3
+    skew_deg: 28
+    structure: st05_i635
+    tags: {upper_layer: "2", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 64 m"
+    review: another deck 19 m above the upper road here
+  - id: i635tex_over_cycleway104746707_2
+    upper: {osm_way: 159236769, name: I-635 TEXpress, highway: motorway}
+    lower: {osm_way: 104746707, name: Cottonwood Creek Trail, highway: cycleway}
+    lonlat: [-96.761809, 32.924231]
+    upper_z_m: 176.5
+    lower_z_m: 160.6
+    dz_m: 15.9
+    skew_deg: 46
+    structure: st05_i635
+    tags: {upper_layer: "2", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 66 m"
+  - id: i635tex_over_us75_3
+    upper: {osm_way: 159236769, name: I-635 TEXpress, highway: motorway}
+    lower: {osm_way: 118182267, name: US 75, highway: motorway}
+    lonlat: [-96.763668, 32.924237]
+    upper_z_m: 179.5
+    lower_z_m: 162.9
+    dz_m: 16.6
+    skew_deg: 28
+    structure: st05_i635
+    tags: {upper_layer: "2", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 64 m"
+    review: another deck 17 m above the upper road here
+  - id: i635tex_over_frontageramp138669820_2
+    upper: {osm_way: 159236769, name: I-635 TEXpress, highway: motorway}
+    lower: {osm_way: 138669820, name: frontage ramp, highway: secondary_link}
+    lonlat: [-96.762817, 32.924236]
+    upper_z_m: 178.5
+    lower_z_m: 169.5
+    dz_m: 9.0
+    skew_deg: 29
+    structure: st05_i635
+    tags: {upper_layer: "2", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 68 m"
+  - id: i635tex_over_us75_4
+    upper: {osm_way: 159236769, name: I-635 TEXpress, highway: motorway}
+    lower: {osm_way: 556550344, name: US 75, highway: motorway}
+    lonlat: [-96.764033, 32.924237]
+    upper_z_m: 179.7
+    lower_z_m: 163.2
+    dz_m: 16.5
+    skew_deg: 29
+    structure: st05_i635
+    tags: {upper_layer: "2", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 62 m"
+    review: another deck 18 m above the upper road here
+  - id: i635tex_over_us75frontage_4
+    upper: {osm_way: 159236769, name: I-635 TEXpress, highway: motorway}
+    lower: {osm_way: 1029503827, name: US 75 frontage, highway: secondary}
+    lonlat: [-96.762987, 32.924236]
+    upper_z_m: 178.7
+    lower_z_m: 169.8
+    dz_m: 8.9
+    skew_deg: 29
+    structure: st05_i635
+    tags: {upper_layer: "2", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 64 m"
+  - id: ramp159236813_over_i635
+    upper: {osm_way: 159236813, name: ramp, highway: motorway_link}
+    lower: {osm_way: 26392616, name: I-635, highway: motorway}
+    lonlat: [-96.753421, 32.922645]
+    upper_z_m: 184.7
+    lower_z_m: 176.9
+    dz_m: 7.8
+    skew_deg: 3
+    structure: st14_ramp159236813
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower measured"
+  - id: ramp159236813_over_lbjfrontage
+    upper: {osm_way: 159236813, name: ramp, highway: motorway_link}
+    lower: {osm_way: 93868118, name: I-635 frontage, highway: secondary}
+    lonlat: [-96.753178, 32.922902]
+    upper_z_m: 184.9
+    lower_z_m: 177.3
+    dz_m: 7.6
+    skew_deg: 28
+    structure: st14_ramp159236813
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated along its traced profile"
+    review: another deck 9 m above the upper road here
+  - id: ramp159236813_over_i635tex
+    upper: {osm_way: 159236813, name: ramp, highway: motorway_link}
+    lower: {osm_way: 159236703, name: I-635 TEXpress, highway: motorway}
+    lonlat: [-96.753497, 32.922534]
+    upper_z_m: 184.7
+    lower_z_m: 176.3
+    dz_m: 8.4
+    skew_deg: 2
+    structure: st14_ramp159236813
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 26 m"
+  - id: ramp159236817_over_frontageramp9937002
+    upper: {osm_way: 159236817, name: ramp, highway: motorway_link}
+    lower: {osm_way: 9937002, name: frontage ramp, highway: secondary_link}
+    lonlat: [-96.752719, 32.923017]
+    upper_z_m: 184.7
+    lower_z_m: 177.1
+    dz_m: 7.6
+    skew_deg: 22
+    structure: st14_ramp159236813
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 28 m"
+  - id: ramp159236817_over_i635
+    upper: {osm_way: 159236817, name: ramp, highway: motorway_link}
+    lower: {osm_way: 26392616, name: I-635, highway: motorway}
+    lonlat: [-96.753345, 32.922612]
+    upper_z_m: 184.8
+    lower_z_m: 176.8
+    dz_m: 8.0
+    skew_deg: 1
+    structure: st14_ramp159236813
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 22 m"
+  - id: ramp159236817_over_lbjfrontage
+    upper: {osm_way: 159236817, name: ramp, highway: motorway_link}
+    lower: {osm_way: 93868118, name: I-635 frontage, highway: secondary}
+    lonlat: [-96.753088, 32.922872]
+    upper_z_m: 185.0
+    lower_z_m: 177.2
+    dz_m: 7.8
+    skew_deg: 29
+    structure: st14_ramp159236813
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 26 m"
+    review: another deck 9 m above the upper road here
+  - id: ramp159236817_over_i635tex
+    upper: {osm_way: 159236817, name: ramp, highway: motorway_link}
+    lower: {osm_way: 159236703, name: I-635 TEXpress, highway: motorway}
+    lonlat: [-96.753418, 32.922499]
+    upper_z_m: 184.8
+    lower_z_m: 176.3
+    dz_m: 8.5
+    skew_deg: 1
+    structure: st14_ramp159236813
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 26 m"
+  - id: us75_over_cycleway104746707
+    upper: {osm_way: 197635304, name: US 75, highway: motorway}
+    lower: {osm_way: 104746707, name: Cottonwood Creek Trail, highway: cycleway}
+    lonlat: [-96.760206, 32.928534]
+    upper_z_m: 167.1
+    lower_z_m: 162.2
+    dz_m: 4.9
+    skew_deg: 46
+    structure: st15_us75
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 64 m"
+  - id: ramp197635345_over_cycleway104746707
+    upper: {osm_way: 197635345, name: ramp, highway: motorway_link}
+    lower: {osm_way: 104746707, name: Cottonwood Creek Trail, highway: cycleway}
+    lonlat: [-96.760217, 32.92884]
+    upper_z_m: 168.1
+    lower_z_m: 162.4
+    dz_m: 5.7
+    skew_deg: 44
+    structure: st15_us75
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 44 m"
+  - id: us75_over_cycleway104746707_2
+    upper: {osm_way: 201791044, name: US 75, highway: motorway}
+    lower: {osm_way: 104746707, name: Cottonwood Creek Trail, highway: cycleway}
+    lonlat: [-96.760197, 32.928285]
+    upper_z_m: 166.7
+    lower_z_m: 162.1
+    dz_m: 4.6
+    skew_deg: 45
+    structure: st16_us75
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 78 m"
+  - id: ramp293356826_over_ramp138669826
+    upper: {osm_way: 293356826, name: ramp to Dallas, highway: motorway_link}
+    lower: {osm_way: 138669826, name: ramp to Churchill Way / Forest Lane, highway: motorway_link}
+    lonlat: [-96.765829, 32.920987]
+    upper_z_m: 175.8
+    lower_z_m: 163.8
+    dz_m: 12.0
+    skew_deg: 77
+    structure: st06_ramp26390456
+    tags: {upper_layer: "4", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower measured"
+  - id: ramp293356826_over_lbjfrontage
+    upper: {osm_way: 293356826, name: ramp to Dallas, highway: motorway_link}
+    lower: {osm_way: 419342646, name: I-635 frontage, highway: secondary}
+    lonlat: [-96.766757, 32.9234]
+    upper_z_m: 189.3
+    lower_z_m: 171.3
+    dz_m: 18.0
+    skew_deg: 65
+    structure: st17_ramp293356826
+    tags: {upper_layer: "4", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 52 m"
+  - id: ramp303563720_over_lbjfrontage
+    upper: {osm_way: 303563720, name: ramp, highway: motorway_link}
+    lower: {osm_way: 39610462, name: I-635 frontage, highway: secondary}
+    lonlat: [-96.763332, 32.924982]
+    upper_z_m: 196.1
+    lower_z_m: 171.3
+    dz_m: 24.8
+    skew_deg: 33
+    structure: st18_ramp303563720
+    tags: {upper_layer: "5", upper_bridge: "yes", lower_layer: "1"}
+    evidence: "upper measured; lower measured"
+  - id: ramp303563720_over_cycleway104746707
+    upper: {osm_way: 303563720, name: ramp, highway: motorway_link}
+    lower: {osm_way: 104746707, name: Cottonwood Creek Trail, highway: cycleway}
+    lonlat: [-96.760202, 32.928422]
+    upper_z_m: 176.1
+    lower_z_m: 162.2
+    dz_m: 13.9
+    skew_deg: 46
+    structure: st18_ramp303563720
+    tags: {upper_layer: "5", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 54 m"
+  - id: ramp303563720_over_frontageramp138669828
+    upper: {osm_way: 303563720, name: ramp, highway: motorway_link}
+    lower: {osm_way: 138669828, name: frontage ramp, highway: secondary_link}
+    lonlat: [-96.763233, 32.925108]
+    upper_z_m: 195.7
+    lower_z_m: 171.0
+    dz_m: 24.7
+    skew_deg: 34
+    structure: st18_ramp303563720
+    tags: {upper_layer: "5", upper_bridge: "yes", lower_layer: "1"}
+    evidence: "upper measured; lower measured"
+  - id: ramp303563720_over_ramp498113739
+    upper: {osm_way: 303563720, name: ramp, highway: motorway_link}
+    lower: {osm_way: 498113739, name: ramp, highway: motorway_link}
+    lonlat: [-96.762928, 32.925506]
+    upper_z_m: 193.9
+    lower_z_m: 184.5
+    dz_m: 9.4
+    skew_deg: 60
+    structure: st18_ramp303563720
+    tags: {upper_layer: "5", upper_bridge: "yes", lower_layer: "3"}
+    evidence: "upper measured; lower measured"
+  - id: lbjfrontage_over_us75_4
+    upper: {osm_way: 419511242, name: I-635 frontage, highway: secondary}
+    lower: {osm_way: 118182267, name: US 75, highway: motorway}
+    lonlat: [-96.764179, 32.923401]
+    upper_z_m: 169.5
+    lower_z_m: 162.4
+    dz_m: 7.1
+    skew_deg: 26
+    structure: st11_lbjfrontage
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 36 m"
+  - id: frontageramp484580221_over_ramp39551574
+    upper: {osm_way: 484580221, name: frontage ramp, highway: secondary_link}
+    lower: {osm_way: 39551574, name: ramp, highway: motorway_link}
+    lonlat: [-96.76888, 32.923772]
+    upper_z_m: 174.5
+    lower_z_m: 167.8
+    dz_m: 6.7
+    skew_deg: 1
+    structure: st08_coitroad
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper interpolated (occluded by a deck above); lower interpolated over 128 m"
+    review: another deck 14 m above the upper road here
+  - id: frontageramp484580221_over_i635
+    upper: {osm_way: 484580221, name: frontage ramp, highway: secondary_link}
+    lower: {osm_way: 39610465, name: I-635, highway: motorway}
+    lonlat: [-96.768874, 32.924409]
+    upper_z_m: 175.9
+    lower_z_m: 168.1
+    dz_m: 7.8
+    skew_deg: 1
+    structure: st08_coitroad
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 70 m"
+  - id: frontageramp484580221_over_i635_2
+    upper: {osm_way: 484580221, name: frontage ramp, highway: secondary_link}
+    lower: {osm_way: 122886328, name: I-635, highway: motorway}
+    lonlat: [-96.768879, 32.92395]
+    upper_z_m: 174.9
+    lower_z_m: 167.7
+    dz_m: 7.2
+    skew_deg: 1
+    structure: st08_coitroad
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower measured"
+  - id: frontageramp484580221_over_i635tex
+    upper: {osm_way: 484580221, name: frontage ramp, highway: secondary_link}
+    lower: {osm_way: 159236772, name: I-635 TEXpress, highway: motorway}
+    lonlat: [-96.768876, 32.924254]
+    upper_z_m: 175.6
+    lower_z_m: 168.4
+    dz_m: 7.2
+    skew_deg: 1
+    structure: st08_coitroad
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 70 m"
+  - id: frontageramp484580221_over_ramp498113751
+    upper: {osm_way: 484580221, name: frontage ramp, highway: secondary_link}
+    lower: {osm_way: 498113751, name: ramp to Park Central Drive / Hillcrest Road, highway: motorway_link}
+    lonlat: [-96.768867, 32.924606]
+    upper_z_m: 176.3
+    lower_z_m: 169.6
+    dz_m: 6.7
+    skew_deg: 1
+    structure: st08_coitroad
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper interpolated (occluded by a deck above); lower interpolated over 146 m"
+    review: another deck 9 m above the upper road here
+  - id: frontageramp484580221_over_i635tex_2
+    upper: {osm_way: 484580221, name: frontage ramp, highway: secondary_link}
+    lower: {osm_way: 938314886, name: I-635 TEXpress, highway: motorway}
+    lonlat: [-96.768878, 32.924102]
+    upper_z_m: 175.2
+    lower_z_m: 168.0
+    dz_m: 7.2
+    skew_deg: 0
+    structure: st08_coitroad
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower measured"
+  - id: frontageramp484580224_over_ramp39551574
+    upper: {osm_way: 484580224, name: frontage ramp, highway: secondary_link}
+    lower: {osm_way: 39551574, name: ramp, highway: motorway_link}
+    lonlat: [-96.76952, 32.923759]
+    upper_z_m: 174.6
+    lower_z_m: 167.2
+    dz_m: 7.4
+    skew_deg: 17
+    structure: st08_coitroad
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower measured"
+    review: another deck 13 m above the upper road here
+  - id: frontageramp484580224_over_i635
+    upper: {osm_way: 484580224, name: frontage ramp, highway: secondary_link}
+    lower: {osm_way: 39610465, name: I-635, highway: motorway}
+    lonlat: [-96.769493, 32.924408]
+    upper_z_m: 175.8
+    lower_z_m: 167.5
+    dz_m: 8.3
+    skew_deg: 1
+    structure: st08_coitroad
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower measured"
+  - id: frontageramp484580224_over_i635_2
+    upper: {osm_way: 484580224, name: frontage ramp, highway: secondary_link}
+    lower: {osm_way: 122886328, name: I-635, highway: motorway}
+    lonlat: [-96.769505, 32.92396]
+    upper_z_m: 174.9
+    lower_z_m: 167.2
+    dz_m: 7.7
+    skew_deg: 1
+    structure: st08_coitroad
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower measured"
+  - id: frontageramp484580224_over_i635tex
+    upper: {osm_way: 484580224, name: frontage ramp, highway: secondary_link}
+    lower: {osm_way: 159236772, name: I-635 TEXpress, highway: motorway}
+    lonlat: [-96.769497, 32.924253]
+    upper_z_m: 175.5
+    lower_z_m: 167.8
+    dz_m: 7.7
+    skew_deg: 1
+    structure: st08_coitroad
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower measured"
+  - id: frontageramp484580224_over_ramp498113751
+    upper: {osm_way: 484580224, name: frontage ramp, highway: secondary_link}
+    lower: {osm_way: 498113751, name: ramp to Park Central Drive / Hillcrest Road, highway: motorway_link}
+    lonlat: [-96.769486, 32.924653]
+    upper_z_m: 176.3
+    lower_z_m: 169.5
+    dz_m: 6.8
+    skew_deg: 4
+    structure: st08_coitroad
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper interpolated (occluded by a deck above); lower interpolated over 146 m"
+    review: another deck 7 m above the upper road here
+  - id: frontageramp484580224_over_i635tex_2
+    upper: {osm_way: 484580224, name: frontage ramp, highway: secondary_link}
+    lower: {osm_way: 938314886, name: I-635 TEXpress, highway: motorway}
+    lonlat: [-96.769501, 32.924104]
+    upper_z_m: 175.2
+    lower_z_m: 167.5
+    dz_m: 7.7
+    skew_deg: 1
+    structure: st08_coitroad
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower measured"
+  - id: ramp498113739_over_i635
+    upper: {osm_way: 498113739, name: ramp, highway: motorway_link}
+    lower: {osm_way: 10003052, name: I-635, highway: motorway}
+    lonlat: [-96.762597, 32.924458]
+    upper_z_m: 186.4
+    lower_z_m: 178.4
+    dz_m: 8.0
+    skew_deg: 32
+    structure: st19_ramp498113739
+    tags: {upper_layer: "3", upper_bridge: "yes", lower_layer: "2"}
+    evidence: "upper measured; lower measured"
+  - id: ramp498113739_over_us75frontage
+    upper: {osm_way: 498113739, name: ramp, highway: motorway_link}
+    lower: {osm_way: 26390462, name: US 75 frontage, highway: secondary}
+    lonlat: [-96.762714, 32.924638]
+    upper_z_m: 186.5
+    lower_z_m: 170.4
+    dz_m: 16.1
+    skew_deg: 35
+    structure: st19_ramp498113739
+    tags: {upper_layer: "3", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower measured"
+  - id: ramp498113739_over_i635_2
+    upper: {osm_way: 498113739, name: ramp, highway: motorway_link}
+    lower: {osm_way: 27936304, name: I-635, highway: motorway}
+    lonlat: [-96.761959, 32.923919]
+    upper_z_m: 184.3
+    lower_z_m: 175.7
+    dz_m: 8.6
+    skew_deg: 57
+    structure: st19_ramp498113739
+    tags: {upper_layer: "3", upper_bridge: "yes", lower_layer: "2"}
+    evidence: "upper measured; lower measured"
+  - id: ramp498113739_over_lbjfrontage
+    upper: {osm_way: 498113739, name: ramp, highway: motorway_link}
+    lower: {osm_way: 39610462, name: I-635 frontage, highway: secondary}
+    lonlat: [-96.762858, 32.92498]
+    upper_z_m: 186.0
+    lower_z_m: 170.6
+    dz_m: 15.4
+    skew_deg: 14
+    structure: st19_ramp498113739
+    tags: {upper_layer: "3", upper_bridge: "yes", lower_layer: "1"}
+    evidence: "upper interpolated (occluded by a deck above); lower measured"
+    review: another deck 9 m above the upper road here
+  - id: ramp498113739_over_cycleway104746707
+    upper: {osm_way: 498113739, name: ramp, highway: motorway_link}
+    lower: {osm_way: 104746707, name: Cottonwood Creek Trail, highway: cycleway}
+    lonlat: [-96.762087, 32.923995]
+    upper_z_m: 184.8
+    lower_z_m: 161.3
+    dz_m: 23.5
+    skew_deg: 4
+    structure: st19_ramp498113739
+    tags: {upper_layer: "3", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower measured"
+  - id: ramp498113739_over_frontageramp138669820
+    upper: {osm_way: 498113739, name: ramp, highway: motorway_link}
+    lower: {osm_way: 138669820, name: frontage ramp, highway: secondary_link}
+    lonlat: [-96.762634, 32.924512]
+    upper_z_m: 186.5
+    lower_z_m: 170.2
+    dz_m: 16.3
+    skew_deg: 31
+    structure: st19_ramp498113739
+    tags: {upper_layer: "3", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 32 m"
+    review: another deck 9 m above the upper road here
+  - id: ramp498113739_over_ramp138669827
+    upper: {osm_way: 498113739, name: ramp, highway: motorway_link}
+    lower: {osm_way: 138669827, name: ramp to Midpark Road, highway: motorway_link}
+    lonlat: [-96.762903, 32.925173]
+    upper_z_m: 185.6
+    lower_z_m: 163.6
+    dz_m: 22.0
+    skew_deg: 50
+    structure: st19_ramp498113739
+    tags: {upper_layer: "3", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower measured"
+  - id: ramp498113739_over_frontageramp138669828
+    upper: {osm_way: 498113739, name: ramp, highway: motorway_link}
+    lower: {osm_way: 138669828, name: frontage ramp, highway: secondary_link}
+    lonlat: [-96.76289, 32.925108]
+    upper_z_m: 185.7
+    lower_z_m: 170.4
+    dz_m: 15.3
+    skew_deg: 10
+    structure: st19_ramp498113739
+    tags: {upper_layer: "3", upper_bridge: "yes", lower_layer: "1"}
+    evidence: "upper measured; lower measured"
+  - id: ramp498113739_over_i635tex
+    upper: {osm_way: 498113739, name: ramp, highway: motorway_link}
+    lower: {osm_way: 159236756, name: I-635 TEXpress, highway: motorway}
+    lonlat: [-96.762292, 32.924143]
+    upper_z_m: 185.7
+    lower_z_m: 177.3
+    dz_m: 8.4
+    skew_deg: 45
+    structure: st19_ramp498113739
+    tags: {upper_layer: "3", upper_bridge: "yes", lower_layer: "2"}
+    evidence: "upper measured; lower measured"
+  - id: ramp498113739_over_i635tex_2
+    upper: {osm_way: 498113739, name: ramp, highway: motorway_link}
+    lower: {osm_way: 159236769, name: I-635 TEXpress, highway: motorway}
+    lonlat: [-96.762398, 32.924235]
+    upper_z_m: 186.0
+    lower_z_m: 177.8
+    dz_m: 8.2
+    skew_deg: 42
+    structure: st19_ramp498113739
+    tags: {upper_layer: "3", upper_bridge: "yes", lower_layer: "2"}
+    evidence: "upper measured; lower measured"
+  - id: ramp498113739_over_us75
+    upper: {osm_way: 498113739, name: ramp, highway: motorway_link}
+    lower: {osm_way: 197635300, name: US 75, highway: motorway}
+    lonlat: [-96.762902, 32.92569]
+    upper_z_m: 183.5
+    lower_z_m: 164.5
+    dz_m: 19.0
+    skew_deg: 64
+    structure: st19_ramp498113739
+    tags: {upper_layer: "3", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower measured"
+  - id: ramp498113739_over_us75_2
+    upper: {osm_way: 498113739, name: ramp, highway: motorway_link}
+    lower: {osm_way: 556550345, name: US 75, highway: motorway}
+    lonlat: [-96.762922, 32.92529]
+    upper_z_m: 185.3
+    lower_z_m: 163.9
+    dz_m: 21.4
+    skew_deg: 54
+    structure: st19_ramp498113739
+    tags: {upper_layer: "3", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower measured"
+  - id: ramp498113740_over_coitroad
+    upper: {osm_way: 498113740, name: ramp, highway: motorway_link}
+    lower: {osm_way: 26454383, name: Coit Road, highway: secondary}
+    lonlat: [-96.769293, 32.924612]
+    upper_z_m: 183.9
+    lower_z_m: 176.4
+    dz_m: 7.5
+    skew_deg: 3
+    structure: st15_us75
+    tags: {upper_layer: "3", upper_bridge: "yes", lower_layer: "1"}
+    evidence: "upper measured; lower interpolated over 22 m"
+  - id: ramp498113740_over_coitroad_2
+    upper: {osm_way: 498113740, name: ramp, highway: motorway_link}
+    lower: {osm_way: 26454384, name: Coit Road, highway: secondary}
+    lonlat: [-96.769015, 32.924623]
+    upper_z_m: 184.6
+    lower_z_m: 176.4
+    dz_m: 8.2
+    skew_deg: 3
+    structure: st15_us75
+    tags: {upper_layer: "3", upper_bridge: "yes", lower_layer: "1"}
+    evidence: "upper measured; lower interpolated over 22 m"
+  - id: ramp498113740_over_lbjfrontage
+    upper: {osm_way: 498113740, name: ramp, highway: motorway_link}
+    lower: {osm_way: 26454389, name: I-635 frontage, highway: secondary}
+    lonlat: [-96.764913, 32.924985]
+    upper_z_m: 185.4
+    lower_z_m: 171.9
+    dz_m: 13.5
+    skew_deg: 69
+    structure: st15_us75
+    tags: {upper_layer: "3", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 58 m"
+  - id: ramp498113740_over_ramp138669829
+    upper: {osm_way: 498113740, name: ramp, highway: motorway_link}
+    lower: {osm_way: 138669829, name: ramp, highway: motorway_link}
+    lonlat: [-96.762198, 32.926928]
+    upper_z_m: 177.0
+    lower_z_m: 166.3
+    dz_m: 10.7
+    skew_deg: 81
+    structure: st15_us75
+    tags: {upper_layer: "3", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 150 m"
+  - id: ramp498113740_over_frontageramp484580221
+    upper: {osm_way: 498113740, name: ramp, highway: motorway_link}
+    lower: {osm_way: 484580221, name: frontage ramp, highway: secondary_link}
+    lonlat: [-96.768865, 32.924628]
+    upper_z_m: 184.9
+    lower_z_m: 176.3
+    dz_m: 8.6
+    skew_deg: 8
+    structure: st15_us75
+    tags: {upper_layer: "3", upper_bridge: "yes", lower_layer: "1"}
+    evidence: "upper measured; lower interpolated over 22 m"
+  - id: ramp498113740_over_frontageramp484580224
+    upper: {osm_way: 498113740, name: ramp, highway: motorway_link}
+    lower: {osm_way: 484580224, name: frontage ramp, highway: secondary_link}
+    lonlat: [-96.769488, 32.924605]
+    upper_z_m: 183.5
+    lower_z_m: 176.2
+    dz_m: 7.3
+    skew_deg: 4
+    structure: st15_us75
+    tags: {upper_layer: "3", upper_bridge: "yes", lower_layer: "1"}
+    evidence: "upper measured; lower interpolated over 24 m"
+  - id: ramp498113740_over_ramp498113751
+    upper: {osm_way: 498113740, name: ramp, highway: motorway_link}
+    lower: {osm_way: 498113751, name: ramp to Park Central Drive / Hillcrest Road, highway: motorway_link}
+    lonlat: [-96.769063, 32.924621]
+    upper_z_m: 184.4
+    lower_z_m: 170.2
+    dz_m: 14.2
+    skew_deg: 82
+    structure: st15_us75
+    tags: {upper_layer: "3", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 172 m"
+  - id: ramp498113740_over_us75frontage
+    upper: {osm_way: 498113740, name: ramp, highway: motorway_link}
+    lower: {osm_way: 1034387312, name: US 75 frontage, highway: secondary}
+    lonlat: [-96.763719, 32.925564]
+    upper_z_m: 183.4
+    lower_z_m: 169.2
+    dz_m: 14.2
+    skew_deg: 74
+    structure: st15_us75
+    tags: {upper_layer: "3", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower measured"
+  - id: ramp498113740_over_footway1093917155
+    upper: {osm_way: 498113740, name: ramp, highway: motorway_link}
+    lower: {osm_way: 1093917155, name: footway, highway: footway}
+    lonlat: [-96.769432, 32.924607]
+    upper_z_m: 183.6
+    lower_z_m: 176.3
+    dz_m: 7.3
+    skew_deg: 3
+    structure: st15_us75
+    tags: {upper_layer: "3", upper_bridge: "yes", lower_layer: "1"}
+    evidence: "upper measured; lower interpolated over 22 m"
+  - id: ramp498113740_over_footway1093917156
+    upper: {osm_way: 498113740, name: ramp, highway: motorway_link}
+    lower: {osm_way: 1093917156, name: footway, highway: footway}
+    lonlat: [-96.768915, 32.924626]
+    upper_z_m: 184.8
+    lower_z_m: 176.5
+    dz_m: 8.3
+    skew_deg: 3
+    structure: st15_us75
+    tags: {upper_layer: "3", upper_bridge: "yes", lower_layer: "1"}
+    evidence: "upper measured; lower interpolated over 22 m"
+  - id: ramp498113745_over_ramp161501979
+    upper: {osm_way: 498113745, name: ramp, highway: motorway_link}
+    lower: {osm_way: 161501979, name: ramp, highway: motorway_link}
+    lonlat: [-96.764897, 32.921593]
+    upper_z_m: 175.6
+    lower_z_m: 162.5
+    dz_m: 13.1
+    skew_deg: 84
+    structure: st04_ramp9941850
+    tags: {upper_layer: "3", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower measured"
+  - id: i635tex_over_tiboulevard
+    upper: {osm_way: 498323847, name: I-635 TEXpress, highway: motorway}
+    lower: {osm_way: 161503418, name: TI Boulevard, highway: tertiary}
+    lonlat: [-96.75047, 32.920969]
+    upper_z_m: 181.8
+    lower_z_m: 173.0
+    dz_m: 8.8
+    skew_deg: 7
+    structure: st07_i635
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 84 m"
+  - id: i635tex_over_tiboulevard_2
+    upper: {osm_way: 498323847, name: I-635 TEXpress, highway: motorway}
+    lower: {osm_way: 161503420, name: TI Boulevard, highway: tertiary}
+    lonlat: [-96.750363, 32.920907]
+    upper_z_m: 181.8
+    lower_z_m: 172.9
+    dz_m: 8.9
+    skew_deg: 7
+    structure: st07_i635
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 84 m"
+  - id: i635tex_over_footway753815398
+    upper: {osm_way: 498323847, name: I-635 TEXpress, highway: motorway}
+    lower: {osm_way: 753815398, name: footway, highway: footway}
+    lonlat: [-96.75031, 32.920876]
+    upper_z_m: 181.9
+    lower_z_m: 172.9
+    dz_m: 9.0
+    skew_deg: 7
+    structure: st07_i635
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 82 m"
+  - id: ramp498323860_over_ramp93868120
+    upper: {osm_way: 498323860, name: ramp, highway: motorway_link}
+    lower: {osm_way: 93868120, name: ramp, highway: motorway_link}
+    lonlat: [-96.74738, 32.919706]
+    upper_z_m: 183.4
+    lower_z_m: 175.5
+    dz_m: 7.9
+    skew_deg: 78
+    structure: st01_ramp4652037
+    tags: {upper_layer: "4", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 116 m"
+  - id: ramp498323860_over_tiboulevard
+    upper: {osm_way: 498323860, name: ramp, highway: motorway_link}
+    lower: {osm_way: 161503418, name: TI Boulevard, highway: tertiary}
+    lonlat: [-96.750199, 32.921401]
+    upper_z_m: 186.0
+    lower_z_m: 173.9
+    dz_m: 12.1
+    skew_deg: 6
+    structure: st01_ramp4652037
+    tags: {upper_layer: "4", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 26 m"
+  - id: ramp498323860_over_footway753815398
+    upper: {osm_way: 498323860, name: ramp, highway: motorway_link}
+    lower: {osm_way: 753815398, name: footway, highway: footway}
+    lonlat: [-96.750035, 32.921309]
+    upper_z_m: 186.0
+    lower_z_m: 173.9
+    dz_m: 12.1
+    skew_deg: 5
+    structure: st01_ramp4652037
+    tags: {upper_layer: "4", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower measured"
+  - id: ramp498323860_over_tiboulevard_2
+    upper: {osm_way: 498323860, name: ramp, highway: motorway_link}
+    lower: {osm_way: 932812782, name: TI Boulevard, highway: tertiary}
+    lonlat: [-96.750095, 32.921343]
+    upper_z_m: 186.0
+    lower_z_m: 173.8
+    dz_m: 12.2
+    skew_deg: 7
+    structure: st01_ramp4652037
+    tags: {upper_layer: "4", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 26 m"
+  - id: ramp498323889_over_tiboulevard
+    upper: {osm_way: 498323889, name: ramp, highway: motorway_link}
+    lower: {osm_way: 539771794, name: TI Boulevard, highway: tertiary}
+    lonlat: [-96.750823, 32.920251]
+    upper_z_m: 181.3
+    lower_z_m: 171.7
+    dz_m: 9.6
+    skew_deg: 0
+    structure: st07_i635
+    tags: {upper_layer: "2", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 40 m"
+  - id: ramp498323889_over_footway753815398
+    upper: {osm_way: 498323889, name: ramp, highway: motorway_link}
+    lower: {osm_way: 753815398, name: footway, highway: footway}
+    lonlat: [-96.750736, 32.92021]
+    upper_z_m: 181.2
+    lower_z_m: 171.7
+    dz_m: 9.5
+    skew_deg: 1
+    structure: st07_i635
+    tags: {upper_layer: "2", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 40 m"
+  - id: ramp498323905_over_ramp182141558
+    upper: {osm_way: 498323905, name: ramp to McKinney, highway: motorway_link}
+    lower: {osm_way: 182141558, name: ramp to Coit Road, highway: motorway_link}
+    lonlat: [-96.758118, 32.924306]
+    upper_z_m: 190.3
+    lower_z_m: 178.0
+    dz_m: 12.3
+    skew_deg: 86
+    structure: st01_ramp4652037
+    tags: {upper_layer: "4", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated along its traced profile"
+  - id: ramp498323905_over_frontageramp778567345
+    upper: {osm_way: 498323905, name: ramp to McKinney, highway: motorway_link}
+    lower: {osm_way: 778567345, name: frontage ramp, highway: secondary_link}
+    lonlat: [-96.757331, 32.924137]
+    upper_z_m: 191.2
+    lower_z_m: 182.0
+    dz_m: 9.2
+    skew_deg: 15
+    structure: st01_ramp4652037
+    tags: {upper_layer: "4", upper_bridge: "yes", lower_layer: "1"}
+    evidence: "upper measured; lower interpolated over 24 m"
+  - id: ramp498323907_over_frontageramp9942117
+    upper: {osm_way: 498323907, name: ramp, highway: motorway_link}
+    lower: {osm_way: 9942117, name: frontage ramp, highway: secondary_link}
+    lonlat: [-96.757077, 32.924079]
+    upper_z_m: 191.6
+    lower_z_m: 182.5
+    dz_m: 9.1
+    skew_deg: 17
+    structure: st01_ramp4652037
+    tags: {upper_layer: "4", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 22 m"
+  - id: ramp498323907_over_ramp159236813
+    upper: {osm_way: 498323907, name: ramp, highway: motorway_link}
+    lower: {osm_way: 159236813, name: ramp, highway: motorway_link}
+    lonlat: [-96.753246, 32.92285]
+    upper_z_m: 193.3
+    lower_z_m: 184.8
+    dz_m: 8.5
+    skew_deg: 20
+    structure: st01_ramp4652037
+    tags: {upper_layer: "4", upper_bridge: "yes", lower_layer: "1"}
+    evidence: "upper measured; lower interpolated over 24 m"
+  - id: ramp498323907_over_ramp159236817
+    upper: {osm_way: 498323907, name: ramp, highway: motorway_link}
+    lower: {osm_way: 159236817, name: ramp, highway: motorway_link}
+    lonlat: [-96.753158, 32.922816]
+    upper_z_m: 193.2
+    lower_z_m: 185.0
+    dz_m: 8.2
+    skew_deg: 20
+    structure: st01_ramp4652037
+    tags: {upper_layer: "4", upper_bridge: "yes", lower_layer: "1"}
+    evidence: "upper measured; lower interpolated over 24 m"
+  - id: ramp498323907_over_frontageramp938164033
+    upper: {osm_way: 498323907, name: ramp, highway: motorway_link}
+    lower: {osm_way: 938164033, name: frontage ramp, highway: secondary_link}
+    lonlat: [-96.756923, 32.924043]
+    upper_z_m: 191.8
+    lower_z_m: 182.7
+    dz_m: 9.1
+    skew_deg: 20
+    structure: st01_ramp4652037
+    tags: {upper_layer: "4", upper_bridge: "yes", lower_layer: "1"}
+    evidence: "upper measured; lower interpolated over 24 m"
+  - id: ramp498323907_over_frontageramp1278674146
+    upper: {osm_way: 498323907, name: ramp, highway: motorway_link}
+    lower: {osm_way: 1278674146, name: frontage ramp, highway: secondary_link}
+    lonlat: [-96.757198, 32.924107]
+    upper_z_m: 191.4
+    lower_z_m: 182.3
+    dz_m: 9.1
+    skew_deg: 18
+    structure: st01_ramp4652037
+    tags: {upper_layer: "4", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 24 m"
+  - id: ramp498323907_over_footway1514936134
+    upper: {osm_way: 498323907, name: ramp, highway: motorway_link}
+    lower: {osm_way: 1514936134, name: footway, highway: footway}
+    lonlat: [-96.756993, 32.92406]
+    upper_z_m: 191.7
+    lower_z_m: 182.7
+    dz_m: 9.0
+    skew_deg: 18
+    structure: st01_ramp4652037
+    tags: {upper_layer: "4", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 24 m"
+  - id: ramp498323907_over_footway1514936135
+    upper: {osm_way: 498323907, name: ramp, highway: motorway_link}
+    lower: {osm_way: 1514936135, name: footway, highway: footway}
+    lonlat: [-96.757273, 32.924124]
+    upper_z_m: 191.3
+    lower_z_m: 182.2
+    dz_m: 9.1
+    skew_deg: 25
+    structure: st01_ramp4652037
+    tags: {upper_layer: "4", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 24 m"
+  - id: ramp498323909_over_ramp182141558
+    upper: {osm_way: 498323909, name: ramp to Dallas, highway: motorway_link}
+    lower: {osm_way: 182141558, name: ramp to Coit Road, highway: motorway_link}
+    lonlat: [-96.75771, 32.924188]
+    upper_z_m: 190.7
+    lower_z_m: 175.3
+    dz_m: 15.4
+    skew_deg: 80
+    structure: st01_ramp4652037
+    tags: {upper_layer: "4", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 230 m"
+  - id: ramp498323909_over_frontageramp778567345
+    upper: {osm_way: 498323909, name: ramp to Dallas, highway: motorway_link}
+    lower: {osm_way: 778567345, name: frontage ramp, highway: secondary_link}
+    lonlat: [-96.757331, 32.924135]
+    upper_z_m: 191.2
+    lower_z_m: 182.0
+    dz_m: 9.2
+    skew_deg: 11
+    structure: st01_ramp4652037
+    tags: {upper_layer: "4", upper_bridge: "yes", lower_layer: "1"}
+    evidence: "upper measured; lower interpolated over 24 m"
+  - id: ramp498323912_over_cycleway104746707
+    upper: {osm_way: 498323912, name: ramp, highway: motorway_link}
+    lower: {osm_way: 104746707, name: Cottonwood Creek Trail, highway: cycleway}
+    lonlat: [-96.760189, 32.928085]
+    upper_z_m: 169.6
+    lower_z_m: 162.1
+    dz_m: 7.5
+    skew_deg: 44
+    structure: st01_ramp4652037
+    tags: {upper_layer: "4", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 78 m"
+  - id: ramp498323914_over_cycleway104746707
+    upper: {osm_way: 498323914, name: ramp, highway: motorway_link}
+    lower: {osm_way: 104746707, name: Cottonwood Creek Trail, highway: cycleway}
+    lonlat: [-96.760187, 32.928015]
+    upper_z_m: 169.6
+    lower_z_m: 162.0
+    dz_m: 7.6
+    skew_deg: 48
+    structure: st01_ramp4652037
+    tags: {upper_layer: "4", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 50 m"
+  - id: ramp498323917_over_ramp182141576
+    upper: {osm_way: 498323917, name: ramp, highway: motorway_link}
+    lower: {osm_way: 182141576, name: ramp, highway: motorway_link}
+    lonlat: [-96.761187, 32.923539]
+    upper_z_m: 183.4
+    lower_z_m: 169.3
+    dz_m: 14.1
+    skew_deg: 82
+    structure: st04_ramp9941850
+    tags: {upper_layer: "3", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated along its traced profile"
+  - id: ramp498323919_over_ramp182141576
+    upper: {osm_way: 498323919, name: ramp, highway: motorway_link}
+    lower: {osm_way: 182141576, name: ramp, highway: motorway_link}
+    lonlat: [-96.760354, 32.923589]
+    upper_z_m: 184.7
+    lower_z_m: 169.5
+    dz_m: 15.2
+    skew_deg: 82
+    structure: st19_ramp498113739
+    tags: {upper_layer: "3", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 220 m"
+  - id: ramp498323921_over_frontageramp39609948
+    upper: {osm_way: 498323921, name: ramp, highway: motorway_link}
+    lower: {osm_way: 39609948, name: frontage ramp, highway: secondary_link}
+    lonlat: [-96.757344, 32.923177]
+    upper_z_m: 188.4
+    lower_z_m: 180.0
+    dz_m: 8.4
+    skew_deg: 27
+    structure: st19_ramp498113739
+    tags: {upper_layer: "3", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 22 m"
+  - id: ramp498323921_over_frontageramp778567344
+    upper: {osm_way: 498323921, name: ramp, highway: motorway_link}
+    lower: {osm_way: 778567344, name: frontage ramp, highway: secondary_link}
+    lonlat: [-96.757185, 32.923141]
+    upper_z_m: 188.6
+    lower_z_m: 180.7
+    dz_m: 7.9
+    skew_deg: 19
+    structure: st19_ramp498113739
+    tags: {upper_layer: "3", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 24 m"
+  - id: ramp498323921_over_frontageramp1278674147
+    upper: {osm_way: 498323921, name: ramp, highway: motorway_link}
+    lower: {osm_way: 1278674147, name: frontage ramp, highway: secondary_link}
+    lonlat: [-96.757437, 32.923197]
+    upper_z_m: 188.3
+    lower_z_m: 179.8
+    dz_m: 8.5
+    skew_deg: 27
+    structure: st19_ramp498113739
+    tags: {upper_layer: "3", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 24 m"
+  - id: ramp498323921_over_footway1514936130
+    upper: {osm_way: 498323921, name: ramp, highway: motorway_link}
+    lower: {osm_way: 1514936130, name: footway, highway: footway}
+    lonlat: [-96.757246, 32.923155]
+    upper_z_m: 188.6
+    lower_z_m: 180.4
+    dz_m: 8.2
+    skew_deg: 8
+    structure: st19_ramp498113739
+    tags: {upper_layer: "3", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 24 m"
+  - id: ramp498323921_over_footway1514936131
+    upper: {osm_way: 498323921, name: ramp, highway: motorway_link}
+    lower: {osm_way: 1514936131, name: footway, highway: footway}
+    lonlat: [-96.757539, 32.92322]
+    upper_z_m: 188.2
+    lower_z_m: 179.5
+    dz_m: 8.7
+    skew_deg: 15
+    structure: st19_ramp498113739
+    tags: {upper_layer: "3", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 24 m"
+  - id: footway526359039_over_ramp26389784
+    upper: {osm_way: 526359039, name: footway, highway: footway}
+    lower: {osm_way: 26389784, name: ramp, highway: motorway_link}
+    lonlat: [-96.766119, 32.918306]
+    upper_z_m: 169.4
+    lower_z_m: 160.7
+    dz_m: 8.7
+    skew_deg: 34
+    structure: st20_churchillway
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 38 m"
+  - id: footway526359039_over_ramp39610466
+    upper: {osm_way: 526359039, name: footway, highway: footway}
+    lower: {osm_way: 39610466, name: ramp, highway: motorway_link}
+    lonlat: [-96.766722, 32.918145]
+    upper_z_m: 168.6
+    lower_z_m: 161.0
+    dz_m: 7.6
+    skew_deg: 34
+    structure: st20_churchillway
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower measured"
+  - id: footway526359039_over_us75
+    upper: {osm_way: 526359039, name: footway, highway: footway}
+    lower: {osm_way: 556550348, name: US 75, highway: motorway}
+    lonlat: [-96.766322, 32.918252]
+    upper_z_m: 169.3
+    lower_z_m: 161.1
+    dz_m: 8.2
+    skew_deg: 34
+    structure: st20_churchillway
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 38 m"
+  - id: footway526359039_over_us75_2
+    upper: {osm_way: 526359039, name: footway, highway: footway}
+    lower: {osm_way: 556550349, name: US 75, highway: motorway}
+    lonlat: [-96.766541, 32.918194]
+    upper_z_m: 168.9
+    lower_z_m: 161.2
+    dz_m: 7.7
+    skew_deg: 34
+    structure: st20_churchillway
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 38 m"
+  - id: churchillway_over_ramp26389784
+    upper: {osm_way: 556550404, name: Churchill Way, highway: tertiary}
+    lower: {osm_way: 26389784, name: ramp, highway: motorway_link}
+    lonlat: [-96.7661, 32.918362]
+    upper_z_m: 169.4
+    lower_z_m: 160.7
+    dz_m: 8.7
+    skew_deg: 34
+    structure: st20_churchillway
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 32 m"
+  - id: churchillway_over_ramp39610466
+    upper: {osm_way: 556550404, name: Churchill Way, highway: tertiary}
+    lower: {osm_way: 39610466, name: ramp, highway: motorway_link}
+    lonlat: [-96.766703, 32.918198]
+    upper_z_m: 168.6
+    lower_z_m: 160.9
+    dz_m: 7.7
+    skew_deg: 35
+    structure: st20_churchillway
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 34 m"
+  - id: churchillway_over_us75
+    upper: {osm_way: 556550404, name: Churchill Way, highway: tertiary}
+    lower: {osm_way: 556550348, name: US 75, highway: motorway}
+    lonlat: [-96.766303, 32.918307]
+    upper_z_m: 169.3
+    lower_z_m: 161.0
+    dz_m: 8.3
+    skew_deg: 35
+    structure: st20_churchillway
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 32 m"
+  - id: churchillway_over_us75_2
+    upper: {osm_way: 556550404, name: Churchill Way, highway: tertiary}
+    lower: {osm_way: 556550349, name: US 75, highway: motorway}
+    lonlat: [-96.766522, 32.918247]
+    upper_z_m: 169.0
+    lower_z_m: 161.1
+    dz_m: 7.9
+    skew_deg: 35
+    structure: st20_churchillway
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 32 m"
+  - id: churchillway_over_ramp26389784_2
+    upper: {osm_way: 556550405, name: Churchill Way, highway: tertiary}
+    lower: {osm_way: 26389784, name: ramp, highway: motorway_link}
+    lonlat: [-96.766064, 32.918465]
+    upper_z_m: 169.4
+    lower_z_m: 160.7
+    dz_m: 8.7
+    skew_deg: 34
+    structure: st20_churchillway
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 34 m"
+  - id: churchillway_over_us75_3
+    upper: {osm_way: 556550405, name: Churchill Way, highway: tertiary}
+    lower: {osm_way: 556550348, name: US 75, highway: motorway}
+    lonlat: [-96.766265, 32.918411]
+    upper_z_m: 169.4
+    lower_z_m: 161.0
+    dz_m: 8.4
+    skew_deg: 34
+    structure: st20_churchillway
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 34 m"
+  - id: churchillway_over_us75_4
+    upper: {osm_way: 556550405, name: Churchill Way, highway: tertiary}
+    lower: {osm_way: 556550349, name: US 75, highway: motorway}
+    lonlat: [-96.766484, 32.918353]
+    upper_z_m: 169.2
+    lower_z_m: 161.1
+    dz_m: 8.1
+    skew_deg: 34
+    structure: st20_churchillway
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 34 m"
+  - id: frontageramp778567345_over_i635
+    upper: {osm_way: 778567345, name: frontage ramp, highway: secondary_link}
+    lower: {osm_way: 39610464, name: I-635, highway: motorway}
+    lonlat: [-96.757513, 32.923441]
+    upper_z_m: 179.9
+    lower_z_m: 172.7
+    dz_m: 7.2
+    skew_deg: 1
+    structure: st10_frontageramp39609949
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower measured"
+  - id: frontageramp778567345_over_i635tex
+    upper: {osm_way: 778567345, name: frontage ramp, highway: secondary_link}
+    lower: {osm_way: 159236702, name: I-635 TEXpress, highway: motorway}
+    lonlat: [-96.757461, 32.923624]
+    upper_z_m: 180.8
+    lower_z_m: 172.9
+    dz_m: 7.9
+    skew_deg: 1
+    structure: st10_frontageramp39609949
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower measured"
+  - id: frontageramp778567345_over_ramp182141558
+    upper: {osm_way: 778567345, name: frontage ramp, highway: secondary_link}
+    lower: {osm_way: 182141558, name: ramp to Coit Road, highway: motorway_link}
+    lonlat: [-96.757335, 32.92408]
+    upper_z_m: 182.1
+    lower_z_m: 175.6
+    dz_m: 6.5
+    skew_deg: 11
+    structure: st10_frontageramp39609949
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 230 m"
+    review: another deck 9 m above the upper road here
+  - id: frontageramp778567345_over_i635tex_2
+    upper: {osm_way: 778567345, name: frontage ramp, highway: secondary_link}
+    lower: {osm_way: 498323857, name: I-635 TEXpress, highway: motorway}
+    lonlat: [-96.757432, 32.923729]
+    upper_z_m: 181.4
+    lower_z_m: 173.4
+    dz_m: 8.0
+    skew_deg: 1
+    structure: st10_frontageramp39609949
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower measured"
+  - id: frontageramp778567345_over_i635_2
+    upper: {osm_way: 778567345, name: frontage ramp, highway: secondary_link}
+    lower: {osm_way: 498323863, name: I-635, highway: motorway}
+    lonlat: [-96.75738, 32.923911]
+    upper_z_m: 181.9
+    lower_z_m: 174.1
+    dz_m: 7.8
+    skew_deg: 1
+    structure: st10_frontageramp39609949
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower measured"
+  - id: i635tex_over_tiboulevard_3
+    upper: {osm_way: 833729984, name: I-635 TEXpress, highway: motorway}
+    lower: {osm_way: 161503420, name: TI Boulevard, highway: tertiary}
+    lonlat: [-96.750447, 32.920769]
+    upper_z_m: 181.4
+    lower_z_m: 172.5
+    dz_m: 8.9
+    skew_deg: 6
+    structure: st07_i635
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 84 m"
+  - id: i635tex_over_footway753815398_2
+    upper: {osm_way: 833729984, name: I-635 TEXpress, highway: motorway}
+    lower: {osm_way: 753815398, name: footway, highway: footway}
+    lonlat: [-96.750397, 32.92074]
+    upper_z_m: 181.4
+    lower_z_m: 172.5
+    dz_m: 8.9
+    skew_deg: 5
+    structure: st07_i635
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 82 m"
+  - id: i635tex_over_tiboulevard_4
+    upper: {osm_way: 833729984, name: I-635 TEXpress, highway: motorway}
+    lower: {osm_way: 1161827577, name: TI Boulevard, highway: tertiary}
+    lonlat: [-96.750557, 32.92083]
+    upper_z_m: 181.3
+    lower_z_m: 172.6
+    dz_m: 8.7
+    skew_deg: 6
+    structure: st07_i635
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 84 m"
+  - id: greenvilleaven_over_i635_2
+    upper: {osm_way: 913391279, name: Greenville Avenue, highway: secondary}
+    lower: {osm_way: 498323870, name: I-635, highway: motorway}
+    lonlat: [-96.743186, 32.916967]
+    upper_z_m: 183.5
+    lower_z_m: 179.3
+    dz_m: 4.2
+    skew_deg: 14
+    structure: st09_greenvilleaven
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 38 m"
+  - id: frontageramp938164033_over_i635tex
+    upper: {osm_way: 938164033, name: frontage ramp, highway: secondary_link}
+    lower: {osm_way: 159236703, name: I-635 TEXpress, highway: motorway}
+    lonlat: [-96.757056, 32.92366]
+    upper_z_m: 182.3
+    lower_z_m: 174.3
+    dz_m: 8.0
+    skew_deg: 1
+    structure: st10_frontageramp39609949
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 50 m"
+  - id: frontageramp938164033_over_ramp159236838
+    upper: {osm_way: 938164033, name: frontage ramp, highway: secondary_link}
+    lower: {osm_way: 159236838, name: ramp, highway: motorway_link}
+    lonlat: [-96.757061, 32.92364]
+    upper_z_m: 182.2
+    lower_z_m: 174.2
+    dz_m: 8.0
+    skew_deg: 5
+    structure: st10_frontageramp39609949
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 50 m"
+  - id: frontageramp938164033_over_ramp159236840
+    upper: {osm_way: 938164033, name: frontage ramp, highway: secondary_link}
+    lower: {osm_way: 159236840, name: ramp, highway: motorway_link}
+    lonlat: [-96.757086, 32.923549]
+    upper_z_m: 181.8
+    lower_z_m: 173.7
+    dz_m: 8.1
+    skew_deg: 0
+    structure: st10_frontageramp39609949
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 50 m"
+  - id: frontageramp938164033_over_ramp182141558
+    upper: {osm_way: 938164033, name: frontage ramp, highway: secondary_link}
+    lower: {osm_way: 182141558, name: ramp to Coit Road, highway: motorway_link}
+    lonlat: [-96.756966, 32.923973]
+    upper_z_m: 182.8
+    lower_z_m: 180.0
+    dz_m: 2.8
+    skew_deg: 1
+    structure: st10_frontageramp39609949
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 94 m"
+  - id: frontageramp938164033_over_i635
+    upper: {osm_way: 938164033, name: frontage ramp, highway: secondary_link}
+    lower: {osm_way: 498323863, name: I-635, highway: motorway}
+    lonlat: [-96.757006, 32.92384]
+    upper_z_m: 182.7
+    lower_z_m: 174.9
+    dz_m: 7.8
+    skew_deg: 0
+    structure: st10_frontageramp39609949
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 50 m"
+  - id: frontageramp938164033_over_i635_2
+    upper: {osm_way: 938164033, name: frontage ramp, highway: secondary_link}
+    lower: {osm_way: 498323903, name: I-635, highway: motorway}
+    lonlat: [-96.757139, 32.923356]
+    upper_z_m: 181.1
+    lower_z_m: 173.4
+    dz_m: 7.7
+    skew_deg: 3
+    structure: st10_frontageramp39609949
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 50 m"
+  - id: frontageramp938164033_over_i635tex_2
+    upper: {osm_way: 938164033, name: frontage ramp, highway: secondary_link}
+    lower: {osm_way: 1163407441, name: I-635 TEXpress, highway: motorway}
+    lonlat: [-96.75709, 32.923532]
+    upper_z_m: 181.7
+    lower_z_m: 173.6
+    dz_m: 8.1
+    skew_deg: 5
+    structure: st10_frontageramp39609949
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 50 m"
+  - id: churchillway_over_ramp39610466_2
+    upper: {osm_way: 1034388900, name: Churchill Way, highway: tertiary}
+    lower: {osm_way: 39610466, name: ramp, highway: motorway_link}
+    lonlat: [-96.766665, 32.918305]
+    upper_z_m: 168.8
+    lower_z_m: 160.9
+    dz_m: 7.9
+    skew_deg: 34
+    structure: st20_churchillway
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 34 m"
+  - id: footway1093917155_over_ramp39551574
+    upper: {osm_way: 1093917155, name: footway, highway: footway}
+    lower: {osm_way: 39551574, name: ramp, highway: motorway_link}
+    lonlat: [-96.769439, 32.92376]
+    upper_z_m: 174.7
+    lower_z_m: 167.3
+    dz_m: 7.4
+    skew_deg: 2
+    structure: st08_coitroad
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 128 m"
+    review: another deck 13 m above the upper road here
+  - id: footway1093917155_over_i635
+    upper: {osm_way: 1093917155, name: footway, highway: footway}
+    lower: {osm_way: 39610465, name: I-635, highway: motorway}
+    lonlat: [-96.769434, 32.924408]
+    upper_z_m: 176.1
+    lower_z_m: 167.6
+    dz_m: 8.5
+    skew_deg: 1
+    structure: st08_coitroad
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 66 m"
+  - id: footway1093917155_over_i635_2
+    upper: {osm_way: 1093917155, name: footway, highway: footway}
+    lower: {osm_way: 122886328, name: I-635, highway: motorway}
+    lonlat: [-96.769437, 32.923959]
+    upper_z_m: 175.1
+    lower_z_m: 167.2
+    dz_m: 7.9
+    skew_deg: 0
+    structure: st08_coitroad
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 64 m"
+  - id: footway1093917155_over_i635tex
+    upper: {osm_way: 1093917155, name: footway, highway: footway}
+    lower: {osm_way: 159236772, name: I-635 TEXpress, highway: motorway}
+    lonlat: [-96.769435, 32.924253]
+    upper_z_m: 175.7
+    lower_z_m: 167.9
+    dz_m: 7.8
+    skew_deg: 1
+    structure: st08_coitroad
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 66 m"
+  - id: footway1093917155_over_ramp498113751
+    upper: {osm_way: 1093917155, name: footway, highway: footway}
+    lower: {osm_way: 498113751, name: ramp to Park Central Drive / Hillcrest Road, highway: motorway_link}
+    lonlat: [-96.769432, 32.924649]
+    upper_z_m: 176.5
+    lower_z_m: 169.6
+    dz_m: 6.9
+    skew_deg: 5
+    structure: st08_coitroad
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper interpolated (occluded by a deck above); lower interpolated over 146 m"
+    review: another deck 7 m above the upper road here
+  - id: footway1093917155_over_i635tex_2
+    upper: {osm_way: 1093917155, name: footway, highway: footway}
+    lower: {osm_way: 938314886, name: I-635 TEXpress, highway: motorway}
+    lonlat: [-96.769436, 32.924104]
+    upper_z_m: 175.4
+    lower_z_m: 167.5
+    dz_m: 7.9
+    skew_deg: 0
+    structure: st08_coitroad
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 66 m"
+  - id: footway1093917156_over_ramp39551574
+    upper: {osm_way: 1093917156, name: footway, highway: footway}
+    lower: {osm_way: 39551574, name: ramp, highway: motorway_link}
+    lonlat: [-96.768929, 32.923771]
+    upper_z_m: 174.7
+    lower_z_m: 167.8
+    dz_m: 6.9
+    skew_deg: 2
+    structure: st08_coitroad
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper interpolated (occluded by a deck above); lower interpolated over 128 m"
+    review: another deck 14 m above the upper road here
+  - id: footway1093917156_over_i635
+    upper: {osm_way: 1093917156, name: footway, highway: footway}
+    lower: {osm_way: 39610465, name: I-635, highway: motorway}
+    lonlat: [-96.768919, 32.924409]
+    upper_z_m: 176.1
+    lower_z_m: 168.0
+    dz_m: 8.1
+    skew_deg: 1
+    structure: st08_coitroad
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 64 m"
+  - id: footway1093917156_over_i635_2
+    upper: {osm_way: 1093917156, name: footway, highway: footway}
+    lower: {osm_way: 122886328, name: I-635, highway: motorway}
+    lonlat: [-96.768926, 32.923951]
+    upper_z_m: 175.1
+    lower_z_m: 167.6
+    dz_m: 7.5
+    skew_deg: 1
+    structure: st08_coitroad
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 64 m"
+  - id: footway1093917156_over_i635tex
+    upper: {osm_way: 1093917156, name: footway, highway: footway}
+    lower: {osm_way: 159236772, name: I-635 TEXpress, highway: motorway}
+    lonlat: [-96.768921, 32.924254]
+    upper_z_m: 175.8
+    lower_z_m: 168.3
+    dz_m: 7.5
+    skew_deg: 1
+    structure: st08_coitroad
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 64 m"
+  - id: footway1093917156_over_ramp498113751
+    upper: {osm_way: 1093917156, name: footway, highway: footway}
+    lower: {osm_way: 498113751, name: ramp to Park Central Drive / Hillcrest Road, highway: motorway_link}
+    lonlat: [-96.768916, 32.92461]
+    upper_z_m: 176.5
+    lower_z_m: 169.6
+    dz_m: 6.9
+    skew_deg: 4
+    structure: st08_coitroad
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper interpolated (occluded by a deck above); lower interpolated over 146 m"
+    review: another deck 8 m above the upper road here
+  - id: footway1093917156_over_i635tex_2
+    upper: {osm_way: 1093917156, name: footway, highway: footway}
+    lower: {osm_way: 938314886, name: I-635 TEXpress, highway: motorway}
+    lonlat: [-96.768924, 32.924102]
+    upper_z_m: 175.4
+    lower_z_m: 167.9
+    dz_m: 7.5
+    skew_deg: 1
+    structure: st08_coitroad
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 62 m"
+  - id: frontageramp1278674145_over_i635
+    upper: {osm_way: 1278674145, name: frontage ramp, highway: secondary_link}
+    lower: {osm_way: 39610464, name: I-635, highway: motorway}
+    lonlat: [-96.757399, 32.923417]
+    upper_z_m: 180.3
+    lower_z_m: 172.9
+    dz_m: 7.4
+    skew_deg: 1
+    structure: st10_frontageramp39609949
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 44 m"
+  - id: frontageramp1278674145_over_ramp159236840
+    upper: {osm_way: 1278674145, name: frontage ramp, highway: secondary_link}
+    lower: {osm_way: 159236840, name: ramp, highway: motorway_link}
+    lonlat: [-96.757349, 32.923599]
+    upper_z_m: 181.1
+    lower_z_m: 173.2
+    dz_m: 7.9
+    skew_deg: 0
+    structure: st10_frontageramp39609949
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 44 m"
+  - id: frontageramp1278674145_over_i635tex
+    upper: {osm_way: 1278674145, name: frontage ramp, highway: secondary_link}
+    lower: {osm_way: 498323857, name: I-635 TEXpress, highway: motorway}
+    lonlat: [-96.757318, 32.923708]
+    upper_z_m: 181.7
+    lower_z_m: 173.7
+    dz_m: 8.0
+    skew_deg: 1
+    structure: st10_frontageramp39609949
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 44 m"
+  - id: frontageramp1278674145_over_i635_2
+    upper: {osm_way: 1278674145, name: frontage ramp, highway: secondary_link}
+    lower: {osm_way: 498323863, name: I-635, highway: motorway}
+    lonlat: [-96.757268, 32.92389]
+    upper_z_m: 182.2
+    lower_z_m: 174.3
+    dz_m: 7.9
+    skew_deg: 1
+    structure: st10_frontageramp39609949
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 44 m"
+  - id: frontageramp1278674145_over_i635tex_2
+    upper: {osm_way: 1278674145, name: frontage ramp, highway: secondary_link}
+    lower: {osm_way: 1163407441, name: I-635 TEXpress, highway: motorway}
+    lonlat: [-96.757349, 32.923598]
+    upper_z_m: 181.1
+    lower_z_m: 173.1
+    dz_m: 8.0
+    skew_deg: 3
+    structure: st10_frontageramp39609949
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 44 m"
+  - id: ramp1278937879_over_cycleway104746707
+    upper: {osm_way: 1278937879, name: ramp, highway: motorway_link}
+    lower: {osm_way: 104746707, name: Cottonwood Creek Trail, highway: cycleway}
+    lonlat: [-96.761377, 32.924962]
+    upper_z_m: 167.4
+    lower_z_m: 161.8
+    dz_m: 5.6
+    skew_deg: 7
+    structure: st21_ramp1278937879
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 26 m"
+  - id: ramp1279237042_over_tiboulevard
+    upper: {osm_way: 1279237042, name: ramp, highway: motorway_link}
+    lower: {osm_way: 161503418, name: TI Boulevard, highway: tertiary}
+    lonlat: [-96.750379, 32.921115]
+    upper_z_m: 181.5
+    lower_z_m: 173.4
+    dz_m: 8.1
+    skew_deg: 0
+    structure: st07_i635
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 42 m"
+  - id: ramp1279237042_over_tiboulevard_2
+    upper: {osm_way: 1279237042, name: ramp, highway: motorway_link}
+    lower: {osm_way: 161503420, name: TI Boulevard, highway: tertiary}
+    lonlat: [-96.750266, 32.921064]
+    upper_z_m: 181.5
+    lower_z_m: 173.3
+    dz_m: 8.2
+    skew_deg: 1
+    structure: st07_i635
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 42 m"
+  - id: ramp1279237042_over_footway753815398
+    upper: {osm_way: 1279237042, name: ramp, highway: motorway_link}
+    lower: {osm_way: 753815398, name: footway, highway: footway}
+    lonlat: [-96.750208, 32.921038]
+    upper_z_m: 181.5
+    lower_z_m: 173.3
+    dz_m: 8.2
+    skew_deg: 0
+    structure: st07_i635
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 40 m"
+  - id: footway1442937301_over_ramp26389784
+    upper: {osm_way: 1442937301, name: footway, highway: footway}
+    lower: {osm_way: 26389784, name: ramp, highway: motorway_link}
+    lonlat: [-96.766037, 32.91854]
+    upper_z_m: 169.5
+    lower_z_m: 160.7
+    dz_m: 8.8
+    skew_deg: 33
+    structure: st20_churchillway
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower measured"
+  - id: footway1442937301_over_ramp39610466
+    upper: {osm_way: 1442937301, name: footway, highway: footway}
+    lower: {osm_way: 39610466, name: ramp, highway: motorway_link}
+    lonlat: [-96.766638, 32.91838]
+    upper_z_m: 169.0
+    lower_z_m: 160.8
+    dz_m: 8.2
+    skew_deg: 36
+    structure: st20_churchillway
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower measured"
+  - id: footway1442937301_over_us75
+    upper: {osm_way: 1442937301, name: footway, highway: footway}
+    lower: {osm_way: 556550348, name: US 75, highway: motorway}
+    lonlat: [-96.766238, 32.918488]
+    upper_z_m: 169.5
+    lower_z_m: 161.0
+    dz_m: 8.5
+    skew_deg: 34
+    structure: st20_churchillway
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower measured"
+  - id: footway1442937301_over_us75_2
+    upper: {osm_way: 1442937301, name: footway, highway: footway}
+    lower: {osm_way: 556550349, name: US 75, highway: motorway}
+    lonlat: [-96.766457, 32.918429]
+    upper_z_m: 169.3
+    lower_z_m: 161.0
+    dz_m: 8.3
+    skew_deg: 34
+    structure: st20_churchillway
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower measured"
+  - id: ramp1483197512_over_ramp9941850
+    upper: {osm_way: 1483197512, name: ramp, highway: motorway_link}
+    lower: {osm_way: 9941850, name: ramp, highway: motorway_link}
+    lonlat: [-96.765089, 32.924181]
+    upper_z_m: 197.5
+    lower_z_m: 188.1
+    dz_m: 9.4
+    skew_deg: 45
+    structure: st18_ramp303563720
+    tags: {upper_layer: "5", upper_bridge: "yes", lower_layer: "3"}
+    evidence: "upper measured; lower interpolated over 30 m"
+  - id: ramp1483197512_over_i635
+    upper: {osm_way: 1483197512, name: ramp, highway: motorway_link}
+    lower: {osm_way: 10003052, name: I-635, highway: motorway}
+    lonlat: [-96.763911, 32.924455]
+    upper_z_m: 197.7
+    lower_z_m: 180.0
+    dz_m: 17.7
+    skew_deg: 57
+    structure: st18_ramp303563720
+    tags: {upper_layer: "5", upper_bridge: "yes", lower_layer: "2"}
+    evidence: "upper measured; lower measured"
+  - id: ramp1483197512_over_us75frontage
+    upper: {osm_way: 1483197512, name: ramp, highway: motorway_link}
+    lower: {osm_way: 27936019, name: US 75 frontage, highway: secondary}
+    lonlat: [-96.764691, 32.924204]
+    upper_z_m: 197.9
+    lower_z_m: 172.2
+    dz_m: 25.7
+    skew_deg: 36
+    structure: st18_ramp303563720
+    tags: {upper_layer: "5", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 30 m"
+  - id: ramp1483197512_over_i635tex
+    upper: {osm_way: 1483197512, name: ramp, highway: motorway_link}
+    lower: {osm_way: 159236769, name: I-635 TEXpress, highway: motorway}
+    lonlat: [-96.764485, 32.924238]
+    upper_z_m: 197.9
+    lower_z_m: 179.6
+    dz_m: 18.3
+    skew_deg: 75
+    structure: st18_ramp303563720
+    tags: {upper_layer: "5", upper_bridge: "yes", lower_layer: "2"}
+    evidence: "upper measured; lower measured"
+  - id: ramp1483197512_over_us75
+    upper: {osm_way: 1483197512, name: ramp, highway: motorway_link}
+    lower: {osm_way: 1482805416, name: US 75, highway: motorway}
+    lonlat: [-96.763852, 32.924492]
+    upper_z_m: 197.6
+    lower_z_m: 163.4
+    dz_m: 34.2
+    skew_deg: 70
+    structure: st18_ramp303563720
+    tags: {upper_layer: "5", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 72 m"
+  - id: ramp1483197512_over_ramp1483197511
+    upper: {osm_way: 1483197512, name: ramp, highway: motorway_link}
+    lower: {osm_way: 1483197511, name: ramp, highway: motorway_link}
+    lonlat: [-96.763878, 32.924475]
+    upper_z_m: 197.7
+    lower_z_m: 163.4
+    dz_m: 34.3
+    skew_deg: 66
+    structure: st18_ramp303563720
+    tags: {upper_layer: "5", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 50 m"
+  - id: ramp1483197513_over_coitroad
+    upper: {osm_way: 1483197513, name: ramp, highway: motorway_link}
+    lower: {osm_way: 26454383, name: Coit Road, highway: secondary}
+    lonlat: [-96.769301, 32.92419]
+    upper_z_m: 183.2
+    lower_z_m: 175.7
+    dz_m: 7.5
+    skew_deg: 1
+    structure: st18_ramp303563720
+    tags: {upper_layer: "5", upper_bridge: "yes", lower_layer: "1"}
+    evidence: "upper measured; lower measured"
+  - id: ramp1483197513_over_coitroad_2
+    upper: {osm_way: 1483197513, name: ramp, highway: motorway_link}
+    lower: {osm_way: 26454384, name: Coit Road, highway: secondary}
+    lonlat: [-96.769022, 32.92419]
+    upper_z_m: 184.3
+    lower_z_m: 175.7
+    dz_m: 8.6
+    skew_deg: 1
+    structure: st18_ramp303563720
+    tags: {upper_layer: "5", upper_bridge: "yes", lower_layer: "1"}
+    evidence: "upper measured; lower measured"
+  - id: ramp1483197513_over_frontageramp484580221
+    upper: {osm_way: 1483197513, name: ramp, highway: motorway_link}
+    lower: {osm_way: 484580221, name: frontage ramp, highway: secondary_link}
+    lonlat: [-96.768876, 32.924189]
+    upper_z_m: 184.9
+    lower_z_m: 175.4
+    dz_m: 9.5
+    skew_deg: 1
+    structure: st18_ramp303563720
+    tags: {upper_layer: "5", upper_bridge: "yes", lower_layer: "1"}
+    evidence: "upper measured; lower measured"
+  - id: ramp1483197513_over_frontageramp484580224
+    upper: {osm_way: 1483197513, name: ramp, highway: motorway_link}
+    lower: {osm_way: 484580224, name: frontage ramp, highway: secondary_link}
+    lonlat: [-96.769499, 32.92419]
+    upper_z_m: 182.3
+    lower_z_m: 175.3
+    dz_m: 7.0
+    skew_deg: 1
+    structure: st18_ramp303563720
+    tags: {upper_layer: "5", upper_bridge: "yes", lower_layer: "1"}
+    evidence: "upper measured; lower measured"
+  - id: ramp1483197513_over_footway1093917155
+    upper: {osm_way: 1483197513, name: ramp, highway: motorway_link}
+    lower: {osm_way: 1093917155, name: footway, highway: footway}
+    lonlat: [-96.769435, 32.92419]
+    upper_z_m: 182.6
+    lower_z_m: 175.7
+    dz_m: 6.9
+    skew_deg: 0
+    structure: st18_ramp303563720
+    tags: {upper_layer: "5", upper_bridge: "yes", lower_layer: "1"}
+    evidence: "upper measured; lower measured"
+  - id: ramp1483197513_over_footway1093917156
+    upper: {osm_way: 1483197513, name: ramp, highway: motorway_link}
+    lower: {osm_way: 1093917156, name: footway, highway: footway}
+    lonlat: [-96.768922, 32.924189]
+    upper_z_m: 184.6
+    lower_z_m: 175.6
+    dz_m: 9.0
+    skew_deg: 1
+    structure: st18_ramp303563720
+    tags: {upper_layer: "5", upper_bridge: "yes", lower_layer: "1"}
+    evidence: "upper measured; lower measured"
+  - id: footway1514936128_over_i635tex
+    upper: {osm_way: 1514936128, name: footway, highway: footway}
+    lower: {osm_way: 159236703, name: I-635 TEXpress, highway: motorway}
+    lonlat: [-96.757112, 32.92367]
+    upper_z_m: 182.2
+    lower_z_m: 174.2
+    dz_m: 8.0
+    skew_deg: 1
+    structure: st10_frontageramp39609949
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 44 m"
+  - id: footway1514936128_over_ramp159236838
+    upper: {osm_way: 1514936128, name: footway, highway: footway}
+    lower: {osm_way: 159236838, name: ramp, highway: motorway_link}
+    lonlat: [-96.757116, 32.923656]
+    upper_z_m: 182.2
+    lower_z_m: 174.1
+    dz_m: 8.1
+    skew_deg: 5
+    structure: st10_frontageramp39609949
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 44 m"
+  - id: footway1514936128_over_ramp159236840
+    upper: {osm_way: 1514936128, name: footway, highway: footway}
+    lower: {osm_way: 159236840, name: ramp, highway: motorway_link}
+    lonlat: [-96.757142, 32.923561]
+    upper_z_m: 181.8
+    lower_z_m: 173.6
+    dz_m: 8.2
+    skew_deg: 0
+    structure: st10_frontageramp39609949
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 44 m"
+  - id: footway1514936128_over_ramp182141558
+    upper: {osm_way: 1514936128, name: footway, highway: footway}
+    lower: {osm_way: 182141558, name: ramp to Coit Road, highway: motorway_link}
+    lonlat: [-96.757023, 32.923989]
+    upper_z_m: 182.8
+    lower_z_m: 180.3
+    dz_m: 2.5
+    skew_deg: 6
+    structure: st10_frontageramp39609949
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 94 m"
+  - id: footway1514936128_over_i635
+    upper: {osm_way: 1514936128, name: footway, highway: footway}
+    lower: {osm_way: 498323863, name: I-635, highway: motorway}
+    lonlat: [-96.757061, 32.923851]
+    upper_z_m: 182.8
+    lower_z_m: 174.8
+    dz_m: 8.0
+    skew_deg: 0
+    structure: st10_frontageramp39609949
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 44 m"
+  - id: footway1514936128_over_i635_2
+    upper: {osm_way: 1514936128, name: footway, highway: footway}
+    lower: {osm_way: 498323903, name: I-635, highway: motorway}
+    lonlat: [-96.757196, 32.92337]
+    upper_z_m: 181.0
+    lower_z_m: 173.3
+    dz_m: 7.7
+    skew_deg: 2
+    structure: st10_frontageramp39609949
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 44 m"
+  - id: footway1514936128_over_i635tex_2
+    upper: {osm_way: 1514936128, name: footway, highway: footway}
+    lower: {osm_way: 1163407441, name: I-635 TEXpress, highway: motorway}
+    lonlat: [-96.757146, 32.923547]
+    upper_z_m: 181.7
+    lower_z_m: 173.5
+    dz_m: 8.2
+    skew_deg: 4
+    structure: st10_frontageramp39609949
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 44 m"
+  - id: footway1514936129_over_i635
+    upper: {osm_way: 1514936129, name: footway, highway: footway}
+    lower: {osm_way: 39610464, name: I-635, highway: motorway}
+    lonlat: [-96.757456, 32.923429]
+    upper_z_m: 180.2
+    lower_z_m: 172.8
+    dz_m: 7.4
+    skew_deg: 1
+    structure: st10_frontageramp39609949
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 46 m"
+  - id: footway1514936129_over_i635tex
+    upper: {osm_way: 1514936129, name: footway, highway: footway}
+    lower: {osm_way: 159236702, name: I-635 TEXpress, highway: motorway}
+    lonlat: [-96.757405, 32.923611]
+    upper_z_m: 181.1
+    lower_z_m: 173.0
+    dz_m: 8.1
+    skew_deg: 2
+    structure: st10_frontageramp39609949
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 46 m"
+  - id: footway1514936129_over_ramp182141558
+    upper: {osm_way: 1514936129, name: footway, highway: footway}
+    lower: {osm_way: 182141558, name: ramp to Coit Road, highway: motorway_link}
+    lonlat: [-96.757278, 32.924063]
+    upper_z_m: 182.4
+    lower_z_m: 175.6
+    dz_m: 6.8
+    skew_deg: 6
+    structure: st10_frontageramp39609949
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 230 m"
+    review: another deck 10 m above the upper road here
+  - id: footway1514936129_over_i635tex_2
+    upper: {osm_way: 1514936129, name: footway, highway: footway}
+    lower: {osm_way: 498323857, name: I-635 TEXpress, highway: motorway}
+    lonlat: [-96.757375, 32.923719]
+    upper_z_m: 181.7
+    lower_z_m: 173.6
+    dz_m: 8.1
+    skew_deg: 1
+    structure: st10_frontageramp39609949
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 46 m"
+  - id: footway1514936129_over_i635_2
+    upper: {osm_way: 1514936129, name: footway, highway: footway}
+    lower: {osm_way: 498323863, name: I-635, highway: motorway}
+    lonlat: [-96.757324, 32.9239]
+    upper_z_m: 182.2
+    lower_z_m: 174.3
+    dz_m: 7.9
+    skew_deg: 1
+    structure: st10_frontageramp39609949
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 46 m"
+  - id: ramp1559139703_over_tiboulevard
+    upper: {osm_way: 1559139703, name: ramp, highway: motorway_link}
+    lower: {osm_way: 161503420, name: TI Boulevard, highway: tertiary}
+    lonlat: [-96.750599, 32.920521]
+    upper_z_m: 180.8
+    lower_z_m: 171.7
+    dz_m: 9.1
+    skew_deg: 5
+    structure: st07_i635
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower measured"
+  - id: ramp1559139703_over_footway753815398
+    upper: {osm_way: 1559139703, name: ramp, highway: motorway_link}
+    lower: {osm_way: 753815398, name: footway, highway: footway}
+    lonlat: [-96.750552, 32.920496]
+    upper_z_m: 180.8
+    lower_z_m: 171.8
+    dz_m: 9.0
+    skew_deg: 4
+    structure: st07_i635
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower measured"
+  - id: ramp1559139703_over_tiboulevard_2
+    upper: {osm_way: 1559139703, name: ramp, highway: motorway_link}
+    lower: {osm_way: 1161827577, name: TI Boulevard, highway: tertiary}
+    lonlat: [-96.750713, 32.920581]
+    upper_z_m: 180.7
+    lower_z_m: 171.9
+    dz_m: 8.8
+    skew_deg: 4
+    structure: st07_i635
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower measured"
+  - id: ramp1577438203_over_coitroad
+    upper: {osm_way: 1577438203, name: ramp to McKinney, highway: motorway_link}
+    lower: {osm_way: 26454383, name: Coit Road, highway: secondary}
+    lonlat: [-96.769309, 32.923775]
+    upper_z_m: 187.6
+    lower_z_m: 174.7
+    dz_m: 12.9
+    skew_deg: 1
+    structure: st01_ramp4652037
+    tags: {upper_layer: "4", upper_bridge: "yes", lower_layer: "1"}
+    evidence: "upper measured; lower interpolated over 22 m"
+  - id: ramp1577438203_over_coitroad_2
+    upper: {osm_way: 1577438203, name: ramp to McKinney, highway: motorway_link}
+    lower: {osm_way: 26454384, name: Coit Road, highway: secondary}
+    lonlat: [-96.769029, 32.923774]
+    upper_z_m: 188.2
+    lower_z_m: 174.6
+    dz_m: 13.6
+    skew_deg: 1
+    structure: st01_ramp4652037
+    tags: {upper_layer: "4", upper_bridge: "yes", lower_layer: "1"}
+    evidence: "upper measured; lower interpolated over 22 m"
+  - id: ramp1577438203_over_ramp39551574
+    upper: {osm_way: 1577438203, name: ramp to McKinney, highway: motorway_link}
+    lower: {osm_way: 39551574, name: ramp, highway: motorway_link}
+    lonlat: [-96.768813, 32.923774]
+    upper_z_m: 188.8
+    lower_z_m: 167.9
+    dz_m: 20.9
+    skew_deg: 88
+    structure: st01_ramp4652037
+    tags: {upper_layer: "4", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated along its traced profile"
+  - id: ramp1577438203_over_frontageramp484580221
+    upper: {osm_way: 1577438203, name: ramp to McKinney, highway: motorway_link}
+    lower: {osm_way: 484580221, name: frontage ramp, highway: secondary_link}
+    lonlat: [-96.76888, 32.923774]
+    upper_z_m: 188.6
+    lower_z_m: 174.5
+    dz_m: 14.1
+    skew_deg: 3
+    structure: st01_ramp4652037
+    tags: {upper_layer: "4", upper_bridge: "yes", lower_layer: "1"}
+    evidence: "upper measured; lower interpolated over 22 m"
+  - id: ramp1577438203_over_frontageramp484580224
+    upper: {osm_way: 1577438203, name: ramp to McKinney, highway: motorway_link}
+    lower: {osm_way: 484580224, name: frontage ramp, highway: secondary_link}
+    lonlat: [-96.769514, 32.923775]
+    upper_z_m: 187.2
+    lower_z_m: 174.6
+    dz_m: 12.6
+    skew_deg: 11
+    structure: st01_ramp4652037
+    tags: {upper_layer: "4", upper_bridge: "yes", lower_layer: "1"}
+    evidence: "upper measured; lower interpolated over 24 m"
+  - id: ramp1577438203_over_footway1093917155
+    upper: {osm_way: 1577438203, name: ramp to McKinney, highway: motorway_link}
+    lower: {osm_way: 1093917155, name: footway, highway: footway}
+    lonlat: [-96.769439, 32.923775]
+    upper_z_m: 187.4
+    lower_z_m: 174.8
+    dz_m: 12.6
+    skew_deg: 0
+    structure: st01_ramp4652037
+    tags: {upper_layer: "4", upper_bridge: "yes", lower_layer: "1"}
+    evidence: "upper measured; lower interpolated over 22 m"
+  - id: ramp1577438203_over_footway1093917156
+    upper: {osm_way: 1577438203, name: ramp to McKinney, highway: motorway_link}
+    lower: {osm_way: 1093917156, name: footway, highway: footway}
+    lonlat: [-96.768929, 32.923774]
+    upper_z_m: 188.5
+    lower_z_m: 174.7
+    dz_m: 13.8
+    skew_deg: 1
+    structure: st01_ramp4652037
+    tags: {upper_layer: "4", upper_bridge: "yes", lower_layer: "1"}
+    evidence: "upper measured; lower interpolated over 22 m"
+
+# Plan crossings that the 2019 lidar cannot order: the upper structure is absent, or
+# the order contradicts the OSM layer tags with no lidar trace of the OSM-upper way.
+# They are not AC-H2 references until a person resolves them.
+unresolved:
+  - id: ramp4652037_x_footway104746703
+    a: {osm_way: 4652037, name: ramp, highway: motorway_link, layer: "4", bridge: "yes"}
+    b: {osm_way: 104746703, name: footway, highway: footway, layer: "", bridge: ""}
+    lonlat: [-96.761351, 32.925925]
+    reason: "no lidar profile on one side of the crossing (one-sided trace); cannot interpolate"
+  - id: frontageramp9937002_x_ramp159236813
+    a: {osm_way: 9937002, name: frontage ramp, highway: secondary_link, layer: "", bridge: ""}
+    b: {osm_way: 159236813, name: ramp, highway: motorway_link, layer: "1", bridge: "yes"}
+    lonlat: [-96.752668, 32.923094]
+    reason: "no returns at the upper road's level at the crossing and no deck above it (column top +0.0 m from the traced level); the upper structure is not in the 2019 lidar"
+  - id: ramp9941850_x_frontageramp138669821
+    a: {osm_way: 9941850, name: ramp, highway: motorway_link, layer: "3", bridge: "yes"}
+    b: {osm_way: 138669821, name: frontage ramp, highway: secondary_link, layer: "1", bridge: "yes"}
+    lonlat: [-96.764573, 32.923278]
+    reason: "no returns at the upper road's level at the crossing and no deck above it (column top +0.1 m from the traced level); the upper structure is not in the 2019 lidar"
+  - id: frontageramp26392606_x_ramp1559139703
+    a: {osm_way: 26392606, name: frontage ramp, highway: secondary_link, layer: "", bridge: ""}
+    b: {osm_way: 1559139703, name: ramp, highway: motorway_link, layer: "1", bridge: "yes"}
+    lonlat: [-96.743997, 32.916579]
+    reason: "no grade separation in the 2019 lidar (dz 0.1 m); OSM shows a bridge here"
+  - id: ramp26392612_x_ramp1559139703
+    a: {osm_way: 26392612, name: ramp to Greenville Avenue / Abrams Road, highway: motorway_link, layer: "", bridge: ""}
+    b: {osm_way: 1559139703, name: ramp, highway: motorway_link, layer: "1", bridge: "yes"}
+    lonlat: [-96.751711, 32.921044]
+    reason: "no returns at the upper road's level at the crossing and no deck above it (column top -2.7 m from the traced level); the upper structure is not in the 2019 lidar"
+  - id: ramp26392613_x_ramp1559139703
+    a: {osm_way: 26392613, name: ramp, highway: motorway_link, layer: "", bridge: ""}
+    b: {osm_way: 1559139703, name: ramp, highway: motorway_link, layer: "1", bridge: "yes"}
+    lonlat: [-96.752647, 32.921398]
+    reason: "no returns at the upper road's level at the crossing and no deck above it (column top -7.4 m from the traced level); the upper structure is not in the 2019 lidar"
+  - id: greenvilleaven_x_i635
+    a: {osm_way: 27935630, name: Greenville Avenue, highway: secondary, layer: "1", bridge: "yes"}
+    b: {osm_way: 832751542, name: I-635, highway: motorway, layer: "", bridge: ""}
+    lonlat: [-96.743463, 32.916425]
+    reason: "no grade separation in the 2019 lidar (dz 0.9 m); OSM shows a bridge here"
+  - id: frontageramp27935741_x_ramp1559139707
+    a: {osm_way: 27935741, name: frontage ramp, highway: secondary_link, layer: "", bridge: ""}
+    b: {osm_way: 1559139707, name: ramp, highway: motorway_link, layer: "2", bridge: "yes"}
+    lonlat: [-96.74337, 32.917371]
+    reason: "no grade separation in the 2019 lidar (dz 0.0 m); OSM shows a bridge here"
+  - id: frontageramp27935751_x_i635
+    a: {osm_way: 27935751, name: frontage ramp, highway: secondary_link, layer: "1", bridge: "yes"}
+    b: {osm_way: 832751542, name: I-635, highway: motorway, layer: "", bridge: ""}
+    lonlat: [-96.743718, 32.916602]
+    reason: "no grade separation in the 2019 lidar (dz 1.6 m); OSM shows a bridge here"
+  - id: frontageramp39609949_x_ramp182141558
+    a: {osm_way: 39609949, name: frontage ramp, highway: secondary_link, layer: "1", bridge: "yes"}
+    b: {osm_way: 182141558, name: ramp to Coit Road, highway: motorway_link, layer: "", bridge: ""}
+    lonlat: [-96.757089, 32.924009]
+    reason: "no grade separation in the 2019 lidar (dz 1.9 m); OSM shows a bridge here"
+  - id: ramp39656723_x_ramp1559139703
+    a: {osm_way: 39656723, name: ramp, highway: motorway_link, layer: "", bridge: ""}
+    b: {osm_way: 1559139703, name: ramp, highway: motorway_link, layer: "1", bridge: "yes"}
+    lonlat: [-96.747205, 32.918602]
+    reason: "no grade separation in the 2019 lidar (dz 0.0 m); OSM shows a bridge here"
+  - id: ramp93868120_x_ramp1559139707
+    a: {osm_way: 93868120, name: ramp, highway: motorway_link, layer: "", bridge: ""}
+    b: {osm_way: 1559139707, name: ramp, highway: motorway_link, layer: "2", bridge: "yes"}
+    lonlat: [-96.745864, 32.918942]
+    reason: "no grade separation in the 2019 lidar (dz 0.0 m); OSM shows a bridge here"
+  - id: ramp182141558_x_frontageramp1278674145
+    a: {osm_way: 182141558, name: ramp to Coit Road, highway: motorway_link, layer: "", bridge: ""}
+    b: {osm_way: 1278674145, name: frontage ramp, highway: secondary_link, layer: "1", bridge: "yes"}
+    lonlat: [-96.757224, 32.924048]
+    reason: "no grade separation in the 2019 lidar (dz 0.8 m); OSM shows a bridge here"
+  - id: ramp293356826_x_us75frontage
+    a: {osm_way: 293356826, name: ramp to Dallas, highway: motorway_link, layer: "4", bridge: "yes"}
+    b: {osm_way: 419511229, name: US 75 frontage, highway: secondary, layer: "", bridge: ""}
+    lonlat: [-96.765693, 32.921896]
+    reason: "no returns at the upper road's level at the crossing and no deck above it (column top +0.0 m from the traced level); the upper structure is not in the 2019 lidar"
+  - id: ramp293356826_x_service557655247
+    a: {osm_way: 293356826, name: ramp to Dallas, highway: motorway_link, layer: "4", bridge: "yes"}
+    b: {osm_way: 557655247, name: service, highway: service, layer: "", bridge: ""}
+    lonlat: [-96.765705, 32.922153]
+    reason: "no returns at the upper road's level at the crossing and no deck above it (column top -17.6 m from the traced level); the upper structure is not in the 2019 lidar"
+  - id: i635_x_footway1280002129
+    a: {osm_way: 498323870, name: I-635, highway: motorway, layer: "", bridge: ""}
+    b: {osm_way: 1280002129, name: footway, highway: footway, layer: "1", bridge: "yes"}
+    lonlat: [-96.743105, 32.916915]
+    reason: "no returns at the upper road's level at the crossing and no deck above it (column top -3.6 m from the traced level); the upper structure is not in the 2019 lidar"
+  - id: i635_x_frontageramp1305005739
+    a: {osm_way: 498323870, name: I-635, highway: motorway, layer: "", bridge: ""}
+    b: {osm_way: 1305005739, name: frontage ramp, highway: secondary_link, layer: "1", bridge: "yes"}
+    lonlat: [-96.743044, 32.916876]
+    reason: "no returns at the upper road's level at the crossing and no deck above it (column top -4.0 m from the traced level); the upper structure is not in the 2019 lidar"
+  - id: i635_x_ramp1559139707
+    a: {osm_way: 498323870, name: I-635, highway: motorway, layer: "", bridge: ""}
+    b: {osm_way: 1559139707, name: ramp, highway: motorway_link, layer: "2", bridge: "yes"}
+    lonlat: [-96.742485, 32.916514]
+    reason: "no returns at the upper road's level at the crossing and no deck above it (column top -2.5 m from the traced level); the upper structure is not in the 2019 lidar"
+  - id: ramp498323882_x_ramp498323921
+    a: {osm_way: 498323882, name: ramp, highway: motorway_link, layer: "", bridge: ""}
+    b: {osm_way: 498323921, name: ramp, highway: motorway_link, layer: "3", bridge: "yes"}
+    lonlat: [-96.753894, 32.921883]
+    reason: "no lidar profile on one side of the crossing (one-sided trace); cannot interpolate"
+  - id: ramp498323882_x_ramp1559139703
+    a: {osm_way: 498323882, name: ramp, highway: motorway_link, layer: "", bridge: ""}
+    b: {osm_way: 1559139703, name: ramp, highway: motorway_link, layer: "1", bridge: "yes"}
+    lonlat: [-96.75286, 32.921473]
+    reason: "no lidar profile on one side of the crossing (one-sided trace); cannot interpolate"
+  - id: ramp498323921_x_frontageramp938164034
+    a: {osm_way: 498323921, name: ramp, highway: motorway_link, layer: "3", bridge: "yes"}
+    b: {osm_way: 938164034, name: frontage ramp, highway: secondary_link, layer: "", bridge: ""}
+    lonlat: [-96.757635, 32.923242]
+    reason: "no lidar profile on one side of the crossing (one-sided trace); cannot interpolate"
+  - id: greenvilleaven_x_ramp1559139703
+    a: {osm_way: 572069042, name: Greenville Avenue, highway: secondary, layer: "", bridge: ""}
+    b: {osm_way: 1559139703, name: ramp, highway: motorway_link, layer: "1", bridge: "yes"}
+    lonlat: [-96.74366, 32.916357]
+    reason: "no grade separation in the 2019 lidar (dz 0.0 m); OSM shows a bridge here"
+  - id: greenvilleaven_x_ramp1559139703_2
+    a: {osm_way: 599556002, name: Greenville Avenue, highway: secondary, layer: "", bridge: ""}
+    b: {osm_way: 1559139703, name: ramp, highway: motorway_link, layer: "1", bridge: "yes"}
+    lonlat: [-96.743533, 32.916274]
+    reason: "no grade separation in the 2019 lidar (dz -0.0 m); OSM shows a bridge here"
+  - id: i635_x_greenvilleaven
+    a: {osm_way: 832751542, name: I-635, highway: motorway, layer: "", bridge: ""}
+    b: {osm_way: 934240063, name: Greenville Avenue, highway: secondary, layer: "1", bridge: "yes"}
+    lonlat: [-96.743584, 32.916512]
+    reason: "no grade separation in the 2019 lidar (dz 0.9 m); OSM shows a bridge here"
+  - id: i635_x_footway1280002129_2
+    a: {osm_way: 832751542, name: I-635, highway: motorway, layer: "", bridge: ""}
+    b: {osm_way: 1280002129, name: footway, highway: footway, layer: "1", bridge: "yes"}
+    lonlat: [-96.743394, 32.916375]
+    reason: "no grade separation in the 2019 lidar (dz 0.7 m); OSM shows a bridge here"
+  - id: i635_x_frontageramp1305005739_2
+    a: {osm_way: 832751542, name: I-635, highway: motorway, layer: "", bridge: ""}
+    b: {osm_way: 1305005739, name: frontage ramp, highway: secondary_link, layer: "1", bridge: "yes"}
+    lonlat: [-96.743323, 32.916324]
+    reason: "no grade separation in the 2019 lidar (dz 0.5 m); OSM shows a bridge here"
+  - id: greenvilleaven_x_ramp1559139707
+    a: {osm_way: 913391279, name: Greenville Avenue, highway: secondary, layer: "1", bridge: "yes"}
+    b: {osm_way: 1559139707, name: ramp, highway: motorway_link, layer: "2", bridge: "yes"}
+    lonlat: [-96.743087, 32.917158]
+    reason: "no grade separation in the 2019 lidar (dz 0.1 m); OSM shows a bridge here"
+  - id: footway1280002128_x_ramp1559139703
+    a: {osm_way: 1280002128, name: footway, highway: footway, layer: "", bridge: ""}
+    b: {osm_way: 1559139703, name: ramp, highway: motorway_link, layer: "1", bridge: "yes"}
+    lonlat: [-96.743465, 32.91623]
+    reason: "no grade separation in the 2019 lidar (dz -0.0 m); OSM shows a bridge here"
+  - id: footway1280002129_x_i635tex
+    a: {osm_way: 1280002129, name: footway, highway: footway, layer: "1", bridge: "yes"}
+    b: {osm_way: 1565100675, name: I-635 TEXpress, highway: motorway, layer: "", bridge: ""}
+    lonlat: [-96.743213, 32.916712]
+    reason: "no returns at the upper road's level at the crossing and no deck above it (column top -6.4 m from the traced level); the upper structure is not in the 2019 lidar"
+  - id: footway1280002129_x_i635tex_2
+    a: {osm_way: 1280002129, name: footway, highway: footway, layer: "1", bridge: "yes"}
+    b: {osm_way: 1565100725, name: I-635 TEXpress, highway: motorway, layer: "", bridge: ""}
+    lonlat: [-96.743271, 32.916605]
+    reason: "no returns at the upper road's level at the crossing and no deck above it (column top -6.5 m from the traced level); the upper structure is not in the 2019 lidar"
+  - id: footway1280002130_x_ramp1559139707
+    a: {osm_way: 1280002130, name: footway, highway: footway, layer: "", bridge: ""}
+    b: {osm_way: 1559139707, name: ramp, highway: motorway_link, layer: "2", bridge: "yes"}
+    lonlat: [-96.743007, 32.917096]
+    reason: "no grade separation in the 2019 lidar (dz -0.1 m); OSM shows a bridge here"
+  - id: frontageramp1305005739_x_i635tex
+    a: {osm_way: 1305005739, name: frontage ramp, highway: secondary_link, layer: "1", bridge: "yes"}
+    b: {osm_way: 1565100675, name: I-635 TEXpress, highway: motorway, layer: "", bridge: ""}
+    lonlat: [-96.743166, 32.916679]
+    reason: "no returns at the upper road's level at the crossing and no deck above it (column top -6.2 m from the traced level); the upper structure is not in the 2019 lidar"
+  - id: frontageramp1305005739_x_i635tex_2
+    a: {osm_way: 1305005739, name: frontage ramp, highway: secondary_link, layer: "1", bridge: "yes"}
+    b: {osm_way: 1565100725, name: I-635 TEXpress, highway: motorway, layer: "", bridge: ""}
+    lonlat: [-96.743222, 32.916574]
+    reason: "no returns at the upper road's level at the crossing and no deck above it (column top -6.3 m from the traced level); the upper structure is not in the 2019 lidar"
+  - id: frontageramp1305005740_x_ramp1559139707
+    a: {osm_way: 1305005740, name: frontage ramp, highway: secondary_link, layer: "", bridge: ""}
+    b: {osm_way: 1559139707, name: ramp, highway: motorway_link, layer: "2", bridge: "yes"}
+    lonlat: [-96.742846, 32.916939]
+    reason: "no grade separation in the 2019 lidar (dz 0.2 m); OSM shows a bridge here"
+  - id: frontageramp1305005741_x_ramp1559139703
+    a: {osm_way: 1305005741, name: frontage ramp, highway: secondary_link, layer: "", bridge: ""}
+    b: {osm_way: 1559139703, name: ramp, highway: motorway_link, layer: "1", bridge: "yes"}
+    lonlat: [-96.743326, 32.91614]
+    reason: "no grade separation in the 2019 lidar (dz -0.0 m); OSM shows a bridge here"
+  - id: greenvilleaven_x_ramp1559139707_2
+    a: {osm_way: 1483929370, name: Greenville Avenue, highway: secondary, layer: "", bridge: ""}
+    b: {osm_way: 1559139707, name: ramp, highway: motorway_link, layer: "2", bridge: "yes"}
+    lonlat: [-96.743224, 32.917263]
+    reason: "no grade separation in the 2019 lidar (dz 0.1 m); OSM shows a bridge here"
+  - id: ramp1559139703_x_i635
+    a: {osm_way: 1559139703, name: ramp, highway: motorway_link, layer: "1", bridge: "yes"}
+    b: {osm_way: 1565100724, name: I-635, highway: motorway, layer: "", bridge: ""}
+    lonlat: [-96.742586, 32.915793]
+    reason: "lidar order (I-635 185.3 m over ramp 182.8 m, lower interpolated over 144 m) contradicts the OSM layer tags; the OSM-upper way is not seen in the 2019 lidar"
+  - id: ramp1559139707_x_ramp1565100642
+    a: {osm_way: 1559139707, name: ramp, highway: motorway_link, layer: "2", bridge: "yes"}
+    b: {osm_way: 1565100642, name: ramp, highway: motorway_link, layer: "", bridge: ""}
+    lonlat: [-96.741784, 32.915891]
+    reason: "no grade separation in the 2019 lidar (dz 0.0 m); OSM shows a bridge here"
+
+# Draft AC-A5 reference: deck start and end along each carried centerline, in the
+# direction of the traced centerline. Method: stations every 2 m with class 17 returns
+# within 1.0 m of the centerline and within 1.5 m of the carried way's traced level; the
+# deck is the run of stations containing the crossing with no gap over 3 m. Stations
+# hidden under a higher deck (returns more than 2 m above the level within 1.5 m) bridge
+# gaps but do not extend a run's ends. Crossings share a structure when they lie on the
+# same run, or within 60 m on the same class 17 deck component at heights within 2 m;
+# that grouping is a heuristic and may join adjacent decks (st07, st15). A structure with
+# `ends: []` has no class 17 at the carried level (its deck is unclassified). OSM bridge
+# extents are not used (D-037). `levels` is the OSM layer of the carried ways (0 to 5).
+# 21 structures, 20 with drafted ends.
+structure_ends:
+  status: draft, needs human review
+  structures:
+    - id: st01_ramp4652037
+      carries: [4652037, 26390456, 26454377, 498323860, 498323905, 498323907, 498323909, 498323912, 498323914, 1577438203]
+      over: [9941850, 9942117, 10003052, 26390462, 26454383, 26454384, 27936019, 27936304, 39551574, 39609947, 39610461, 39610462, 93868120, 104746707, 118182267, 138669816, 138669820, 138669827, 138669828, 159236756, 159236769, 159236813, 159236817, 161503418, 182141558, 272210117, 484580221, 484580224, 498113739, 556550344, 753815398, 778567345, 912687011, 932812782, 938164033, 1093917155, 1093917156, 1278674146, 1514936134, 1514936135]
+      levels: [4]  # OSM layer of the carried ways
+      note: "Class 17 deck component(s) at the carried road's level; 55 crossing(s)."
+      ends:
+        - along: 4652037
+          start_lonlat: [-96.746501, 32.919156]
+          end_lonlat: [-96.759407, 32.928772]
+          length_m: 1994.0
+        - along: 26390456
+          start_lonlat: [-96.746501, 32.919156]
+          end_lonlat: [-96.765226, 32.922893]
+          length_m: 1982.0
+        - along: 26454377
+          start_lonlat: [-96.773452, 32.923783]
+          end_lonlat: [-96.759407, 32.928772]
+          length_m: 1566.0
+        - along: 498323909
+          start_lonlat: [-96.74649, 32.919148]
+          end_lonlat: [-96.764934, 32.923326]
+          length_m: 1928.0
+    - id: st02_ramp9941850
+      carries: [9941850]
+      over: [27936019, 27936304, 159236756, 159236772, 498113749]
+      levels: [3]  # OSM layer of the carried ways
+      note: "Class 17 deck component(s) at the carried road's level; 5 crossing(s)."
+      ends:
+        - along: 9941850
+          start_lonlat: [-96.764666, 32.923584]
+          end_lonlat: [-96.76693, 32.924694]
+          length_m: 266.0
+          flag: "deck continues past the traced centerline; end not reached; 14 m of the run is under a higher deck (no returns, bridged)"
+    - id: st03_ramp9941850
+      carries: [9941850]
+      over: [39610461, 556550344]
+      levels: [3]  # OSM layer of the carried ways
+      note: "No class 17 returns at the carried road's level along its centerline at the crossing(s); deck ends unavailable from this collection."
+      ends: []
+      ends_unavailable: no class 17 at the carried level in this collection
+    - id: st04_ramp9941850
+      carries: [9941850, 9986763, 498113745, 498323917]
+      over: [104746707, 118182267, 161501979, 182141539, 182141576, 557627441]
+      levels: [3]  # OSM layer of the carried ways
+      note: "Class 17 deck component(s) at the carried road's level; 7 crossing(s)."
+      ends:
+        - along: 9941850
+          start_lonlat: [-96.765774, 32.919291]
+          end_lonlat: [-96.764524, 32.922749]
+          length_m: 402.0
+        - along: 9986763
+          start_lonlat: [-96.765774, 32.919291]
+          end_lonlat: [-96.749051, 32.91946]
+          length_m: 1948.0
+    - id: st05_i635
+      carries: [10003052, 27936304, 159236756, 159236769]
+      over: [26390462, 27936019, 104746707, 118182267, 138669820, 556550344, 1029503827, 1482805416, 1483197511]
+      levels: [2]  # OSM layer of the carried ways
+      note: "Class 17 deck component(s) at the carried road's level; 25 crossing(s)."
+      ends:
+        - along: 10003052
+          start_lonlat: [-96.760919, 32.924384]
+          end_lonlat: [-96.764894, 32.924448]
+          length_m: 372.0
+          flag: "34 m of the run is under a higher deck (no returns, bridged)"
+        - along: 27936304
+          start_lonlat: [-96.765221, 32.923915]
+          end_lonlat: [-96.761308, 32.923909]
+          length_m: 366.0
+          flag: "38 m of the run is under a higher deck (no returns, bridged)"
+        - along: 159236756
+          start_lonlat: [-96.765235, 32.924115]
+          end_lonlat: [-96.761152, 32.924115]
+          length_m: 382.0
+          flag: "36 m of the run is under a higher deck (no returns, bridged)"
+        - along: 159236769
+          start_lonlat: [-96.761093, 32.924206]
+          end_lonlat: [-96.765069, 32.92424]
+          length_m: 372.0
+          flag: "32 m of the run is under a higher deck (no returns, bridged)"
+    - id: st06_ramp26390456
+      carries: [26390456, 293356826]
+      over: [138669826]
+      levels: [4]  # OSM layer of the carried ways
+      note: "Class 17 deck component(s) at the carried road's level; 2 crossing(s)."
+      ends:
+        - along: 26390456
+          start_lonlat: [-96.765451, 32.922292]
+          end_lonlat: [-96.766125, 32.919833]
+          length_m: 280.0
+        - along: 293356826
+          start_lonlat: [-96.765697, 32.921833]
+          end_lonlat: [-96.766125, 32.919831]
+          length_m: 226.0
+    - id: st07_i635
+      carries: [26392600, 27935854, 39656718, 39656727, 498323847, 498323889, 833729984, 1279237042, 1559139703]
+      over: [161503418, 161503420, 498323889, 539771794, 753815398, 1161827577]
+      levels: [1, 2, 3]  # OSM layer of the carried ways
+      note: "Class 17 deck component(s) at the carried road's level; 26 crossing(s)."
+      ends:
+        - along: 26392600
+          start_lonlat: [-96.7511, 32.920673]
+          end_lonlat: [-96.747134, 32.918442]
+          length_m: 446.0
+        - along: 27935854
+          start_lonlat: [-96.759685, 32.929254]
+          end_lonlat: [-96.748663, 32.91914]
+          length_m: 2104.0
+          flag: "deck continues past the traced centerline; end not reached; 16 m of the run is under a higher deck (no returns, bridged)"
+        - along: 39656718
+          start_lonlat: [-96.749691, 32.920683]
+          end_lonlat: [-96.7507, 32.921261]
+          length_m: 114.0
+        - along: 39656727
+          start_lonlat: [-96.751006, 32.920849]
+          end_lonlat: [-96.749927, 32.920263]
+          length_m: 120.0
+        - along: 498323847
+          start_lonlat: [-96.74977, 32.920561]
+          end_lonlat: [-96.750775, 32.921141]
+          length_m: 114.0
+        - along: 498323889
+          start_lonlat: [-96.760289, 32.928778]
+          end_lonlat: [-96.749054, 32.919461]
+          length_m: 1976.0
+          flag: "deck continues past the traced centerline; end not reached; 18 m of the run is under a higher deck (no returns, bridged)"
+        - along: 833729984
+          start_lonlat: [-96.750873, 32.921005]
+          end_lonlat: [-96.749802, 32.920408]
+          length_m: 120.0
+        - along: 1559139703
+          start_lonlat: [-96.751074, 32.920769]
+          end_lonlat: [-96.749974, 32.920177]
+          length_m: 122.0
+    - id: st08_coitroad
+      carries: [26454383, 26454384, 484580221, 484580224, 1093917155, 1093917156]
+      over: [39551574, 39610465, 122886328, 159236772, 498113751, 938314886]
+      levels: [1]  # OSM layer of the carried ways
+      note: "Class 17 deck component(s) at the carried road's level; 36 crossing(s)."
+      ends:
+        - along: 26454383
+          start_lonlat: [-96.769295, 32.92455]
+          end_lonlat: [-96.769308, 32.923865]
+          length_m: 76.0
+        - along: 26454384
+          start_lonlat: [-96.769028, 32.923832]
+          end_lonlat: [-96.769016, 32.924553]
+          length_m: 80.0
+        - along: 484580221
+          start_lonlat: [-96.768871, 32.924548]
+          end_lonlat: [-96.768881, 32.923844]
+          length_m: 78.0
+        - along: 484580224
+          start_lonlat: [-96.769508, 32.923861]
+          end_lonlat: [-96.769489, 32.924546]
+          length_m: 76.0
+    - id: st09_greenvilleaven
+      carries: [27935630, 27935751, 27935767, 913391279]
+      over: [498323870, 1565100675, 1565100725]
+      levels: [1]  # OSM layer of the carried ways
+      note: "Class 17 deck component(s) at the carried road's level; 9 crossing(s)."
+      ends:
+        - along: 27935630
+          start_lonlat: [-96.743468, 32.916415]
+          end_lonlat: [-96.743129, 32.917077]
+          length_m: 80.0
+        - along: 27935751
+          start_lonlat: [-96.743735, 32.916584]
+          end_lonlat: [-96.743386, 32.917259]
+          length_m: 82.0
+        - along: 27935767
+          start_lonlat: [-96.743279, 32.917147]
+          end_lonlat: [-96.743592, 32.916495]
+          length_m: 78.0
+    - id: st10_frontageramp39609949
+      carries: [39609949, 778567345, 938164033, 1278674145, 1514936128, 1514936129]
+      over: [39610464, 159236702, 159236703, 159236838, 159236840, 182141558, 498323857, 498323863, 498323903, 1163407441]
+      levels: [1]  # OSM layer of the carried ways
+      note: "Class 17 deck component(s) at the carried road's level; 35 crossing(s)."
+      ends:
+        - along: 39609949
+          start_lonlat: [-96.757303, 32.923224]
+          end_lonlat: [-96.757087, 32.924015]
+          length_m: 90.0
+        - along: 778567345
+          start_lonlat: [-96.757581, 32.923285]
+          end_lonlat: [-96.757337, 32.924067]
+          length_m: 90.0
+        - along: 938164033
+          start_lonlat: [-96.756957, 32.923992]
+          end_lonlat: [-96.757184, 32.923185]
+          length_m: 92.0
+        - along: 1278674145
+          start_lonlat: [-96.757225, 32.924045]
+          end_lonlat: [-96.757445, 32.923255]
+          length_m: 90.0
+    - id: st11_lbjfrontage
+      carries: [39610461, 138669821, 419511242]
+      over: [118182267, 556550344]
+      levels: [1]  # OSM layer of the carried ways
+      note: "Class 17 deck component(s) at the carried road's level; 4 crossing(s)."
+      ends:
+        - along: 39610461
+          start_lonlat: [-96.764785, 32.923401]
+          end_lonlat: [-96.76378, 32.923401]
+          length_m: 94.0
+        - along: 138669821
+          start_lonlat: [-96.763937, 32.923256]
+          end_lonlat: [-96.765024, 32.923275]
+          length_m: 102.0
+    - id: st12_lbjfrontage
+      carries: [39610462, 138669828]
+      over: [138669827, 556550345, 1482805416, 1483197511]
+      levels: [1]  # OSM layer of the carried ways
+      note: "Class 17 deck component(s) at the carried road's level; 8 crossing(s)."
+      ends:
+        - along: 39610462
+          start_lonlat: [-96.762798, 32.924979]
+          end_lonlat: [-96.763846, 32.924985]
+          length_m: 98.0
+        - along: 138669828
+          start_lonlat: [-96.763735, 32.925134]
+          end_lonlat: [-96.762734, 32.925108]
+          length_m: 94.0
+    - id: st13_ramp39656719
+      carries: [39656719]
+      over: [161503418, 753815398, 932812782]
+      levels: [4]  # OSM layer of the carried ways
+      note: "Class 17 deck component(s) at the carried road's level; 3 crossing(s)."
+      ends:
+        - along: 39656719
+          start_lonlat: [-96.748212, 32.920468]
+          end_lonlat: [-96.7594, 32.928779]
+          length_m: 1782.0
+    - id: st14_ramp159236813
+      carries: [159236813, 159236817]
+      over: [9937002, 26392616, 93868118, 159236703]
+      levels: [1]  # OSM layer of the carried ways
+      note: "Class 17 deck component(s) at the carried road's level; 7 crossing(s)."
+      ends:
+        - along: 159236813
+          start_lonlat: [-96.752741, 32.923081]
+          end_lonlat: [-96.753565, 32.92243]
+          length_m: 110.0
+          flag: "deck continues past the traced centerline; end not reached; 12 m of the run is under a higher deck (no returns, bridged)"
+        - along: 159236817
+          start_lonlat: [-96.753487, 32.922391]
+          end_lonlat: [-96.751956, 32.922778]
+          length_m: 184.0
+          flag: "deck continues past the traced centerline; end not reached; 14 m of the run is under a higher deck (no returns, bridged)"
+    - id: st15_us75
+      carries: [197635304, 197635345, 498113740]
+      over: [26454383, 26454384, 26454389, 104746707, 138669829, 484580221, 484580224, 498113751, 1034387312, 1093917155, 1093917156]
+      levels: [1, 3]  # OSM layer of the carried ways
+      note: "Class 17 deck component(s) at the carried road's level; 12 crossing(s)."
+      ends:
+        - along: 197635304
+          start_lonlat: [-96.759631, 32.929047]
+          end_lonlat: [-96.760462, 32.928295]
+          length_m: 114.0
+        - along: 197635345
+          start_lonlat: [-96.759633, 32.929291]
+          end_lonlat: [-96.771552, 32.924561]
+          length_m: 1318.0
+    - id: st16_us75
+      carries: [201791044]
+      over: [104746707]
+      levels: [1]  # OSM layer of the carried ways
+      note: "Class 17 deck component(s) at the carried road's level; 1 crossing(s)."
+      ends:
+        - along: 201791044
+          start_lonlat: [-96.760369, 32.928124]
+          end_lonlat: [-96.759644, 32.928787]
+          length_m: 100.0
+    - id: st17_ramp293356826
+      carries: [293356826]
+      over: [419342646]
+      levels: [4]  # OSM layer of the carried ways
+      note: "Class 17 deck component(s) at the carried road's level; 1 crossing(s)."
+      ends:
+        - along: 293356826
+          start_lonlat: [-96.773452, 32.923783]
+          end_lonlat: [-96.766059, 32.922903]
+          length_m: 720.0
+    - id: st18_ramp303563720
+      carries: [303563720, 1483197512, 1483197513]
+      over: [9941850, 10003052, 26454383, 26454384, 27936019, 39610462, 104746707, 138669828, 159236769, 484580221, 484580224, 498113739, 1093917155, 1093917156, 1482805416, 1483197511]
+      levels: [5]  # OSM layer of the carried ways
+      note: "Class 17 deck component(s) at the carried road's level; 16 crossing(s)."
+      ends:
+        - along: 303563720
+          start_lonlat: [-96.759965, 32.928639]
+          end_lonlat: [-96.770985, 32.924191]
+          length_m: 1262.0
+    - id: st19_ramp498113739
+      carries: [498113739, 498323919, 498323921]
+      over: [10003052, 26390462, 27936304, 39609948, 39610462, 104746707, 138669820, 138669827, 138669828, 159236756, 159236769, 182141576, 197635300, 556550345, 778567344, 1278674147, 1514936130, 1514936131]
+      levels: [3]  # OSM layer of the carried ways
+      note: "Class 17 deck component(s) at the carried road's level; 18 crossing(s)."
+      ends:
+        - along: 498113739
+          start_lonlat: [-96.759633, 32.929291]
+          end_lonlat: [-96.749051, 32.919459]
+          length_m: 2060.0
+          flag: "16 m of the run is under a higher deck (no returns, bridged)"
+    - id: st20_churchillway
+      carries: [526359039, 556550404, 556550405, 1034388900, 1442937301]
+      over: [26389784, 39610466, 556550348, 556550349]
+      levels: [1]  # OSM layer of the carried ways
+      note: "Class 17 deck component(s) at the carried road's level; 16 crossing(s)."
+      ends:
+        - along: 526359039
+          start_lonlat: [-96.765666, 32.918407]
+          end_lonlat: [-96.766891, 32.9181]
+          length_m: 120.0
+        - along: 556550405
+          start_lonlat: [-96.76571, 32.91856]
+          end_lonlat: [-96.766831, 32.91826]
+          length_m: 110.0
+    - id: st21_ramp1278937879
+      carries: [1278937879]
+      over: [104746707]
+      levels: [1]  # OSM layer of the carried ways
+      note: "Class 17 deck component(s) at the carried road's level; 1 crossing(s)."
+      ends:
+        - along: 1278937879
+          start_lonlat: [-96.760814, 32.924912]
+          end_lonlat: [-96.761516, 32.924974]
+          length_m: 66.0

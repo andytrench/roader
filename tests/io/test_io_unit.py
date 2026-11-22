@@ -12,6 +12,7 @@ from roader.model.schema import LidarCollection
 ROOT = Path(__file__).resolve().parents[2]
 M1 = "wboylston_laurel_i190"
 M2 = "woburn_i93_i95"
+M2_STACK = "dallas_high_five_i635_us75"
 
 CONFIG = """
 [unit]
@@ -68,7 +69,7 @@ def _sites():
     return {s["id"]: s for s in yaml.safe_load((ROOT / "tests" / "sites.yaml").read_text())["sites"]}
 
 
-@pytest.mark.parametrize("site_id", [M1, M2])
+@pytest.mark.parametrize("site_id", [M1, M2, M2_STACK])
 def test_unit_config_matches_sites_yaml(site_id):
     cfg = load_unit_config(ROOT / "configs" / "units" / f"{site_id}.toml")
     site = _sites()[site_id]
@@ -115,7 +116,7 @@ def test_sites_yaml_lists_all_spec_classes():
     assert by_milestone[2] == ["cloverleaf_interchange", "four_or_five_level_stack"]
 
 
-@pytest.mark.parametrize("site_id", [M1, M2])
+@pytest.mark.parametrize("site_id", [M1, M2, M2_STACK])
 def test_ac_h2_crossing_list_present(site_id):
     site = _sites()[site_id]
     doc = yaml.safe_load((ROOT / site["crossings"]).read_text())
@@ -139,7 +140,7 @@ def test_ac_h2_crossing_list_present(site_id):
             st = structures[c["structure"]]
             assert c["upper"]["osm_way"] in st["carries"] and c["lower"]["osm_way"] in st["over"]
     for st in structures.values():
-        assert st["ends"]
+        assert st["ends"] or st["ends_unavailable"]
         for end in st["ends"]:
             assert end["along"] in st["carries"] and end["length_m"] > 0
             for lon, lat in (end["start_lonlat"], end["end_lonlat"]):
