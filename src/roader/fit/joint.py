@@ -17,10 +17,18 @@ A seam joins a *child* road end (a ramp leaving or joining) to a *parent* road
 seam: its cross slope on each side is held at the parent's surface slope across
 the child's direction for ``SEAM_HOLD_M``, then moves to its own measured values
 over ``SEAM_TRANSITION_M`` (AC-P2: nonzero transition). Its grade at the seam is
-the parent's surface slope along the child's direction. Where a road's returns
-cannot be met with the seam fixed (its RMS rises by more than ``RMS_RISE_M``) a
-short vertical curve is added ``SEAM_PVI_M`` from the seam, so the seam does not
-bend the rest of the road.
+the parent's surface slope along the child's direction. A child that misses its
+seam, or whose returns cannot be met with the seam fixed (its RMS rises by more
+than ``RMS_RISE_M``), gets two adjacent vertical curves filling the first
+``SEAM_WINDOW_M`` from the seam (curves crowding the seam are replaced): they
+carry the seam's elevation and grade to the child's own tangent, so the seam
+does not bend the rest of the road. A parent that cannot follow its returns gets
+a short curve ``SEAM_PVI_M`` from the seam.
+
+A crossing on a child where it still lies on its parent's pavement, with the
+parent crossing the same road, is the parent's grade separation: the child's
+recorded height difference there comes from its own extrapolated profile and is
+not a separate constraint (flagged ``FR-AF-3:crossing_on_parent``).
 """
 
 from __future__ import annotations
@@ -39,7 +47,11 @@ from roader.rules import RuleBook
 SEAM_HOLD_M = 5.0
 SEAM_TRANSITION_M = 20.0
 SEAM_PVI_M = 30.0
+SEAM_WINDOW_M = 60.0  # a child's seam transition curves lie within this of the seam
+SEAM_MISS_Z_M = 0.005  # half the D-020 link tolerances: a seam missed by more gets its transition up front
+SEAM_MISS_GRADE = 0.0005
 RMS_RISE_M = 0.005
+RESIDUAL_CAP_M = 1.0  # a residual counts at most this much in a road's RMS, so a diverging solve shows
 SEAM_INSET_M = 0.25  # cross-slope samples inset from the edges and the crown, as the AC-H4 test samples
 SEAM_LATERAL_M = 1.0
 BAND_M = 0.15  # surface band around the profile for the returns used (as in roader.fit.road)
@@ -67,6 +79,7 @@ class JointRoad:
     gaps: list[tuple[float, float]] = field(default_factory=list)
     strip_factor: float = 1.0
     profile_flags: list[Flag] | None = None  # set when the joint solve rebuilt the profile
+    bins: tuple[np.ndarray, np.ndarray, np.ndarray] | None = field(default=None, repr=False)
 
 
 @dataclass
@@ -140,37 +153,47 @@ def _side_offsets(road: Road, s: float, side: float) -> list[float]:
 # ---------------------------------------------------------------- cross slope at seams
 
 
-def _hold(pw: Piecewise, s_c: float, length: float, value: float, prov: Provenance) -> Piecewise:
-    """``pw`` with ``value`` held over SEAM_HOLD_M from the road end at s_c, then a transition back."""
+def _hold(pw: Piecewise, s_c: float, length: float, values: tuple[float, float], prov: Provenance) -> Piecewise:
+    """``pw`` following ``values`` (at the seam, at the hold's end) over SEAM_HOLD_M from the road end at s_c, then a transition back."""
     d = 1.0 if s_c < 0.5 * length else -1.0
     hold = min(SEAM_HOLD_M, 0.25 * length)
     trans = min(SEAM_TRANSITION_M, 0.25 * length)
     near, far = s_c + d * hold, s_c + d * (hold + trans)
     resume = pw(far)
     kept = [k for k in pw.knots if d * (k.s - far) > 1e-6]
-    new = [Knot(s_c, value, prov), Knot(near, value, prov), Knot(far, resume, prov)]
+    new = [Knot(s_c, values[0], prov), Knot(near, values[1], prov), Knot(far, resume, prov)]
     knots = sorted(new + kept, key=lambda k: k.s)
     return Piecewise(knots)
 
 
+def _slope_across(child: Road, parent: Road, s: float, side: float, fallback: tuple[float, float]) -> float:
+    """Mean surface slope of the parent across the child's direction under one side of the child at its station s."""
+    _t, n_c, _k = _frame(child, s)
+    vals = []
+    for u in _side_offsets(child, s, side):
+        x, y = child.alignment.offset_point(s, u)
+        ps, pu = parent.alignment.project(x, y)
+        wl, wr = parent.cross_section.width_left(ps), parent.cross_section.width_right(ps)
+        if not (-wr <= pu <= wl):
+            continue
+        vals.append(float(surface_gradient(parent, ps, pu) @ n_c))
+    if not vals:
+        vals = [float(surface_gradient(parent, *fallback) @ n_c)]
+    return float(np.mean(vals))
+
+
 def _seam_slopes(child: Road, parent: Road, seam: Seam) -> None:
-    """Child cross slope per side = the parent's surface slope across the child at the seam."""
+    """Child cross slope per side = the parent's surface slope across the child, at the seam and at the hold's end.
+
+    Following the parent over the hold (not a constant) keeps the change of cross
+    slope along the road equal on both sides of the seam, so the grade matches at
+    every offset where the parent's cross slope is in transition (AC-H4).
+    """
     xs = child.cross_section
-    t_c, n_c, _k = _frame(child, seam.child_s)
-    del t_c
-    targets = {}
-    for side in (1.0, -1.0):
-        vals = []
-        for u in _side_offsets(child, seam.child_s, side):
-            x, y = child.alignment.offset_point(seam.child_s, u)
-            ps, pu = parent.alignment.project(x, y)
-            wl, wr = parent.cross_section.width_left(ps), parent.cross_section.width_right(ps)
-            if not (-wr <= pu <= wl):
-                continue
-            vals.append(float(surface_gradient(parent, ps, pu) @ n_c))
-        if not vals:
-            vals = [float(surface_gradient(parent, seam.parent_s, seam.parent_u) @ n_c)]
-        targets[side] = float(np.mean(vals))
+    d = 1.0 if seam.child_s < 0.5 * child.length else -1.0
+    near = seam.child_s + d * min(SEAM_HOLD_M, 0.25 * child.length)
+    fallback = (seam.parent_s, seam.parent_u)
+    targets = {side: (_slope_across(child, parent, seam.child_s, side, fallback), _slope_across(child, parent, near, side, fallback)) for side in (1.0, -1.0)}
     ref = xs.slope_left.knots[0].prov if xs.slope_left.knots else Provenance(Source.MEASURED, 0.5)
     pprov = parent.cross_section.slope_left.knots[0].prov if parent.cross_section.slope_left.knots else ref
     prov = Provenance(
@@ -250,16 +273,31 @@ def _components(ids: list[str], pairs: list[tuple[str, str]]) -> list[list[str]]
     return [sorted(g) for _r, g in sorted(groups.items())]
 
 
+def _pw(pw: Piecewise, s: np.ndarray) -> np.ndarray:
+    return np.interp(s, [k.s for k in pw.knots], [k.value for k in pw.knots])
+
+
+def _corrected(item: JointRoad) -> np.ndarray:
+    xs = item.road.cross_section
+    return item.z - np.where(item.u >= 0.0, _pw(xs.slope_left, item.s), _pw(xs.slope_right, item.s)) * item.u
+
+
+def _bins_of(item: JointRoad) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """1 m bins of cross-slope-corrected returns within the surface band of the road's own fit.
+
+    The band is taken around ``item.vert`` (the road fitted on its own), so every
+    trial of a component is scored on the same returns.
+    """
+    if item.bins is None:
+        zc = _corrected(item)
+        keep = np.abs(zc - item.vert.z(item.s)) <= BAND_M + 0.02 * np.abs(item.u)
+        item.bins = fp._bins(item.s[keep], zc[keep], item.road.length)
+    return item.bins
+
+
 def _data(item: JointRoad, v: fp._Vert) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
-    """1 m bins of cross-slope-corrected returns within the surface band: (design, z, weight, station)."""
-    road = item.road
-    xs = road.cross_section
-    sl = np.array([xs.slope_left(float(a)) for a in item.s])
-    sr = np.array([xs.slope_right(float(a)) for a in item.s])
-    zc = item.z - np.where(item.u >= 0.0, sl, sr) * item.u
-    band = BAND_M + 0.02 * np.abs(item.u)
-    keep = np.abs(zc - v.z(item.s)) <= band
-    sb, zb, cnt = fp._bins(item.s[keep], zc[keep], road.length)
+    """(design, z, weight, station) of the road's binned returns for chain ``v``."""
+    sb, zb, cnt = _bins_of(item)
     wb = np.sqrt(np.minimum(cnt, 25.0)) / 5.0
     return fp._design(sb, v.pvi, v.lengths), zb, wb, sb
 
@@ -338,9 +376,8 @@ def _rms(item: JointRoad, v: fp._Vert) -> float:
     a, zb, _wb, _sb = _data(item, v)
     if not len(zb):
         return 0.0
-    r = a @ np.concatenate([[v.z0], v.grades]) - zb
-    r = r[np.abs(r) < 1.0]
-    return float(np.sqrt(np.mean(r**2))) if r.size else 0.0
+    r = np.clip(a @ np.concatenate([[v.z0], v.grades]) - zb, -RESIDUAL_CAP_M, RESIDUAL_CAP_M)
+    return float(np.sqrt(np.mean(r**2)))
 
 
 def _seam_rows(seam: Seam, roads: dict[str, Road], verts: dict[str, fp._Vert]):
@@ -368,8 +405,68 @@ def _crossing_rows(c: Crossing, roads: dict[str, Road], verts: dict[str, fp._Ver
     return [(rows, dz0 - _slope(up, su, uu) * uu + _slope(lo, sl, ul) * ul, (c.id, "clearance"))]
 
 
-def _rounds(sub, verts, cseams, ccross, roads, dz0, base):
-    """Solve, and add a vertical curve near the seams of any road whose returns it cannot follow; up to 3 rounds."""
+def _seam_transition(v: fp._Vert, s0: float, length: float, data_s: np.ndarray | None = None) -> fp._Vert:
+    """``v`` with two adjacent curves filling the first SEAM_WINDOW_M from a child's seam at s0 (D-050).
+
+    With the seam's elevation and grade fixed, the two curves' grades carry them to
+    the child's own tangent beyond, so the seam bends only this window. Where the
+    seam lies in an unobserved stretch (no ``data_s`` station within it) at least two
+    shortest curves long, the window is that stretch, so the observed returns keep
+    their fit. A curve starting closer to the seam than two shortest curves is
+    shortened to start at the window's end (giving up at most its near half), or
+    removed when too little of it is left.
+    """
+    d = 1.0 if s0 < 0.5 * length else -1.0
+    window = min(SEAM_WINDOW_M, 0.5 * length)
+    least = 2.0 * fp.MIN_CURVE_M
+    if data_s is not None and len(data_s):
+        unobserved = float(np.min(np.abs(np.asarray(data_s) - s0)))
+        if unobserved >= least:
+            window = min(window, unobserved)
+    if window < least:
+        return v
+    room = window
+    pvi, lengths = v.pvi.copy(), v.lengths.copy()
+    gone = []
+    for k in sorted(range(len(pvi)), key=lambda k: d * (pvi[k] - s0)):
+        mid = d * (pvi[k] - s0)
+        a, b = mid - 0.5 * lengths[k], mid + 0.5 * lengths[k]
+        if a >= least:
+            room = min(room, a)
+            break
+        room = min(window, max(least, mid))
+        if b - room >= fp.MIN_CURVE_M:
+            pvi[k], lengths[k] = s0 + d * 0.5 * (room + b), b - room
+            break
+        gone.append(k)
+    v = fp._Vert(v.z0, v.grades.copy(), pvi, lengths)
+    for k in sorted(gone, reverse=True):
+        v = fp._remove(v, k)
+    q = 0.25 * room
+    for c in (s0 + d * q, s0 + d * 3.0 * q):
+        k = int(np.searchsorted(v.pvi, c))
+        seg = min(k, len(v.grades) - 1)
+        v = fp._Vert(v.z0, np.insert(v.grades, seg + 1, v.grades[seg]), np.insert(v.pvi, k, c), np.insert(v.lengths, k, 2.0 * q))
+    return v
+
+
+def _misses(seam: Seam, roads: dict[str, Road], verts: dict[str, fp._Vert]) -> bool:
+    """The seam's elevation or grade row is off by more than half the D-020 link tolerance with the current chains."""
+    rows = _seam_rows(seam, roads, verts)
+    tol = (SEAM_MISS_Z_M, SEAM_MISS_GRADE)
+    for (coef, rhs, _tag), t in zip(rows, tol, strict=True):
+        val = sum(float(np.asarray(vec) @ _params(verts[rid])) for rid, vec in coef.items())
+        if abs(val - rhs) > t:
+            return True
+    return False
+
+
+def _rounds(sub, verts, cseams, ccross, roads, dz0, base, eased):
+    """Solve, and add freedom near the seams of any road whose returns it cannot follow; up to 3 rounds.
+
+    A child gets its seam transition (``_seam_transition``, once per seam, recorded
+    in ``eased``); a parent a short curve ``SEAM_PVI_M`` from the seam.
+    """
     verts = dict(verts)
     for _round in range(3):
         rows = [r for s in cseams for r in _seam_rows(s, roads, verts)]
@@ -383,8 +480,11 @@ def _rounds(sub, verts, cseams, ccross, roads, dz0, base):
         for i in sorted(sub):
             if _rms(sub[i], trial[i]) - base[i] <= RMS_RISE_M:
                 continue
-            stations = [s.child_s for s in cseams if s.child == i] + [s.parent_s for s in cseams if s.parent == i]
-            for s0 in sorted(stations):
+            for s in cseams:
+                if s.child == i and s.link.id not in eased:
+                    eased.add(s.link.id)
+                    verts[i], grown = _seam_transition(verts[i], s.child_s, roads[i].length, _bins_of(sub[i])[0]), True
+            for s0 in sorted(s.parent_s for s in cseams if s.parent == i):
                 v = _insert_pvi(verts[i], s0 + _inward(s0, roads[i]) * 1.5 * SEAM_PVI_M, SEAM_PVI_M, roads[i].length)
                 if v is not None:
                     verts[i], grown = v, True
@@ -418,9 +518,7 @@ def _rebuild(item: JointRoad, v: fp._Vert, rules: RuleBook) -> list[Flag]:
     a, zb, _wb, sb = _data(item, v)
     del a
     xs = road.cross_section
-    sl = np.array([xs.slope_left(float(q)) for q in item.s])
-    sr = np.array([xs.slope_right(float(q)) for q in item.s])
-    zc = item.z - np.where(item.u >= 0.0, sl, sr) * item.u
+    zc = _corrected(item)
     keep = np.abs(zc - v.z(item.s)) <= BAND_M + 0.02 * np.abs(item.u)
     st = np.linspace(0.0, road.length, 11)
     paved = float(np.median([xs.width_left(float(q)) + xs.width_right(float(q)) for q in st]))
@@ -432,6 +530,31 @@ def _rebuild(item: JointRoad, v: fp._Vert, rules: RuleBook) -> list[Flag]:
     item.profile_flags = flags
     del zb
     return flags
+
+
+def _on_parent_crossings(crossings: list[Crossing], seams: list[Seam], roads: dict[str, Road]) -> list[tuple[Crossing, Crossing, str, str]]:
+    """(crossing, parent's crossing, child, parent) where a child lies on its parent's pavement at a crossing with a road the parent also crosses."""
+    out = []
+    used: set[str] = set()
+    for c in sorted(crossings, key=lambda c: c.id):
+        if c.id in used:
+            continue
+        found = None
+        for road_id, other in ((c.lower_road, c.upper_road), (c.upper_road, c.lower_road)):
+            for sm in seams:
+                if found is not None or sm.child != road_id or sm.parent == other:
+                    continue
+                parent = roads[sm.parent]
+                ps, pu = parent.alignment.project(c.x, c.y)
+                if not (-parent.cross_section.width_right(ps) <= pu <= parent.cross_section.width_left(ps)):
+                    continue
+                twins = [d for d in crossings if d.id != c.id and {d.upper_road, d.lower_road} == {other, sm.parent}]
+                if twins:
+                    found = (min(twins, key=lambda d: (math.hypot(d.x - c.x, d.y - c.y), d.id)), road_id, sm.parent)
+        if found is not None and found[0].id not in {x.id for x, *_ in out}:
+            used.add(found[0].id)
+            out.append((c, *found))
+    return out
 
 
 def joint_fit_roads(fits, links: list[Link], crossings: list[Crossing], rules: RuleBook) -> list[Flag]:
@@ -476,6 +599,20 @@ def joint_fit(items: list[JointRoad], links: list[Link], crossings: list[Crossin
         _seam_slopes(roads[sm.child], roads[sm.parent], sm)
 
     flags: list[Flag] = []
+    for it in items:
+        it.bins = None
+    implied = _on_parent_crossings(crossings, seams, roads)
+    for c, parent_c, child, parent in implied:
+        flags.append(
+            Flag(
+                "FR-AF-3:crossing_on_parent",
+                c.id,
+                "FR-AF-3",
+                f"{roads[child].name} lies on the pavement of {roads[parent].name} here; "
+                f"the height difference is that of crossing {parent_c.id} and is not enforced separately",
+            )
+        )
+    skip = {c.id for c, *_rest in implied}
     pairs = [(s.child, s.parent) for s in seams] + [(c.upper_road, c.lower_road) for c in crossings]
     seamed = {i for s in seams for i in (s.child, s.parent)}
     for comp in _components(sorted(roads), pairs):
@@ -485,10 +622,15 @@ def joint_fit(items: list[JointRoad], links: list[Link], crossings: list[Crossin
         verts = {i: by_id[i].vert for i in comp}
         base = {i: _rms(by_id[i], verts[i]) for i in comp}
         cseams = [s for s in seams if s.child in sub]
-        ccross = [c for c in crossings if c.upper_road in sub]
+        ccross = [c for c in crossings if c.upper_road in sub and c.id not in skip]
+        eased = set()
+        for s in cseams:
+            if _misses(s, roads, verts):
+                eased.add(s.link.id)
+                verts[s.child] = _seam_transition(verts[s.child], s.child_s, roads[s.child].length, _bins_of(sub[s.child])[0])
         _ensure_freedom(verts, cseams, ccross, roads)
         while True:
-            trial, dropped, resid = _rounds(sub, verts, cseams, ccross, roads, dz0, base)
+            trial, dropped, resid = _rounds(sub, verts, cseams, ccross, roads, dz0, base, eased)
             rise = {i: _rms(by_id[i], trial[i]) - base[i] for i in comp}
             worst = max(rise, key=lambda i: (rise[i], i))
             if rise[worst] <= REVERT_RMS_M:
