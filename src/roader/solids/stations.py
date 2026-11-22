@@ -24,6 +24,7 @@ STRUCTURE_TOL_M = 0.01  # chord tolerance cap along a structure span, every LOD
 STATION_MERGE_M = 0.01
 RAMP_FACTOR = 2.4
 RAMP_MIN_M = 1.0
+SKEW_LINE_EDGE_M = 0.3  # extra deck lines stay this far inside the pavement edge
 
 PRIORITY_STRUCTURE = 0
 PRIORITY_OTHER = 1
@@ -161,6 +162,39 @@ def max_step(road: Road, a: float, b: float, tol: float, umax: float, sides: Cal
     if zpp > 1e-12:
         step = min(step, math.sqrt(8.0 * tol / zpp))
     return step
+
+
+def _max_rate(pw, a: float, b: float) -> float:
+    """Largest |d value / ds| of a piecewise-linear parameter over [a, b]."""
+    knots = pw.knots
+    return max((abs(q.value - p.value) / (q.s - p.s) for p, q in pairwise(knots) if q.s > a and p.s < b and q.s > p.s), default=0.0)
+
+
+def skew_offsets(road: Road, structure: Structure, side: str, tol: float) -> list[float]:
+    """Offsets of extra u-lines on one side of a skewed deck (FR-SG-2).
+
+    A skewed station line s = s0 + t u runs along the road as it crosses it, so the
+    surface bends along it by z'' = t^2 p'' + 2 t dslope/ds (profile curvature and the
+    cross-slope rate). Station spacing cannot reduce that chord error; lines along the
+    road every sqrt(8 (tol / 2) / z'') do. The lines stay inside the narrowest pavement
+    edge so they never cross it; none are needed on a square or gently warped deck.
+    """
+    t = max((abs(math.tan(sp.skew_rad)) for sp in structure.supports), default=0.0)
+    if t == 0.0:
+        return []
+    a, b = structure.s_start, structure.s_end
+    xs = road.cross_section
+    slope, width = (xs.slope_left, xs.width_left) if side == "left" else (xs.slope_right, xs.width_right)
+    curv = max((abs(e.g1 - e.g0) / e.length for e in road.profile.elements if e.length > 0.0 and e.s0 < b and e.s0 + e.length > a), default=0.0)
+    bend = t * t * curv + 2.0 * t * _max_rate(slope, a, b)
+    if bend <= 1e-12:
+        return []
+    h = math.sqrt(8.0 * 0.5 * tol / bend)
+    narrow = min([width(a), width(b)] + [k.value for k in width.knots if a < k.s < b])
+    full = narrow + structure.deck.overhang(side)
+    n = math.ceil(full / h)
+    sign = 1.0 if side == "left" else -1.0
+    return [sign * full * k / n for k in range(1, n) if full * k / n < narrow - SKEW_LINE_EDGE_M]
 
 
 def kinks(road: Road, umax: float) -> list[tuple[float, float]]:

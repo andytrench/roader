@@ -198,8 +198,9 @@ def check_voids(
         proj = Projector(upper.alignment)
         su, uu = proj.project(xy)
         xs = upper.cross_section
-        half_l = np.array([xs.width_left(float(s)) for s in su]) + st.deck.overhang_m
-        half_r = np.array([xs.width_right(float(s)) for s in su]) + st.deck.overhang_m
+        # Per side: a twin deck's joint side stops at the joint (FR-CR-3), not at the outer overhang.
+        half_l = np.array([xs.width_left(float(s)) for s in su]) + st.deck.overhang("left")
+        half_r = np.array([xs.width_right(float(s)) for s in su]) + st.deck.overhang("right")
         under = (su >= st.s_start) & (su <= st.s_end) & (uu <= half_l) & (uu >= -half_r)
         if not under.any():
             result.violations.append(Violation(gate, c.id, "no lower-road samples under the deck footprint"))

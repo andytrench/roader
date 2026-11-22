@@ -50,6 +50,7 @@ from roader.conflate.register import (
 )
 from roader.conflate.structures import (
     StructureExtent,
+    absorb_diverging,
     chain_extents,
     find_extents,
     side_drop,
@@ -68,7 +69,7 @@ from roader.model.provenance import Provenance, Source
 from roader.model.schema import Flag, Frame, RoadModel, UnitRecord
 from roader.model.serialize import dumps, loads
 from roader.rules import RuleBook
-from roader.structures import infer_structure, parapet_fill
+from roader.structures import attach_shared, infer_structure, parapet_fill, twin_joints
 from roader.structures.infer import _footprint_on
 
 RULE_EXTENT_PAD_M = 1.0
@@ -160,6 +161,9 @@ def run_pipeline(
     extents = chain_extents(extents, drops, {f.road.id: f.road.length for f in fits})
     extents, xflags = _over_something(extents, crossings)
     flags.extend(xflags)
+    roads = {f.road.id: f.road for f in fits}
+    extents, shares, xflags = absorb_diverging(extents, links, roads)
+    flags.extend(xflags)
 
     barriers = {}
     for f in fits:
@@ -179,6 +183,7 @@ def run_pipeline(
         filled = parapet_fill(by_id[e.road_id].road, res.structure, barriers[e.road_id], rules)
         barriers[e.road_id].extend(filled)
         _fit_overhang(by_id[e.road_id].road, res.structure, barriers[e.road_id])
+    flags.extend(attach_shared(structures, shares, roads, barriers, crossings))
 
     for f in fits:
         _clip_parapets(barriers[f.road.id], [st for st in structures if st.carried_road == f.road.id])
@@ -187,6 +192,7 @@ def run_pipeline(
             if st.carried_road == f.road.id:
                 _fit_overhang(f.road, st, barriers[f.road.id])
         f.road.cross_section.barriers = sorted(barriers[f.road.id], key=lambda b: (b.side, b.s0, b.id))
+    flags.extend(twin_joints(structures, roads, crossings))
     flags.extend(classify_medians(fits, ev))
 
     slopes = []

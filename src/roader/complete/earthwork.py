@@ -77,6 +77,7 @@ def _station_slopes(fit: RoadFit, side: str, skip: list[tuple[float, float]]) ->
 def side_slopes(fit: RoadFit, structures: list[Structure], rules: RuleBook, strip_factor: float = 1.0) -> list[SideSlope]:
     road = fit.road
     skip = [(st.s_start, st.s_end) for st in structures if st.carried_road == road.id]
+    skip += [(sh.s_start, sh.s_end) for st in structures for sh in st.shared if sh.road_id == road.id]  # FR-CR-3
     out = []
     for side in ("left", "right"):
         st, kinds, ratios, counts = _station_slopes(fit, side, skip)

@@ -58,3 +58,16 @@ def test_fr_sv_4_near_coplanar_disjoint_faces_do_not_intersect():
     b = np.array([[[20.43657071, 1.61138993, 97.82691211], [28.66015378, 8.86541513, 97.83804356], [29.9899356, 4.566592, 97.85625997]]])
     assert not tri_tri_intersect_batch(a, b)[0]
     assert not tri_tri_touch(a[0], b[0], [])
+
+
+def test_fr_sv_4_near_parallel_strips_2_cm_apart_do_not_intersect():
+    """Two deck-top faces 2 cm apart in plan, planes about 3e-6 apart in angle (Woburn ramp deck).
+
+    Two vertices of each lie within PLANE_EPS of the other's plane but far from the
+    planes' common line, so the common-line intervals are meaningless; the pair must
+    take the exact path.
+    """
+    a = np.array([[[-30.90524573, -83.73587438, 37.45190483], [-30.80815492, -85.21370832, 37.43356909], [-30.63593277, -85.18265143, 37.43693949]]])
+    b = np.array([[[-30.88560401, -83.73210575, 37.45229234], [-30.61625024, -85.17910207, 37.43732468], [-28.40743478, -83.25662334, 37.5011845]]])
+    assert not tri_tri_touch(a[0], b[0], [])
+    assert not tri_tri_intersect_batch(a, b)[0]

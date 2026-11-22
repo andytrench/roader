@@ -4,9 +4,9 @@ No inventory matching yet (FR-ST-1 lands with the NBI reader), so every
 structure proceeds on data plus rules:
 
 - Ends: measured (``roader.conflate.structures``).
-- Supports: abutments at the measured ends; piers only in the gaps between the
-  crossed roads' pavements less the lateral clearance rule, never over a travel
-  lane (FR-ST-3 layout rule). Observed pier returns are not used yet.
+- Supports: abutments at the measured ends; piers where returns under the deck
+  show them (FR-ST-3 first priority), then in the gaps between the crossed roads'
+  pavements less the lateral clearance rule, never over a travel lane (layout rule).
 - Supports align with the skew of what they cross (FR-ST-4).
 - Family from the longest span (``structure.slab_max_span``), depth from the
   family's depth-to-span rule, slab thickness and columns by rule (FR-ST-2, FR-ST-5).
@@ -17,6 +17,7 @@ structure proceeds on data plus rules:
 
 from __future__ import annotations
 
+import dataclasses
 import itertools
 import math
 from dataclasses import dataclass
@@ -45,6 +46,106 @@ FASCIA_COVERAGE = 0.3
 PIER_END_CLEAR_M = 5.0  # no pier closer than this to an abutment
 MIN_PIER_GAP_M = 8.0
 METHOD_CONFIDENCE = {"class17": 0.9, "sheet_break": 0.7, "class17_only": 0.5}
+# FR-ST-3 observed piers: returns under the deck, off every lower pavement, clear of the ground.
+PIER_MIN_RETURNS = 3
+PIER_MIN_HEIGHT_M = 1.0  # vertical spread of one pier's returns
+PIER_MIN_REACH_M = 3.0  # a column reaches deeper below the deck surface than any girder
+PIER_TOP_MIN_DROP_M = 1.0  # shallower returns are the deck itself
+PIER_GROUND_CLEAR_M = 1.0
+PIER_JOIN_M = 1.0  # returns this close along the support line belong to one pier
+PIER_MAX_LENGTH_M = 3.0  # longer runs are a wall, a fascia or a hedge
+PIER_EDGE_PAD_M = 0.5  # oblique returns just outside the deck edge
+PIER_SNAP_M = 2.0  # an observed pier moves at most this far to clear the lower pavements
+LOWER_PAD_M = 0.5
+
+
+@dataclass
+class ObservedPier:
+    station: float  # on the carried road, where the support line crosses its reference line
+    n_returns: int
+    top_drop_m: float  # shallowest return below the deck surface
+    height_m: float
+
+
+def observed_piers(
+    s: np.ndarray,
+    u: np.ndarray,
+    drop: np.ndarray,
+    on_lower: np.ndarray,
+    ground_drop: float | np.ndarray,
+    extent: tuple[float, float],
+    t: float,
+) -> list[ObservedPier]:
+    """FR-ST-3, first priority: piers seen directly in the returns under a deck.
+
+    ``s``, ``u``: returns in the carried road's frame; ``drop``: deck surface minus
+    return height; ``on_lower``: the return lies over a lower road's pavement (a
+    vehicle or a sign, never a pier); ``ground_drop``: deck surface minus ground.
+    Returns are moved along the support line (s - t u, D-025) and grouped; a group
+    is a pier when it is short along the line, holds ``PIER_MIN_RETURNS``, spans
+    ``PIER_MIN_HEIGHT_M`` vertically and reaches ``PIER_MIN_REACH_M`` below the deck.
+    """
+    ground = np.broadcast_to(np.asarray(ground_drop, dtype=float), np.shape(drop))
+    keep = ~np.asarray(on_lower, dtype=bool) & (drop >= PIER_TOP_MIN_DROP_M) & (drop <= ground - PIER_GROUND_CLEAR_M)
+    sc = s[keep] - t * u[keep]
+    d = drop[keep]
+    inside = (sc >= extent[0] + PIER_END_CLEAR_M) & (sc <= extent[1] - PIER_END_CLEAR_M)
+    sc, d = sc[inside], d[inside]
+    order = np.argsort(sc, kind="stable")
+    sc, d = sc[order], d[order]
+    found: list[ObservedPier] = []
+    if sc.size == 0:
+        return found
+    breaks = np.flatnonzero(np.diff(sc) > PIER_JOIN_M) + 1
+    for g_s, g_d in zip(np.split(sc, breaks), np.split(d, breaks), strict=True):
+        if g_s.size < PIER_MIN_RETURNS or g_s[-1] - g_s[0] > PIER_MAX_LENGTH_M:
+            continue
+        height = float(g_d.max() - g_d.min())
+        if height < PIER_MIN_HEIGHT_M or g_d.max() < PIER_MIN_REACH_M:
+            continue
+        found.append(ObservedPier(float(np.median(g_s)), int(g_s.size), float(g_d.min()), height))
+    kept: list[ObservedPier] = []
+    for p in found:
+        if kept and p.station - kept[-1].station < MIN_PIER_GAP_M:
+            if p.n_returns > kept[-1].n_returns:
+                kept[-1] = p
+            continue
+        kept.append(p)
+    return kept
+
+
+def _pier_returns(
+    upper: RoadFit, ev: Evidence, extent: StructureExtent, overhang: float, lowers: list[tuple[RoadFit, float]], t: float
+) -> list[ObservedPier]:
+    """Returns under one deck in the shape ``observed_piers`` takes. ``lowers``: (fit, surface z) of crossed roads."""
+    if not lowers:
+        return []
+    road = upper.road
+    xs = road.cross_section
+    pad = abs(t) * (max(k.value for k in xs.width_left.knots) + overhang) + 2.0
+    s, u, ok = upper.line.project(ev.xyz[:, :2], max_dist=40.0)
+    idx = np.flatnonzero(ok & (s >= extent.s_start - pad) & (s <= extent.s_end + pad))
+    if idx.size == 0:
+        return []
+    s, u, z = s[idx], u[idx], ev.xyz[idx, 2]
+    wl = np.array([xs.width_left(float(v)) for v in s]) + overhang + PIER_EDGE_PAD_M
+    wr = np.array([xs.width_right(float(v)) for v in s]) + overhang + PIER_EDGE_PAD_M
+    sc = s - t * u
+    under = (u <= wl) & (u >= -wr) & (sc >= extent.s_start) & (sc <= extent.s_end)
+    s, u, z = s[under], u[under], z[under]
+    if s.size == 0:
+        return []
+    top = np.array([road.surface_z(float(a), float(b)) for a, b in zip(s, u, strict=True)])
+    on_lower = np.zeros(s.size, dtype=bool)
+    xy = ev.xyz[idx[under], :2]
+    for fit, _z in lowers:
+        sl, ul, okl = fit.line.project(xy, max_dist=30.0)
+        lxs = fit.road.cross_section
+        lw = np.array([lxs.width_left(float(v)) for v in sl]) + LOWER_PAD_M
+        rw = np.array([lxs.width_right(float(v)) for v in sl]) + LOWER_PAD_M
+        on_lower |= okl & (ul <= lw) & (ul >= -rw)
+    ground = top - min(zl for _f, zl in lowers)
+    return observed_piers(s, u, top - z, on_lower, ground, (extent.s_start, extent.s_end), t)
 
 
 @dataclass
@@ -146,6 +247,42 @@ def measured_depth(upper: RoadFit, ev: Evidence, s0: float, s1: float, overhang:
     return float(np.percentile(d, 95.0)), int(d.size), coverage
 
 
+def clear_of_lanes(station: float, pavements: list[tuple[float, float]], need: float, snap: float = PIER_SNAP_M) -> float | None:
+    """Nearest station within ``snap`` of an observed pier where a support ``need`` long stands off every lower pavement.
+
+    Observed returns locate a pier to a metre or so; its rule-sized columns must
+    still stand in the median or beyond the shoulder, never on a lower travel lane
+    (FR-ST-3). None when no such place is near: the returns are not trusted as a pier.
+    """
+    half = 0.5 * need
+
+    def free(s: float) -> bool:
+        return all(not (a - half < s < b + half) for a, b in pavements)
+
+    if free(station):
+        return station
+    # A median takes the pier at its middle; beyond the outer shoulders, just off the edge.
+    for options in (
+        [0.5 * (b0 + a1) for (_a0, b0), (a1, _b1) in itertools.pairwise(sorted(pavements))],
+        [a - half for a, _b in pavements] + [b + half for _a, b in pavements],
+    ):
+        near = [s for s in options if abs(s - station) <= snap and free(s)]
+        if near:
+            return min(near, key=lambda s: (abs(s - station), s))
+    return None
+
+
+def _merged(zones: list[tuple[float, float]]) -> list[tuple[float, float]]:
+    """Union of station intervals: crossed roads whose clear zones overlap (a ramp merging beside a mainline) leave no gap."""
+    out: list[tuple[float, float]] = []
+    for a, b in sorted(zones):
+        if out and a <= out[-1][1]:
+            out[-1] = (out[-1][0], max(out[-1][1], b))
+        else:
+            out.append((a, b))
+    return out
+
+
 def _even_piers(
     extent: StructureExtent, piers: list[float], zones: list[tuple[float, float]], need: float, rules: RuleBook, era: str
 ) -> tuple[list[float], set[float]]:
@@ -179,13 +316,18 @@ def _even_piers(
 
 
 def parapet_fill(road, structure: Structure, existing: list[Barrier], rules: RuleBook) -> list[Barrier]:
-    """Rule parapets on deck sides where none was observed (FR-ST-5, FR-RD-4: observed parts win)."""
+    """Rule parapets on deck sides where none was observed (FR-ST-5, FR-RD-4: observed parts win).
+
+    A side whose observed parapets cover less than half the deck gets one parapet
+    over the whole deck; observed pieces there are taken out of ``existing`` and
+    their offset, height and widths carried along the deck, so two parapets never
+    stand in one place.
+    """
     era = era_of(structure.year_built)
     out = []
     for side in ("left", "right"):
-        covered = sum(
-            max(0.0, min(b.s1, structure.s_end) - max(b.s0, structure.s_start)) for b in existing if b.side == side and b.kind == "parapet"
-        )
+        seen = [b for b in existing if b.side == side and b.kind == "parapet" and b.s1 > structure.s_start and b.s0 < structure.s_end]
+        covered = sum(max(0.0, min(b.s1, structure.s_end) - max(b.s0, structure.s_start)) for b in seen)
         if covered >= 0.5 * (structure.s_end - structure.s_start):
             continue
         height, prov = rules.fill("parapet.height", era=era)
@@ -197,6 +339,15 @@ def parapet_fill(road, structure: Structure, existing: list[Barrier], rules: Rul
         for b in existing:
             if b.side == side and b.kind == "curb" and b.s1 >= structure.s_start and b.s0 <= structure.s_end:
                 offset = max(offset, b.offset_m + b.base_width_m)
+        if seen:
+            longest = max(seen, key=lambda b: (b.s1 - b.s0, b.id))
+            offset, height, base, top = max(offset, longest.offset_m), longest.height_m, longest.base_width_m, longest.top_width_m
+            prov = dataclasses.replace(prov, flags=[*prov.flags, f"FR-ST-5:parapet_extended_from:{longest.id}"])
+            for b in seen:
+                existing.remove(b)
+                for a, c in ((b.s0, structure.s_start), (structure.s_end, b.s1)):
+                    if c - a > 1.0:  # the observed parapet runs on past the deck
+                        existing.append(dataclasses.replace(b, id=stable_id("br", b.id, round(a, 1)), s0=a, s1=c))
         out.append(
             Barrier(
                 stable_id("br", road.id, side, round(structure.s_start, 0), "rule"),
@@ -234,18 +385,49 @@ def infer_structure(
     lateral, _lp = rules.fill("clearance.lateral.support", road_class=fits[on[0].lower_road].road.road_class if on else "*")
     col_w, col_prov = rules.fill("column.width", era=era)
 
-    # FR-ST-3: piers only between the crossed roads' clear zones.
-    zones = [_footprint_on(upper, fits[c.lower_road], c, lateral) for c in on]
-    zones.sort()
-    piers = []
+    # FR-XS-5: overhang from deck-level returns; the parapet base must fit on the deck.
+    measured = _overhang(upper, ev, extent.s_start, extent.s_end)
+    deck_barriers = [b for b in barriers if b.s1 >= extent.s_start and b.s0 <= extent.s_end]
+    need = 0.0
+    for b in deck_barriers:
+        w = (road.cross_section.width_left if b.side == "left" else road.cross_section.width_right)(0.5 * (b.s0 + b.s1))
+        need = max(need, b.offset_m - w + b.base_width_m + 0.05)
+    overhang_flags = []
+    if measured is not None and measured >= need:
+        overhang = measured
+        overhang_flags.append("FR-XS-5:overhang_measured")
+        ok, _rule = rules.evaluate("deck.overhang", overhang, era=era)
+        if not ok:
+            overhang_flags.append("FR-RL-3:deck.overhang_out_of_range")
+    elif deck_barriers:
+        overhang = need
+        overhang_flags.append("FR-XS-5:overhang_from_parapet_base")
+    else:
+        overhang, _ = rules.fill("deck.overhang", era=era)
+        overhang_flags.append("FR-XS-5:overhang_by_rule")
+
+    # FR-ST-3: observed piers first; then the layout rule, only between the crossed
+    # roads' clear zones and only in gaps no observed pier stands in; then even spacing.
+    t = math.tan(skew)
+    seen = _pier_returns(upper, ev, extent, overhang, [(fits[c.lower_road], fits[c.lower_road].road.profile.z(c.lower_s)) for c in on], t)
     need = col_w / max(math.cos(skew), 0.2) + 0.5
+    pavements = _merged([_footprint_on(upper, fits[c.lower_road], c, 0.0) for c in on])
+    observed: dict[float, tuple[ObservedPier, float]] = {}
+    for p in seen:
+        at = clear_of_lanes(p.station, pavements, need)
+        if at is None:
+            flags.append(Flag("FR-ST-3:observed_over_lane", sid, "FR-ST-3", f"{p.n_returns} pier-like returns at s={p.station:.1f} stand on a lower pavement with no clear place within {PIER_SNAP_M} m; not used"))
+            continue
+        observed[at] = (p, at - p.station)
+    zones = _merged([_footprint_on(upper, fits[c.lower_road], c, lateral) for c in on])
+    piers = sorted(observed)
     inner = (extent.s_start + PIER_END_CLEAR_M, extent.s_end - PIER_END_CLEAR_M)
     for (a0, a1), (b0, b1) in itertools.pairwise(zones):
         gap0, gap1 = a1, b0
         mid = 0.5 * (gap0 + gap1)
-        if gap1 - gap0 >= need and inner[0] <= mid <= inner[1]:
+        if gap1 - gap0 >= need and inner[0] <= mid <= inner[1] and not any(gap0 - need <= p <= gap1 + need for p in observed):
             piers.append(mid)
-    piers, even = _even_piers(extent, piers, zones, need, rules, era)
+    piers, even = _even_piers(extent, sorted(piers), zones, need, rules, era)
     stations = [extent.s_start, *piers, extent.s_end]
     spans = list(np.diff(stations))
     max_span = float(max(spans)) if spans else extent.length
@@ -257,27 +439,7 @@ def infer_structure(
     slab_t, _ = rules.fill("deck.slab_thickness", era=era)
     review_span, _ = rules.fill("structure.review_span", era=era)
     review = max_span >= review_span
-
-    # FR-XS-5: overhang from deck-level returns; the parapet base must fit on the deck.
-    measured = _overhang(upper, ev, extent.s_start, extent.s_end)
-    deck_barriers = [b for b in barriers if b.s1 >= extent.s_start and b.s0 <= extent.s_end]
-    need = 0.0
-    for b in deck_barriers:
-        w = (road.cross_section.width_left if b.side == "left" else road.cross_section.width_right)(0.5 * (b.s0 + b.s1))
-        need = max(need, b.offset_m - w + b.base_width_m + 0.05)
-    deck_flags = [f"FR-ST-5:depth_ratio:{ratio_prov.rule_id}", f"FR-ST-2:family_by_span:{slab_prov.rule_id}"]
-    if measured is not None and measured >= need:
-        overhang = measured
-        deck_flags.append("FR-XS-5:overhang_measured")
-        ok, _rule = rules.evaluate("deck.overhang", overhang, era=era)
-        if not ok:
-            deck_flags.append("FR-RL-3:deck.overhang_out_of_range")
-    elif deck_barriers:
-        overhang = need
-        deck_flags.append("FR-XS-5:overhang_from_parapet_base")
-    else:
-        overhang, _ = rules.fill("deck.overhang", era=era)
-        deck_flags.append("FR-XS-5:overhang_by_rule")
+    deck_flags = [f"FR-ST-5:depth_ratio:{ratio_prov.rule_id}", f"FR-ST-2:family_by_span:{slab_prov.rule_id}", *overhang_flags]
     m_depth, n_fascia, coverage = measured_depth(upper, ev, extent.s_start, extent.s_end, overhang)
     if m_depth is not None:
         depth = m_depth
@@ -309,6 +471,15 @@ def infer_structure(
         label = f"a{1 if n == 0 else 2}" if kind == "abutment" else f"p{n}"
         layout = "FR-ST-3:even_spacing" if s in even else "FR-ST-3:layout_rule"
         prov = Provenance(Source.RULE, cap_prov.confidence, rule_id=foot_prov.rule_id if kind == "abutment" else col_prov.rule_id, flags=[layout if kind == "pier" else "FR-ST-3:measured_end"])
+        if kind == "pier" and s in observed:
+            # Located from returns; columns, cap and footing are still sized by rule (FR-ST-5).
+            p, moved = observed[s]
+            prov = Provenance(
+                Source.MEASURED, 0.4, rule_id=col_prov.rule_id, n_points=p.n_returns,
+                flags=[f"FR-ST-3:observed:{p.n_returns}_returns:top_{p.top_drop_m:.2f}m_below_deck:height_{p.height_m:.2f}m"],
+            )
+            if moved:
+                prov.flags.append(f"FR-ST-3:observed_moved_{moved:+.2f}m_off_lower_pavement")
         supports.append(
             Support(
                 id=stable_id("sp", sid, label),

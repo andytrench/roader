@@ -23,10 +23,12 @@ from roader.solids.stations import (
     PRIORITY_OTHER,
     PRIORITY_STRUCTURE,
     STATION_MERGE_M,
+    STRUCTURE_TOL_M,
     StationLine,
     merge_breakpoints,
     skew_at,
     skew_knots,
+    skew_offsets,
     stations,
     support_block,
 )
@@ -191,6 +193,8 @@ def road_bodies(
         if not 0.0 <= st.s_start < st.s_end <= length:
             raise ValueError(f"structure {st.id}: span outside road {road.id}")
     spans = [(st.s_start, st.s_end) for st in structures]
+    # FR-CR-3: where this road rides another road's deck, that deck is its surface.
+    carried = spans + [(sh.s_start, sh.s_end) for st in model.structures for sh in st.shared if sh.road_id == road.id]
 
     def on_structure(s: float) -> bool:
         return any(a - STATION_MERGE_M <= s <= b + STATION_MERGE_M for a, b in spans)
@@ -207,6 +211,8 @@ def road_bodies(
         bps += [(e.s0, PRIORITY_OTHER), (e.s0 + e.length, PRIORITY_OTHER)]
     for pw in (xs.width_left, xs.width_right, xs.slope_left, xs.slope_right, xs.pavement_thickness):
         bps += [(s, PRIORITY_OTHER) for s in pw.breakpoints()]
+    for a, b in carried[len(spans) :]:
+        bps += [(a, PRIORITY_STRUCTURE), (b, PRIORITY_STRUCTURE)]
 
     # Barriers: rendered where they stand on the deck or on the pavement.
     barriers: list[tuple[Barrier, float, float]] = []
@@ -231,12 +237,14 @@ def road_bodies(
                 (b.offset_m + b.base_width_m for b, s0, s1 in barriers if b.side == side and s0 < st.s_end and s1 > st.s_start),
                 default=0.0,
             )
-            overhang = st.deck.overhang_m
+            overhang = st.deck.overhang(side)
 
             def edge(s: float, width=width, zone=zone, overhang=overhang, sign=sign) -> float:
                 return sign * (max(width(s), zone) + overhang)
 
             lines.append(ULine(f"d{side[0]}:{st.id}", edge, st.s_start, st.s_end))
+            for k, u in enumerate(skew_offsets(road, st, side, min(tol, STRUCTURE_TOL_M))):
+                lines.append(ULine(f"k{side[0]}{k}:{st.id}", _const(u), st.s_start, st.s_end))
         bps += [(st.s_start, PRIORITY_STRUCTURE), (st.s_end, PRIORITY_STRUCTURE)]
         for sp in st.supports:
             a, b = support_block(st, sp)
@@ -255,7 +263,7 @@ def road_bodies(
         if ss.ratio <= 0.0:
             raise ValueError(f"side slope {ss.id}: ratio must be positive")
         sign = 1.0 if ss.side == "left" else -1.0
-        pieces = subtract(max(ss.s0, 0.0), min(ss.s1, length), spans)
+        pieces = subtract(max(ss.s0, 0.0), min(ss.s1, length), carried)
         for k, (a, b) in enumerate(pieces):
             lines.append(ULine(f"toe:{ss.id}:{k}", _toe(road, sign, ss.ratio, sampler, ss.id), a, b))
         fills.append((ss, sign, pieces))
@@ -307,7 +315,7 @@ def road_bodies(
 
     src = road_source(road)
     bodies: list[Body] = []
-    pieces = subtract(0.0, length, spans)
+    pieces = subtract(0.0, length, carried)
     for k, (a, b) in enumerate(pieces):
         bodies.append(
             Body(

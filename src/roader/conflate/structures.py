@@ -7,8 +7,12 @@ surface, the carrying sheet has left the ground and a void or a lower sheet is
 beside it. Each side gives a run; on a skewed bridge the two sides' runs are
 shifted by +-offset * tan(skew), so the centerline ends are their means.
 Returns classified as bridge deck (ASPRS 17) on the road surface give a second,
-sharper estimate; it is used when it agrees with the geometric run, since
-vendor classes are untrusted evidence on their own (FR-IN-3).
+sharper estimate. It is used only where the geometric run confirms a structure,
+since vendor classes are untrusted evidence on their own (FR-IN-3), and there
+it gives the ends (D-031).
+
+A road leaving or joining another on that road's deck rides the same deck
+(``absorb_diverging``): it gets no structure of its own.
 """
 
 from __future__ import annotations
@@ -20,6 +24,7 @@ import numpy as np
 
 from roader.evidence import Evidence
 from roader.fit.road import RoadFit
+from roader.model.schema import Flag, Link, Road
 
 STEP_M = 1.0
 BAND_INNER_M = 1.5
@@ -134,6 +139,83 @@ def chain_extents(
                 )
             )
     return sorted(out, key=lambda e: (e.road_id, e.s_start))
+
+
+SEAM_REACH_M = 2.0  # a run starting this close to its road's seam starts on the parent's deck
+SHARED_OVERRUN_M = 10.0  # a run ending this far past the parent's deck end is a deck of its own
+
+
+@dataclass
+class Share:
+    """A road riding on another road's deck from its seam with that road (FR-CR-3)."""
+
+    parent_road: str
+    parent_s: float  # seam station on the parent
+    road_id: str
+    s_seam: float  # seam station on this road
+    toward: float  # +1: the road leaves the seam toward increasing s (a diverge), -1: arrives there (a merge)
+
+
+def absorb_diverging(
+    extents: list[StructureExtent], links: list[Link], roads: dict[str, Road]
+) -> tuple[list[StructureExtent], list[Share], list[Flag]]:
+    """FR-CR-3: a road diverging from (or merging into) another on that road's deck shares the deck.
+
+    Every diverge or merge whose seam lies on a structure run of the parent gives a
+    ``Share``: the child rides the parent's deck from its seam. A run of the child
+    starting at that seam is dropped, so the child gets no deck or abutments of its
+    own. A run reaching more than ``SHARED_OVERRUN_M`` past the parent's deck end is
+    a deck of its own continuing from the shared one; it is kept, no share is made,
+    and it is flagged for review.
+    """
+    dropped: set[int] = set()
+    shares: list[Share] = []
+    flags: list[Flag] = []
+    for lk in sorted(links, key=lambda k: k.id):
+        if lk.kind == "diverge":
+            parent, p_end, p_s, child, c_end, c_s = lk.from_road, lk.from_end, lk.from_s, lk.to_road, lk.to_end, lk.to_s
+        elif lk.kind == "merge":
+            parent, p_end, p_s, child, c_end, c_s = lk.to_road, lk.to_end, lk.to_s, lk.from_road, lk.from_end, lk.from_s
+        else:
+            continue
+        if parent not in roads or child not in roads:
+            continue
+        road = roads[child]
+        seam = c_s if c_s is not None else (0.0 if c_end == "start" else road.length)
+        p_seam = p_s if p_s is not None else (0.0 if p_end == "start" else roads[parent].length)
+        host = [p for p in extents if p.road_id == parent and p.s_start <= p_seam <= p.s_end]
+        if not host:
+            continue
+        p = host[0]
+        toward = 1.0 if c_end == "start" else -1.0
+        own = [
+            k
+            for k, e in enumerate(extents)
+            if e.road_id == child and (e.s_start <= seam + SEAM_REACH_M if toward > 0 else e.s_end >= seam - SEAM_REACH_M)
+            and (e.s_end >= seam - SEAM_REACH_M if toward > 0 else e.s_start <= seam + SEAM_REACH_M)
+        ]
+        long = []
+        for k in own:
+            e = extents[k]
+            far = e.s_end if toward > 0 else e.s_start
+            ps, _pu = roads[parent].alignment.project(*road.alignment.offset_point(far, 0.0))
+            overrun = max(ps - p.s_end, p.s_start - ps)
+            if overrun > SHARED_OVERRUN_M:
+                long.append((e, overrun))
+        if long:
+            for e, overrun in long:
+                flags.append(
+                    Flag(
+                        "FR-CR-3:diverges_on_deck",
+                        child,
+                        "FR-CR-3",
+                        f"{e.method} run s={e.s_start:.1f}-{e.s_end:.1f} starts on the deck of {parent} (s={p.s_start:.1f}-{p.s_end:.1f}) and runs {overrun:.1f} m past it; kept as its own structure",
+                    )
+                )
+            continue
+        dropped.update(own)
+        shares.append(Share(parent, p_seam, child, seam, toward))
+    return [e for k, e in enumerate(extents) if k not in dropped], shares, flags
 
 
 def _clamped(e: StructureExtent, length: float) -> StructureExtent:
@@ -307,7 +389,7 @@ def find_extents(fit: RoadFit, ev: Evidence, skews: list[tuple[float, float]] | 
             geom.append((a, b, one))
     geom.sort()
     deck = deck_class_runs(fit, ev)
-    skewed = deck_class_runs(fit, ev, skews) if any(one for _a, _b, one in geom) else deck
+    skewed = deck_class_runs(fit, ev, skews) if skews else deck
     out = []
     used_deck: set[int] = set()
     for a, b, one in geom:
@@ -316,10 +398,13 @@ def find_extents(fit: RoadFit, ev: Evidence, skews: list[tuple[float, float]] | 
         used_deck.update(match)
         if c17 and abs(c17[0] - a) <= CLASS17_AGREE_M and abs(c17[1] - b) <= CLASS17_AGREE_M:
             out.append(StructureExtent(fit.road.id, c17[0], c17[1], "class17", (a, b), c17, one))
-        elif c17 and one and len(skewed) == len(deck):
-            # With one side unseen (a twin deck beside it, FR-RS-2) the side drop only
-            # guesses the far end; the deck-class run, read at the centerline, is better.
-            c17 = (min(skewed[i][0] for i in match), max(skewed[i][1] for i in match))
+        elif c17:
+            # D-031: off by more than CLASS17_AGREE_M, class 17 on the road surface still
+            # wins: with one side unseen (a twin deck beside it, FR-RS-2) the side drop only
+            # guesses the far end, and a two-sided sheet break runs on over wingwalls and
+            # abutment fills. Read at the centerline, corrected for the skew.
+            if len(skewed) == len(deck):
+                c17 = (min(skewed[i][0] for i in match), max(skewed[i][1] for i in match))
             out.append(StructureExtent(fit.road.id, c17[0], c17[1], "class17", (a, b), c17, one))
         else:
             out.append(StructureExtent(fit.road.id, a, b, "sheet_break", (a, b), c17, one))

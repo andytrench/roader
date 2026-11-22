@@ -245,6 +245,22 @@ class DeckSpec:
     slab_thickness_m: float
     overhang_m: float
     prov: Provenance
+    # Per-side overhang where one side differs, e.g. the joint side of a twin deck (FR-CR-3); None: overhang_m.
+    overhang_left_m: float | None = None
+    overhang_right_m: float | None = None
+
+    def overhang(self, side: str) -> float:
+        value = self.overhang_left_m if side == "left" else self.overhang_right_m
+        return self.overhang_m if value is None else value
+
+
+@dataclass
+class SharedSpan:
+    """FR-CR-3: a stretch of another road that rides on this structure's deck (a ramp diverging on it)."""
+
+    road_id: str
+    s_start: float
+    s_end: float
 
 
 @dataclass
@@ -277,6 +293,8 @@ class Structure:
     prov: Provenance
     inventory_id: str | None = None
     review: bool = False  # FR-ST-6
+    # Other roads carried over part of their length; the deck is their surface there (FR-CR-3).
+    shared: list[SharedSpan] = field(default_factory=list)
 
 
 # ---------------------------------------------------------------- L6, L7
