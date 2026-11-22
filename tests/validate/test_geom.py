@@ -34,3 +34,15 @@ def test_points_strictly_inside_box():
     v, f = box_arrays()
     pts = np.array([[0.5, 0.5, 0.5], [1.5, 0.5, 0.5], [1.0, 0.5, 0.5], [0.0, 0.0, 0.0], [0.999, 0.999, 0.001]])
     assert points_strictly_inside(v, f, pts).tolist() == [True, False, False, False, True]
+
+
+def test_fr_sv_4_near_coplanar_faces_sharing_a_vertex_do_not_intersect():
+    """Two terrain faces meeting at one vertex, coplanar to 1e-7, with disjoint sectors (M1 site case)."""
+    from roader.validate._geom import vertex_overlap
+
+    a = np.array([[82.0, 44.0, 172.5688], [81.64384972, 41.2607818, 172.87670152], [82.32274146, 40.98091639, 172.91206825]])
+    b = np.array([[82.0, 44.0, 172.5688], [80.21572529, 41.84626491, 172.80267083], [80.92790427, 41.55495385, 172.83951405]])
+    assert not vertex_overlap(a, b, 0, 0)
+    # Rotating B into A's sector makes them overlap.
+    c = np.array([a[0], a[0] + 0.5 * (a[1] - a[0]) + 0.5 * (a[2] - a[0]), a[1] + 1e-3 * (a[2] - a[1])])
+    assert vertex_overlap(a, c, 0, 0)

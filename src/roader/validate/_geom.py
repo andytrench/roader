@@ -14,6 +14,7 @@ from shapely import STRtree
 
 PLANE_EPS = 1e-7  # a vertex within this distance of a plane is on it
 SHARE_EPS = 1e-6  # an intersection point this close to a shared vertex is that vertex
+PARALLEL_EPS = 1e-6  # unit normals closer than this (sine of the angle) are treated as coplanar
 BOX_PAD = 1e-6
 
 
@@ -203,7 +204,9 @@ def vertex_overlap(tri_a: np.ndarray, tri_b: np.ndarray, ca: int, cb: int, eps: 
     nb /= np.linalg.norm(nb)
     off_b = [float(na @ d) for d in db_dirs]
     off_a = [float(nb @ d) for d in da_dirs]
-    if max(abs(x) for x in off_b) <= eps and max(abs(x) for x in off_a) <= eps:
+    near_parallel = float(np.linalg.norm(np.cross(na, nb))) < PARALLEL_EPS
+    if near_parallel or (max(abs(x) for x in off_b) <= eps and max(abs(x) for x in off_a) <= eps):
+        # Planes this close to parallel have no meaningful intersection line (FR-SV-4).
         return _sectors_overlap(da_dirs, db_dirs, na)
     sa = _ray_section(da_dirs, off_a, eps)
     sb = _ray_section(db_dirs, off_b, eps)

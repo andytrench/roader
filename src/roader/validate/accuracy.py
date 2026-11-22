@@ -23,6 +23,7 @@ from roader.validate.report import GateResult, Violation
 BLOCK_M = 25.0
 HOLDOUT_FRACTION = 0.2
 HOLDOUT_SALT = "roader:AC-A1:holdout:v1"
+DECK_EDGE_TOL_M = 1.0  # AC-A1: deck-outline returns beyond the pavement must be this close to the deck surface
 
 
 # ---------------------------------------------------------------- holdout
@@ -106,7 +107,8 @@ def surface_accuracy(
         return _skipped(gate, "no held-out pavement points")
     best = np.full(len(pts), np.inf)
     for road in model.roads:
-        _assign_residuals(road, pts, best)
+        decks = [(st.s_start, st.s_end, st.deck.overhang_m) for st in model.structures if st.carried_road == road.id]
+        _assign_residuals(road, pts, best, decks)
     used = np.isfinite(best)
     if not used.any():
         return _skipped(gate, "no held-out points fall on any road's pavement")
@@ -130,17 +132,32 @@ def surface_accuracy(
     return result
 
 
-def _assign_residuals(road: Road, pts: np.ndarray, best: np.ndarray) -> None:
+def _assign_residuals(road: Road, pts: np.ndarray, best: np.ndarray, decks: list[tuple[float, float, float]] = ()) -> None:
+    """Residuals against this road for points inside its footprint; keeps the smallest per point.
+
+    Over a structure the footprint is the deck outline (pavement plus overhang), so
+    returns on the deck beyond the curb (walkways, curb tops) are compared with the
+    deck they lie on, not with the road under the deck (AC-A1).
+    """
     xs = road.cross_section
     proj = Projector(road.alignment)
-    idx = np.nonzero(proj.near(pts[:, :2], max(_pw_max(xs.width_left), _pw_max(xs.width_right))))[0]
+    reach = max(_pw_max(xs.width_left), _pw_max(xs.width_right)) + max((d[2] for d in decks), default=0.0)
+    idx = np.nonzero(proj.near(pts[:, :2], reach))[0]
     if len(idx) == 0:
         return
     s, u = proj.project(pts[idx, :2])
-    inside = (s > 0.0) & (s < proj.length) & (u <= _pw(xs.width_left, s)) & (u >= -_pw(xs.width_right, s))
+    extra = np.zeros(len(s))
+    for s0, s1, overhang in decks:
+        extra = np.where((s >= s0) & (s <= s1), np.maximum(extra, overhang), extra)
+    wl, wr = _pw(xs.width_left, s), _pw(xs.width_right, s)
+    inside = (s > 0.0) & (s < proj.length) & (u <= wl + extra) & (u >= -wr - extra)
+    on_pavement = (u <= wl) & (u >= -wr)
     idx, s, u = idx[inside], s[inside], u[inside]
+    on_pavement = on_pavement[inside]
     z = np.array([road.surface_z(float(a), float(b)) for a, b in zip(s, u, strict=True)])
     res = pts[idx, 2] - z
+    # Beyond the pavement only returns at deck level belong to the deck; ground seen past its edge does not.
+    res = np.where(on_pavement | (np.abs(res) <= DECK_EDGE_TOL_M), res, np.inf)
     better = np.abs(res) < np.abs(best[idx])
     best[idx[better]] = res[better]
 
