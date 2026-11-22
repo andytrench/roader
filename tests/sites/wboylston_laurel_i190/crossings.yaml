@@ -26,6 +26,7 @@ crossings:
     dz_m: 7.2
     skew_deg: 32  # from perpendicular, between the OSM centerlines
     tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    structure: laurel_over_i190
   - id: laurel_over_i190_nb
     upper: {osm_way: 183371679, name: Laurel Street, highway: secondary}
     lower: {osm_way: 398785088, name: I-190 northbound, highway: motorway}
@@ -35,6 +36,7 @@ crossings:
     dz_m: 7.4
     skew_deg: 32
     tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    structure: laurel_over_i190
 
 # AC-A5 structure ends. status: draft, needs human review. NOT ground truth.
 #
@@ -52,15 +54,22 @@ crossings:
 # Review checklist: confirm the deck joints (backwalls) from plans, inventory
 # (NBI length about 101 m in OSM) or a site visit, and replace these values.
 structure_ends:
-  - id: laurel_over_i190
-    status: draft, needs human review
-    carried: {osm_way: 183371679, name: Laurel Street}
-    method: class 17 extent on the carried pavement (0.5 / 99.5 percentile stations)
-    start_lonlat: [-71.8171235, 42.3888443]
-    end_lonlat: [-71.8158562, 42.3891055]
-    length_m: 108.3
-    alternative:
-      method: sheet break beside the deck, skew-corrected
-      start_lonlat: [-71.817157, 42.3888374]
-      end_lonlat: [-71.8158264, 42.3891116]
-      length_m: 113.7
+  status: draft, needs human review
+  structures:
+    - id: laurel_over_i190
+      carries: [183371679]
+      over: [9364739, 398785088]
+      note: >-
+        One deck over both I-190 carriageways. Method: class 17 extent on the carried
+        pavement (0.5 / 99.5 percentile stations); the skew-corrected sheet break beside
+        the deck is given as an alternative.
+      ends:
+        - along: 183371679
+          start_lonlat: [-71.8171235, 42.3888443]
+          end_lonlat: [-71.8158562, 42.3891055]
+          length_m: 108.3
+          alternative:
+            method: sheet break beside the deck, skew-corrected
+            start_lonlat: [-71.817157, 42.3888374]
+            end_lonlat: [-71.8158264, 42.3891116]
+            length_m: 113.7

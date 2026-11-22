@@ -101,15 +101,17 @@ def _draft_ends(model) -> dict[str, tuple[float, float]]:
     doc = yaml.safe_load(CROSSINGS.read_text())
     to_unit = FrameTransformer(cfg.frame())
     out = {}
-    for entry in doc.get("structure_ends", []):
-        assert entry["status"].startswith("draft")
-        road = _road_for_way(model, entry["carried"]["osm_way"])
-        st = next(s for s in model.structures if s.carried_road == road.id)
-        stations = []
-        for key in ("start_lonlat", "end_lonlat"):
-            x, y = to_unit.lonlat_to_unit([entry[key][0]], [entry[key][1]])
-            stations.append(road.alignment.project(float(x[0]), float(y[0]))[0])
-        out[st.id] = (min(stations), max(stations))
+    ends = doc.get("structure_ends", {})
+    assert ends["status"].startswith("draft")
+    for entry in ends["structures"]:
+        for end in entry["ends"]:
+            road = _road_for_way(model, end["along"])
+            st = next(s for s in model.structures if s.carried_road == road.id)
+            stations = []
+            for key in ("start_lonlat", "end_lonlat"):
+                x, y = to_unit.lonlat_to_unit([end[key][0]], [end[key][1]])
+                stations.append(road.alignment.project(float(x[0]), float(y[0]))[0])
+            out[st.id] = (min(stations), max(stations))
     return out
 
 
