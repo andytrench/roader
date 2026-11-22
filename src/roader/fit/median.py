@@ -5,10 +5,13 @@ each on the other's left. Every ``STATION_M`` along the first of a pair the
 median is classified from the returns between the two inner pavement edges,
 against the straight line joining the two edge heights:
 
-- ``barrier``: linear raised returns (FR-RS-4 evidence) anywhere in the gap;
+- ``barrier``: linear raised returns (FR-RS-4 evidence) within ``BARRIER_EDGE_M``
+  of an inner edge, or anywhere in a median narrower than ``WIDE_M`` (a pier
+  standing in a wide median is not a median barrier);
 - ``none``: edges closer than ``NONE_GAP_M`` and no barrier;
 - ``depressed`` / ``raised``: the median ground is more than ``DEPRESSED_M``
-  below / ``RAISED_M`` above that line;
+  below / ``RAISED_M`` above that line; an unpaved median ``WIDE_M`` or wider is
+  ``depressed`` whatever its relief (a natural median, drained to its low line);
 - ``painted``: flush and as smooth as pavement (robust spread under
   ``SMOOTH_M``); flush but rough ground (grass) counts as ``depressed`` and the
   element carries ``FR-XS-4:flush_unpaved``.
@@ -45,6 +48,8 @@ TWIN_MIN_M = 3.0  # centerline to centerline
 TWIN_MAX_M = 60.0
 TWIN_COS = -0.9
 NONE_GAP_M = 0.5
+WIDE_M = 12.0
+BARRIER_EDGE_M = 3.0
 DEPRESSED_M = 0.25
 RAISED_M = 0.10
 SMOOTH_M = 0.05
@@ -100,10 +105,12 @@ def _partners(a: Road, la: Polyline, others: list[tuple[Road, Polyline]]) -> lis
     return out
 
 
-def _classify(gap, z, u, label, z_line) -> tuple[str | None, int, bool]:
-    """(kind or None if unobserved, returns used, flush_unpaved)."""
-    if int(np.sum(label == LINEAR)) >= BARRIER_MIN_POINTS:
-        return "barrier", int(np.sum(label == LINEAR)), False
+def _classify(gap, z, u, label, z_line, u0) -> tuple[str | None, int, bool]:
+    """(kind or None if unobserved, returns used, flush_unpaved); ``u0`` is the near inner edge offset."""
+    at_edge = (u - u0 <= BARRIER_EDGE_M) | (u0 + gap - u <= BARRIER_EDGE_M) | (gap < WIDE_M)
+    barrier = (label == LINEAR) & at_edge
+    if int(barrier.sum()) >= BARRIER_MIN_POINTS:
+        return "barrier", int(barrier.sum()), False
     if gap < NONE_GAP_M:
         return "none", 0, False
     ground = label == SURFACE
@@ -113,6 +120,8 @@ def _classify(gap, z, u, label, z_line) -> tuple[str | None, int, bool]:
     med = float(np.median(dz))
     if med < -DEPRESSED_M:
         return "depressed", int(ground.sum()), False
+    if gap >= WIDE_M:
+        return "depressed", int(ground.sum()), med > -DEPRESSED_M
     if med > RAISED_M:
         return "raised", int(ground.sum()), False
     spread = 1.4826 * float(np.median(np.abs(dz - med)))
@@ -211,7 +220,7 @@ def classify_medians(fits, ev) -> list[Flag]:
                 def z_line(u, za=za, zb=zb, wa=wa, gap=gap):
                     return za + (u - wa) / max(gap, 1e-6) * (zb - za)
 
-                kind, n, flush = _classify(gap, pz[m], pu[m], plab[m], z_line)
+                kind, n, flush = _classify(gap, pz[m], pu[m], plab[m], z_line, wa)
                 if kind is not None:
                     rows.append((s, kind, gap, n, flush))
             lb = lines[b.id]
