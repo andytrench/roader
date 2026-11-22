@@ -7,7 +7,8 @@ against the straight line joining the two edge heights:
 
 - ``barrier``: linear raised returns (FR-RS-4 evidence) within ``BARRIER_EDGE_M``
   of an inner edge, or anywhere in a median narrower than ``WIDE_M`` (a pier
-  standing in a wide median is not a median barrier);
+  standing in a wide median is not a median barrier); in a narrow median any
+  returns more than ``BARRIER_DZ_M`` above the edge line count as barrier too;
 - ``none``: edges closer than ``NONE_GAP_M`` and no barrier;
 - ``depressed`` / ``raised``: the median ground is more than ``DEPRESSED_M``
   below / ``RAISED_M`` above that line; an unpaved median ``WIDE_M`` or wider is
@@ -50,6 +51,7 @@ TWIN_COS = -0.9
 NONE_GAP_M = 0.5
 WIDE_M = 12.0
 BARRIER_EDGE_M = 3.0
+BARRIER_DZ_M = 0.5
 DEPRESSED_M = 0.25
 RAISED_M = 0.10
 SMOOTH_M = 0.05
@@ -109,6 +111,9 @@ def _classify(gap, z, u, label, z_line, u0) -> tuple[str | None, int, bool]:
     """(kind or None if unobserved, returns used, flush_unpaved); ``u0`` is the near inner edge offset."""
     at_edge = (u - u0 <= BARRIER_EDGE_M) | (u0 + gap - u <= BARRIER_EDGE_M) | (gap < WIDE_M)
     barrier = (label == LINEAR) & at_edge
+    if gap < WIDE_M:
+        # A wall-like rise in a narrow median is a barrier even where the cells were not labelled linear.
+        barrier |= z - z_line(u) > BARRIER_DZ_M
     if int(barrier.sum()) >= BARRIER_MIN_POINTS:
         return "barrier", int(barrier.sum()), False
     if gap < NONE_GAP_M:
