@@ -322,8 +322,9 @@ def road_bodies(
             toe = f"toe:{ss.id}:{k}"
             lo, hi = ("c", toe) if sign > 0 else (toe, "c")
 
-            def bottom(p: int) -> float:
-                return sampler(pv.x[p], pv.y[p]) - embed  # type: ignore[misc]
+            def bottom(p: int, fill_top=fill_top) -> float:
+                # Terrain rising above the slope plane between two toe stations pinches the fill there, not through it.
+                return min(sampler(pv.x[p], pv.y[p]), fill_top(pv.s[p], pv.u[p])) - embed  # type: ignore[misc]
 
             bodies.append(
                 Body(
