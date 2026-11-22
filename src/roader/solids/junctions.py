@@ -46,6 +46,7 @@ STEINER_CLEAR = 0.4  # Steiner points keep STEINER_CLEAR * STEINER_M from the bo
 MIN_FILL_M = 0.05  # fill block never thinner than this under the slab
 RT_GROUND_CLEAR_M = 1e-3  # real-time fill top stays this far above the terrain and below the slab top
 EPS_AREA = 1e-9
+EPS_OVERLAP_M2 = 1e-6  # plan overlap of two cells below this is contact, not overlap
 
 
 def zones(model: RoadModel) -> dict[str, list[tuple[float, float]]]:
@@ -169,6 +170,69 @@ class JunctionPlan:
         for jn, (ring, holes, exact) in zip(areas, outlines, strict=True):
             out.extend(self._junction(jn, ring, holes, {**common, **exact}, sampler, realtime))
         return out
+
+    def trim_fills(self, bodies: list[Body]) -> list[Body]:
+        """Drop embankment cells beyond a road's pavement edge that overlap another element's body (D-071).
+
+        Side slopes of roads that run close together, or beside an L6 area, would otherwise
+        overlap in the gore. Only cells wholly outside the pavement edge are dropped, so the
+        pavement keeps its fill; both of two overlapping slopes stop at their edges.
+        """
+        pv = self.pv
+        model = self.model
+        roads = {r.id: r for r in model.roads}
+        owner_of: dict[str, str] = {ss.id: ss.road_id for ss in model.side_slopes}
+        for r in model.roads:
+            owner_of.update({b.id: r.id for b in r.cross_section.barriers})
+        for st in model.structures:
+            owner_of[st.id] = st.carried_road
+            owner_of.update({sp.id: st.carried_road for sp in st.supports})
+
+        def owner(body: Body) -> str:
+            return owner_of.get(body.element_id, body.element_id)
+
+        def zrange(body: Body, cell: Cell) -> tuple[float, float]:
+            return min(body.bottom(p) for p in cell.loop), max(body.top(p) for p in cell.loop)
+
+        def outer(road: Road, cell: Cell) -> bool:
+            xs = road.cross_section
+            for p in cell.loop:
+                u, st = pv.u[p], pv.s[p]
+                if not math.isfinite(u) or abs(u) < (xs.width_left(st) if u >= 0.0 else xs.width_right(st)) - 1e-6:
+                    return False
+            return True
+
+        candidates: list[tuple[int, int]] = []  # (body, cell) of outer embankment cells
+        for bi, body in enumerate(bodies):
+            if body.layer == "L4" and body.part == "embankment" and owner(body) in roads:
+                road = roads[owner(body)]
+                candidates.extend((bi, ci) for ci, cell in enumerate(body.cells) if outer(road, cell))
+        if not candidates:
+            return bodies
+        geoms, refs = [], []
+        for bi, body in enumerate(bodies):
+            for ci, cell in enumerate(body.cells):
+                geoms.append(Polygon([(pv.x[p], pv.y[p]) for p in cell.loop]))
+                refs.append((bi, ci))
+        index = {ref: k for k, ref in enumerate(refs)}
+        tree = shapely.STRtree(geoms)
+        drop: dict[int, set[int]] = {}
+        for bi, ci in candidates:
+            mine = owner(bodies[bi])
+            g = geoms[index[(bi, ci)]]
+            lo, hi = zrange(bodies[bi], bodies[bi].cells[ci])
+            for k in tree.query(g):
+                bj, cj = refs[int(k)]
+                if owner(bodies[bj]) == mine or g.intersection(geoms[int(k)]).area <= EPS_OVERLAP_M2:
+                    continue
+                lo2, hi2 = zrange(bodies[bj], bodies[bj].cells[cj])
+                if lo < hi2 and lo2 < hi:
+                    drop.setdefault(bi, set()).add(ci)
+                    break
+        return [
+            dataclasses.replace(body, cells=[c for ci, c in enumerate(body.cells) if ci not in drop[bi]]) if bi in drop else body
+            for bi, body in enumerate(bodies)
+        ]
 
     # ------------------------------------------------------------ one area
 

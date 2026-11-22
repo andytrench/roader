@@ -249,6 +249,29 @@ def test_d069_area_under_a_high_deck_is_built_but_not_at_its_level():
     assert any("at the level of the area" in f.message for f in low.flags)
 
 
+# ---------------------------------------------------------------- gore side slopes (D-071)
+
+
+def test_d071_gore_side_slopes_stop_at_the_pavement_edge():
+    """Two roads 1.5 m apart, each on fill towards the other: the slopes would overlap; both stop at their edges."""
+    from roader.model.schema import SideSlope
+
+    a = _road("ga", [("line", 300.0, 0.0)], -150.0, 0.0, 0.0, 4.0, 4.0)
+    b = _road("gb", [("line", 300.0, 0.0)], -150.0, 10.0, 0.0, 4.5, 4.5)
+    slopes = [
+        SideSlope(stable_id("ss", a.id), a.id, "left", 0.0, 300.0, "fill", 2.0, RULE),
+        SideSlope(stable_id("ss", b.id), b.id, "right", 0.0, 300.0, "fill", 2.0, RULE),
+    ]
+    model = dataclasses.replace(_model([a, b], terrain=True), side_slopes=slopes)
+    assert model.junctions == []
+    meshes = generate(model)
+    _closed_ok(meshes)
+    fills = [_plan(m) for m in meshes if m.part == "embankment"]
+    assert len(fills) == 2 and fills[0].intersection(fills[1]).area < 1e-6
+    assert all(f.bounds[1] > -1e-6 and f.bounds[3] < 10.0 + 1e-6 for f in fills)  # kept under their own pavements
+    assert any(m.id.startswith("terrain") for m in meshes)
+
+
 # ---------------------------------------------------------------- outline hygiene (FR-SV-5)
 
 
