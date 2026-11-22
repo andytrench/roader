@@ -84,7 +84,7 @@ def doctor_cmd() -> None:
         import pdal  # noqa: F401
 
         click.echo("OK  pdal (optional)")
-    except Exception:
+    except Exception:  # noqa: BLE001
         click.echo("SKIP pdal (optional extra)")
 
 
