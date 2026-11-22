@@ -7,6 +7,7 @@ frame (D-007, FR-DM-5). Provenance is per element (D-010).
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass, field
 
 from roader.model.geometry import Alignment, Piecewise, Profile
@@ -283,12 +284,92 @@ class Structure:
 
 @dataclass
 class JunctionSeam:
-    """Where a junction area meets a road sweep: station s, offsets u0 < u1 on that road (FR-SG-3, AC-H4)."""
+    """Where a junction area meets a road sweep: station s, offsets u0 < u1 on that road (FR-SG-3, AC-H4).
+
+    The remaining fields lift the road's surface at the seam into a local patch
+    (D-045), so the area's surface is a function of the stored model alone: plan
+    reference point and heading of the road at s, its curvature, elevation, grade
+    and grade rate, cross slopes and their rates along s, pavement thickness, all
+    taken on the junction side of s. ``z`` None: written before the patch existed.
+    """
 
     road_id: str
     s: float
     u0: float
     u1: float
+    side: int = 0  # +1: the area lies at stations above s, -1 below, 0 unknown
+    x: float = 0.0
+    y: float = 0.0
+    heading: float = 0.0
+    curvature: float = 0.0
+    z: float | None = None
+    grade: float = 0.0
+    grade_rate: float = 0.0
+    slope_left: float = 0.0
+    slope_right: float = 0.0
+    slope_left_rate: float = 0.0
+    slope_right_rate: float = 0.0
+    thickness: float = 0.0
+
+    def local(self, x: float, y: float) -> tuple[float, float]:
+        """(station, offset) of a plan point relative to the seam, on the osculating circle of the road."""
+        dx, dy = x - self.x, y - self.y
+        c, s = math.cos(self.heading), math.sin(self.heading)
+        k = self.curvature
+        if abs(k) < 1e-9:
+            return dx * c + dy * s, -dx * s + dy * c
+        # Centre of curvature at P + n / k; a point at (t, u) is C - (1/k - u) n(t).
+        cx, cy = -s / k, c / k
+        vx, vy = dx - cx, dy - cy
+        r = math.hypot(vx, vy)
+        sign = 1.0 if k > 0.0 else -1.0
+        u = 1.0 / k - sign * r
+        if r < 1e-12:
+            return 0.0, u
+        nx_, ny_ = -sign * vx / r, -sign * vy / r  # left normal at the point's station
+        ang = math.atan2(-s * ny_ - c * nx_, -s * nx_ + c * ny_)  # rotation from the seam's normal (-s, c)
+        return ang / k, u
+
+    def z_at(self, x: float, y: float) -> float:
+        """Top of pavement on the seam's patch."""
+        t, u = self.local(x, y)
+        assert self.z is not None
+        slope = self.slope_left + self.slope_left_rate * t if u >= 0.0 else self.slope_right + self.slope_right_rate * t
+        return self.z + self.grade * t + 0.5 * self.grade_rate * t * t + slope * u
+
+    def distance(self, x: float, y: float) -> float:
+        """Blend distance to the section line from u0 to u1: along the road, plus lateral overshoot
+        weighted by JUNCTION_LATERAL_WEIGHT, so a patch speaks mainly for its own pavement (D-045)."""
+        t, u = self.local(x, y)
+        excess = max(self.u0 - u, 0.0, u - self.u1)
+        return math.hypot(t, JUNCTION_LATERAL_WEIGHT * excess)
+
+
+JUNCTION_IDW_POWER = 3.0  # D-045: weights 1/d^3 give each seam its own value and slope
+JUNCTION_LATERAL_WEIGHT = 4.0
+JUNCTION_EDGE_TOL_M = 0.01  # surface_z answers this far outside the outline
+
+
+def _in_ring(ring: list[tuple[float, float]], x: float, y: float) -> bool:
+    inside = False
+    n = len(ring)
+    for k in range(n):
+        (x1, y1), (x2, y2) = ring[k], ring[(k + 1) % n]
+        if (y1 > y) != (y2 > y) and x < x1 + (y - y1) * (x2 - x1) / (y2 - y1):
+            inside = not inside
+    return inside
+
+
+def _ring_distance(ring: list[tuple[float, float]], x: float, y: float) -> float:
+    best = math.inf
+    n = len(ring)
+    for k in range(n):
+        (x1, y1), (x2, y2) = ring[k], ring[(k + 1) % n]
+        ex, ey = x2 - x1, y2 - y1
+        den = ex * ex + ey * ey
+        f = 0.0 if den <= 0.0 else min(max(((x - x1) * ex + (y - y1) * ey) / den, 0.0), 1.0)
+        best = min(best, math.hypot(x - x1 - f * ex, y - y1 - f * ey))
+    return best
 
 
 @dataclass
@@ -296,7 +377,9 @@ class JunctionArea:
     """L6 gore / merge / intersection, built from a planar partition of lane and edge lines (FR-SG-3).
 
     ``outline`` is the plan polygon (counter-clockwise, unit frame). Its surface is
-    lifted from the adjoining roads, so elevation and slope match at every seam.
+    lifted from the adjoining roads, so elevation and slope match at every seam:
+    an inverse-distance blend of the seam patches and of lifted interior
+    ``sections`` of the roads it covers (D-045).
     """
 
     id: str
@@ -306,6 +389,41 @@ class JunctionArea:
     kind: str = "gore"  # gore | merge | diverge | intersection
     seams: list[JunctionSeam] = field(default_factory=list)
     holes: list[list[tuple[float, float]]] = field(default_factory=list)
+    sections: list[JunctionSeam] = field(default_factory=list)  # lifted road sections inside the area (D-045)
+
+    def contains(self, x: float, y: float, tol: float = JUNCTION_EDGE_TOL_M) -> bool:
+        rings = [list(self.outline), *[list(h) for h in self.holes]]
+        if len(rings[0]) < 3:
+            return False
+        inside = _in_ring(rings[0], x, y) and not any(_in_ring(h, x, y) for h in rings[1:])
+        return inside or min(_ring_distance(r, x, y) for r in rings) <= tol
+
+    def _blend(self, x: float, y: float, value) -> float:
+        patches = [*self.seams, *self.sections]
+        if not patches or any(p.z is None for p in patches):
+            raise ValueError(f"junction {self.id}: no lifted surface (L6 patches, D-045)")
+        num = den = 0.0
+        for p in patches:
+            d = p.distance(x, y)
+            if d < 1e-9:
+                return value(p)
+            w = d ** -JUNCTION_IDW_POWER
+            num += w * value(p)
+            den += w
+        return num / den
+
+    def lifted_z(self, x: float, y: float) -> float:
+        """Top of pavement from the patches, without the outline test."""
+        return self._blend(x, y, lambda p: p.z_at(x, y))
+
+    def thickness_at(self, x: float, y: float) -> float:
+        return self._blend(x, y, lambda p: p.thickness)
+
+    def surface_z(self, x: float, y: float) -> float:
+        """Top of pavement inside the area; NaN outside it (validate.seams contract, AC-H4)."""
+        if not self.contains(x, y):
+            return math.nan
+        return self.lifted_z(x, y)
 
 
 @dataclass
