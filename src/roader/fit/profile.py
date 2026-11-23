@@ -252,6 +252,9 @@ def fit_profile(
     # one, or drop a PVI, whenever the cost barely rises. Curves lying mostly in an
     # unobserved gap are dropped regardless (FR-OC-1).
     wsum = float(np.sum(wb**2))
+    # Every simplification is judged against this reference fit, not the last one
+    # accepted, so cheap steps cannot compound into a flattened profile.
+    ref = cost
     changed = True
     while changed and len(v.pvi):
         changed = False
@@ -261,6 +264,7 @@ def fit_profile(
         invented = [k for k in range(n) if obs[k] < MIN_CURVE_OBSERVED]
         if invented:
             v, cost = _fit(_remove(v, invented[0]), sb, zb, wb, length, rules, road_class)
+            ref = max(ref, cost)
             changed = True
             continue
         moves = [("merge", k) for k in sorted(range(n - 1), key=lambda i: (dg[i] + dg[i + 1], i))]
@@ -268,8 +272,8 @@ def fit_profile(
         for op, k in moves[:PRUNE_TRIES]:
             trial = _merge(v, k) if op == "merge" else _remove(v, k)
             trial, tcost = _fit(trial, sb, zb, wb, length, rules, road_class)
-            rms_rise = math.sqrt(2.0 * tcost / wsum) - math.sqrt(2.0 * cost / wsum)
-            if tcost <= cost * PRUNE_COST_RATIO + 1e-9 or rms_rise <= PRUNE_RMS_RISE_M:
+            rms_rise = math.sqrt(2.0 * tcost / wsum) - math.sqrt(2.0 * ref / wsum)
+            if tcost <= ref * PRUNE_COST_RATIO + 1e-9 or rms_rise <= PRUNE_RMS_RISE_M:
                 v, cost, changed = trial, tcost, True
                 break
     v = _sanitize(v, length)
