@@ -29,11 +29,14 @@ from __future__ import annotations
 import math
 from dataclasses import dataclass
 
+import numpy as np
 import shapely
 
 from roader.conflate.graph import RoadSeed
 from roader.conflate.register import Neighbour
+from roader.fit.median import split_twin_medians
 from roader.fit.road import RoadFit, fit_road
+from roader.fit.section import _linear_features
 from roader.model.provenance import Provenance, Source
 from roader.model.schema import Crossing, Flag, Link, Road
 from roader.model.serialize import stable_id
@@ -118,7 +121,12 @@ def fit_network(seeds: list[RoadSeed], ev, rules, *, strip_factor: float = 1.0) 
             anchors[0 if j.end == "start" else 1] = (x, y, heading, curvature)
         neighbours = [Neighbour(other.line, least_half_width(other, rules)) for other in seeds if other.id != sid]
         fitted[sid] = fit_road(seed, ev, rules, strip_factor=strip_factor, anchors=tuple(anchors), neighbours=neighbours)
-    return [fitted[s.id] for s in seeds], js
+    fits = [fitted[s.id] for s in seeds]
+    # Twin carriageways stop at their median (L3, FR-XS-4): with every road fitted, so both inner edges are known.
+    feats = _linear_features(ev)
+    barrier_xy = np.vstack([xy for _f, xy in feats]) if feats else np.zeros((0, 2))
+    split_twin_medians(fits, barrier_xy)
+    return fits, js
 
 
 def least_half_width(seed: RoadSeed, rules) -> float:

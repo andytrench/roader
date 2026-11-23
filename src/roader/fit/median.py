@@ -346,3 +346,132 @@ def split_divided(seeds: list[RoadSeed], ev) -> tuple[list[RoadSeed], list[Flag]
             )
         )
     return sorted(out, key=lambda sd: sd.id), flags
+
+
+# ---------------------------------------------------------------- twin median split (L3)
+
+SPLIT_STEP_M = 5.0
+TWIN_REACH_M = 40.0  # D-075 envelope: within 40 m, within 35 degrees, under 1 m height difference
+TWIN_PARALLEL_DEG = 35.0
+TWIN_DZ_M = 1.0
+FACE_WINDOW_M = 2.5  # barrier returns this close in station set the face at a station
+FACE_MIN_POINTS = 3
+FACE_INSET_M = 0.5  # a barrier face nearer either crown than this is not in the median
+CAP_SMOOTH_M = 12.5
+SPLIT_TOL_M = 0.15
+
+
+def split_twin_medians(fits, barrier_xy: np.ndarray) -> list[Flag]:
+    """No inner edge of twin one-way mainlines passes their median (FR-XS-1, FR-XS-4, D-063).
+
+    For every pair of one-way mainlines running alongside within the D-075 envelope,
+    each road's facing width is capped, station by station, at the face on its side
+    of the median barrier when ``barrier_xy`` (linear raised returns) lie between the
+    two, else at the line midway between the two inner edges where those overlap.
+    Widths short of the cap are kept. Each changed side is flagged.
+    """
+    fits = sorted([f for f in fits if f.road.oneway and f.road.kind == "mainline"], key=lambda f: f.road.id)
+    caps: dict[str, dict[int, list[tuple[np.ndarray, np.ndarray]]]] = {}
+    for a, b in itertools.permutations(fits, 2):
+        res = _caps(a, b, barrier_xy)
+        if res is not None:
+            side, st, cap = res
+            caps.setdefault(a.road.id, {}).setdefault(side, []).append((st, cap))
+    flags = []
+    for f in fits:
+        for side, parts in sorted(caps.get(f.road.id, {}).items()):
+            if _apply(f.road, side, parts):
+                msg = f"{'left' if side > 0 else 'right'} width capped at the median of its twin carriageway"
+                flags.append(Flag("FR-XS-4:median_split", f.road.id, "FR-XS-4", msg))
+                f.flags.append(flags[-1])
+    return flags
+
+
+def _caps(a, b, barrier_xy: np.ndarray):
+    """(facing side of a, stations, cap) where b runs alongside a; None when it never does."""
+    ra, rb, la, lb = a.road, b.road, a.line, b.line
+    st = np.arange(0.0, ra.length, SPLIT_STEP_M)
+    pa = la.point(st)
+    sb, ub, okb = lb.project(pa, max_dist=TWIN_REACH_M)
+    if not okb.any():
+        return None
+    sb = np.clip(np.nan_to_num(sb), 0.0, rb.length)
+    qb = lb.point(sb)
+    sa2, ua, oka = la.project(qb, max_dist=TWIN_REACH_M)
+    ua = np.nan_to_num(ua)
+    parallel = np.abs(np.cos(la.heading(st) - lb.heading(sb))) >= math.cos(math.radians(TWIN_PARALLEL_DEG))
+    dz = np.abs(np.array([ra.profile.z(float(s)) for s in st]) - np.array([rb.profile.z(float(s)) for s in sb]))
+    near = okb & oka & parallel & (dz < TWIN_DZ_M) & (np.abs(ua) > 1.0) & (np.abs(np.nan_to_num(sa2) - st) < TWIN_REACH_M)
+    if near.sum() < 3:
+        return None
+    side = 1 if np.median(ua[near]) > 0 else -1
+    near &= np.sign(ua) == side
+    dist = np.abs(ua)
+    wa = _width(ra, side, st)
+    side_b = 1 if np.median(np.nan_to_num(ub)[near]) > 0 else -1
+    wb = _width(rb, side_b, sb)
+    edge_b = dist - wb  # b's inner edge, measured from a's line toward b
+    cap = np.where(wa > edge_b, 0.5 * (wa + edge_b), np.inf)
+    if len(barrier_xy):
+        s_bar, u_bar, ok_bar = la.project(barrier_xy, max_dist=TWIN_REACH_M)
+        keep = ok_bar & (np.sign(u_bar) == side)
+        s_bar, t_bar = s_bar[keep], np.abs(u_bar[keep])
+        order = np.argsort(s_bar)
+        s_bar, t_bar = s_bar[order], t_bar[order]
+        lo = np.searchsorted(s_bar, st - FACE_WINDOW_M)
+        hi = np.searchsorted(s_bar, st + FACE_WINDOW_M)
+        for i in np.flatnonzero(near):
+            t = t_bar[lo[i] : hi[i]]
+            t = t[(t > FACE_INSET_M) & (t < dist[i] - FACE_INSET_M)]
+            if len(t) >= FACE_MIN_POINTS:
+                cap[i] = min(float(np.min(t)), cap[i]) if np.isfinite(cap[i]) else float(np.min(t))
+    cap = np.where(near, cap, np.inf)
+    if not np.isfinite(cap).any():
+        return None
+    return side, st, _smooth_cap(st, cap)
+
+
+def _smooth_cap(st: np.ndarray, cap: np.ndarray) -> np.ndarray:
+    """Running minimum-preserving median of the finite caps, so one noisy station does not notch the edge."""
+    out = cap.copy()
+    fin = np.isfinite(cap)
+    for i in np.flatnonzero(fin):
+        w = fin & (np.abs(st - st[i]) <= CAP_SMOOTH_M)
+        out[i] = float(np.median(cap[w]))
+    return out
+
+
+def _width(road: Road, side: int, s: np.ndarray) -> np.ndarray:
+    pw = road.cross_section.width_left if side > 0 else road.cross_section.width_right
+    return np.interp(s, [k.s for k in pw.knots], [k.value for k in pw.knots])
+
+
+def _apply(road: Road, side: int, parts) -> bool:
+    """Width on ``side`` = min(width, caps); True when it changed by more than SPLIT_TOL_M anywhere."""
+    from roader.fit.piecewise import simplify
+    from roader.model.geometry import Knot, Piecewise
+
+    xs = road.cross_section
+    pw = xs.width_left if side > 0 else xs.width_right
+    st = np.unique(np.concatenate([np.arange(0.0, road.length, SPLIT_STEP_M), [road.length], [k.s for k in pw.knots]]))
+    st = st[(st >= 0.0) & (st <= road.length)]
+    old = _width(road, side, st)
+    cap = np.full(len(st), np.inf)
+    for s_c, c in parts:
+        fin = np.isfinite(c)
+        if fin.sum() < 2:
+            continue
+        inside = (st >= s_c[fin][0]) & (st <= s_c[fin][-1])
+        cap = np.where(inside, np.minimum(cap, np.interp(st, s_c[fin], c[fin])), cap)
+    new = np.minimum(old, np.maximum(cap, 0.0))
+    if float(np.max(old - new)) <= SPLIT_TOL_M:
+        return False
+    kn, vals = simplify(st, new, 0.5 * SPLIT_TOL_M)
+    base = pw.knots[0].prov
+    prov = Provenance(base.source, base.confidence, rms_m=base.rms_m, n_points=base.n_points, observed_fraction=base.observed_fraction, flags=[*base.flags, "FR-XS-4:median_split"])
+    piece = Piecewise([Knot(float(k), float(v), prov) for k, v in zip(kn, vals, strict=True)])
+    if side > 0:
+        xs.width_left = piece
+    else:
+        xs.width_right = piece
+    return True
