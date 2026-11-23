@@ -464,3 +464,15 @@ def test_fr_st_4_support_skew_follows_the_crossing_up_to_the_cap():
     skew, flags = support_skew([-math.radians(78.7)])  # Dallas ramp nearly parallel to the road below
     assert skew == pytest.approx(-MAX_SUPPORT_SKEW_RAD) and flags == ["FR-ST-4:skew_capped_from_-78.7deg"]
     assert support_skew([]) == (0.0, [])
+
+
+def test_fr_st_4_each_support_takes_the_skew_of_what_it_crosses():
+    from roader.structures.infer import ABUT_SKEW_REACH_M, support_skews
+
+    # A viaduct 0-300 m over two roads; the far abutment stands beside the second one.
+    crossed = [(0.3, (60.0, 90.0)), (-0.5, (280.0 - ABUT_SKEW_REACH_M + 1.0, 295.0))]
+    skews = [sk for sk, _f in support_skews([0.0, 75.0, 150.0, 290.0, 300.0], crossed)]
+    assert skews == [0.0, 0.3, 0.3, -0.5, -0.5]  # square over nothing; piers follow the nearest crossing
+    assert support_skews([0.0, 20.0], []) == [(0.0, []), (0.0, [])]
+    (sk, flags), _ = support_skews([0.0, 20.0], [(math.radians(-75.0), (-5.0, 25.0))])
+    assert sk == pytest.approx(-math.radians(60.0)) and flags == ["FR-ST-4:skew_capped_from_-75.0deg"]

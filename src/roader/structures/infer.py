@@ -51,6 +51,9 @@ MIN_PIER_GAP_M = 8.0
 # FR-ST-4: supports follow the crossing up to this skew; sharper crossings (stack ramps nearly
 # parallel to the roads below) take longer spans in practice, and their skew ramps cannot meet.
 MAX_SUPPORT_SKEW_RAD = math.radians(60.0)
+# FR-ST-4: an abutment takes a crossing's skew only when that crossing's clear zone comes
+# this close to the deck end; a viaduct end over nothing is square.
+ABUT_SKEW_REACH_M = 10.0
 METHOD_CONFIDENCE = {"class17": 0.9, "sheet_break": 0.7, "class17_only": 0.5}
 # FR-ST-3 observed piers: returns under the deck, off every lower pavement, clear of the ground.
 PIER_MIN_RETURNS = 3
@@ -127,6 +130,22 @@ def support_skew(crossing_skews: list[float]) -> tuple[float, list[str]]:
     if abs(skew) <= MAX_SUPPORT_SKEW_RAD:
         return skew, []
     return math.copysign(MAX_SUPPORT_SKEW_RAD, skew), [f"FR-ST-4:skew_capped_from_{math.degrees(skew):.1f}deg"]
+
+
+def support_skews(stations: list[float], crossed: list[tuple[float, tuple[float, float]]]) -> list[tuple[float, list[str]]]:
+    """FR-ST-4: each support takes the skew of what it crosses, capped as in ``support_skew``.
+
+    ``stations``: abutment, piers..., abutment; ``crossed``: (skew, clear-zone stations)
+    of each crossed road. A pier takes the skew of the nearest crossed road; an abutment
+    that of a crossed road within ABUT_SKEW_REACH_M of it, else it is square.
+    """
+    out: list[tuple[float, list[str]]] = []
+    for n, s in enumerate(stations):
+        near = sorted((max(z0 - s, s - z1, 0.0), skew) for skew, (z0, z1) in crossed)
+        if n in (0, len(stations) - 1):
+            near = [d for d in near if d[0] <= ABUT_SKEW_REACH_M]
+        out.append(support_skew([near[0][1]]) if near else (0.0, []))
+    return out
 
 
 def _profile_z(profile, s: np.ndarray) -> np.ndarray:
@@ -456,7 +475,7 @@ def infer_structure(
     era = era_of(year)
     sid = stable_id("st", road.id, round(extent.s_start, 0))
     on = sorted([c for c in crossings if c.upper_road == road.id and extent.s_start - 1.0 <= c.upper_s <= extent.s_end + 1.0], key=lambda c: c.upper_s)
-    skew, skew_flags = support_skew([c.skew_rad for c in on])
+    skew, _ = support_skew([c.skew_rad for c in on])  # pier placement works on one support line
     lateral, _lp = rules.fill("clearance.lateral.support", road_class=fits[on[0].lower_road].road.road_class if on else "*")
     col_w, col_prov = rules.fill("column.width", era=era)
 
@@ -497,7 +516,8 @@ def infer_structure(
             flags.append(Flag("FR-ST-3:observed_over_lane", sid, "FR-ST-3", f"{p.n_returns} pier-like returns at s={p.station:.1f} stand on a lower pavement with no clear place within {PIER_SNAP_M} m; not used"))
             continue
         observed[at] = (p, at - p.station)
-    zones = _merged([_footprint_on(upper, fits[c.lower_road], c, lateral, t=capped(t, hold, c.upper_s), across=across) for c in on])
+    clear = [_footprint_on(upper, fits[c.lower_road], c, lateral, t=capped(t, hold, c.upper_s), across=across) for c in on]
+    zones = _merged(clear)
     piers = sorted(observed)
     inner = (extent.s_start + PIER_END_CLEAR_M, extent.s_end - PIER_END_CLEAR_M)
     for (a0, a1), (b0, b1) in itertools.pairwise(zones):
@@ -537,8 +557,10 @@ def infer_structure(
     deck_width = float(
         road.cross_section.width_left((extent.s_start + extent.s_end) / 2) + road.cross_section.width_right((extent.s_start + extent.s_end) / 2) + 2 * overhang
     )
+    skews = support_skews(stations, [(c.skew_rad, z) for c, z in zip(on, clear, strict=True)])
     supports = []
     for n, s in enumerate(stations):
+        sk, skew_flags = skews[n]
         kind = "abutment" if n in (0, len(stations) - 1) else "pier"
         probe = s + (GROUND_INSIDE_M if n == 0 else -GROUND_INSIDE_M if kind == "abutment" else 0.0)
         ground = _ground(drop, road, probe)
@@ -586,8 +608,9 @@ def infer_structure(
         st_prov.flags.append(f"FR-VC-4:sheet_break {extent.geom[0]:.1f}-{extent.geom[1]:.1f}; class17 {extent.class17[0]:.1f}-{extent.class17[1]:.1f}")
     if review:
         flags.append(Flag("FR-ST-6:review", sid, "FR-ST-6", f"max span {max_span:.0f} m at or above the review threshold"))
-    if skew_flags:
-        flags.append(Flag("FR-ST-4:skew_capped", sid, "FR-ST-4", f"crossing skew {skew_flags[0].split('_from_')[1]} capped at {math.degrees(MAX_SUPPORT_SKEW_RAD):.0f} deg for supports and deck ends"))
+    capped = sorted({f.split('_from_')[1] for _sk, fl in skews for f in fl})
+    if capped:
+        flags.append(Flag("FR-ST-4:skew_capped", sid, "FR-ST-4", f"crossing skew {', '.join(capped)} capped at {math.degrees(MAX_SUPPORT_SKEW_RAD):.0f} deg for the supports over it"))
     structure = Structure(
         id=sid,
         kind="bridge",
