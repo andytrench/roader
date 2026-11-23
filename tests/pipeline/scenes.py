@@ -95,8 +95,8 @@ MEDIAN_HALF = 9.0  # twin reference lines this far either side of the freeway ax
 FREEWAY_HALF = 5.5
 STREET_HALF = 5.0
 RAMP_HALF = 3.0
-LEAVE_R = 600.0  # radius of a ramp's tangent leg where it leaves or joins its parent
-SEP = 90.0  # length of that leg; the ramp's centre is SEP^2 / 2R = 6.75 m off the parent at its end
+LEAVE_R = 400.0  # radius of a ramp's tangent leg where it leaves or joins its parent
+SEP = 60.0  # length of that leg; the ramp's centre is SEP^2 / 2R = 4.5 m off the parent at its end
 THETA = SEP / LEAVE_R
 LOOP_LEG = (200.0, 30.0)  # (radius, length) of the tangent legs of a loop ramp
 CURVE = 60.0  # vertical curves inside a ramp's own stretch
@@ -903,7 +903,7 @@ def _flat(length: float, z: float = GRADE_Z) -> Profile:
     return Profile([VerticalElement(0.0, length, z, 0.0, 0.0, TRUTH)])
 
 
-def simple_overpass(*, skew: float = 0.17, rise: float = 8.5, length: float = 500.0, seed: int | None = None) -> Scene:
+def simple_overpass(*, skew: float = 0.17, rise: float = 8.5, length: float = 400.0, seed: int | None = None) -> Scene:
     eb, wb = twins(length, 0.0, "I 99", ("eb", "wb"), (_flat(length), _flat(length)))
     st = street("st", "Route 1", length, math.pi / 2.0 + skew, crest_profile(length, length / 2.0, rise, length / 2.0 - 50.0, 160.0, 60.0))
     return finish("simple_overpass", [eb, wb, st], params={"skew": skew, "rise": rise, "length": length, "seed": seed})
@@ -917,7 +917,7 @@ def _street_over(length: float, rise: float) -> Profile:
     return crest_profile(length, length / 2.0, rise, 120.0, 100.0, 60.0)
 
 
-def _exit_body(spread: float, sign: float, alpha: float = 0.35, radius: float = 300.0) -> list[El]:
+def _exit_body(spread: float, sign: float, alpha: float = 0.35, radius: float = 200.0) -> list[El]:
     """After a leg turning ``sign * THETA``: out to ``sign * alpha``, ``spread`` m further off, back parallel, free line to the end."""
     return [arc(sign * (alpha - THETA), radius), line(spread / math.sin(alpha)), arc(-sign * alpha, radius), line(free=True)]
 
@@ -935,23 +935,23 @@ def _diamond_ramps(eb: Road, wb: Road, st: Road, spread: float, s_exit: float = 
     return ramps
 
 
-def diamond(*, skew: float | None = None, spread: float | None = None, rise: float = 9.0, length: float = 800.0, seed: int | None = None) -> Scene:
-    skew = _jitter(seed, skew, 0.0, 0.6, 0.0)
-    spread = _jitter(seed and seed + 1, spread, 5.0, 40.0, 15.0)
-    eb, wb = twins(length, 0.0, "I 99", ("eb", "wb"), (_freeway_over(length, rise), _freeway_over(length, rise)))
-    st = street("st", "Route 1", 500.0, math.pi / 2.0 + skew, _flat(500.0))
+def diamond(*, skew: float | None = None, spread: float | None = None, rise: float = 8.0, length: float = 600.0, seed: int | None = None) -> Scene:
+    skew = _jitter(seed, skew, 0.0, 0.5, 0.0)
+    spread = _jitter(seed and seed + 1, spread, 15.0, 35.0, 20.0)
+    eb, wb = twins(length, 0.0, "I 99", ("eb", "wb"), (_flat(length), _flat(length)))
+    st = street("st", "Route 1", 400.0, math.pi / 2.0 + skew, _street_over(400.0, rise))
     ramps = _diamond_ramps(eb, wb, st, spread)
     return finish("diamond", [eb, wb, st, *ramps], params={"skew": skew, "spread": spread, "rise": rise, "seed": seed})
 
 
-def spui(*, skew: float | None = None, deck_half: float = 12.0, rise: float = 8.5, length: float = 800.0, seed: int | None = None) -> Scene:
+def spui(*, skew: float | None = None, deck_half: float = 12.0, rise: float = 8.5, length: float = 600.0, seed: int | None = None) -> Scene:
     skew = _jitter(seed, skew, 0.0, 0.5, 0.0)
     eb, wb = twins(length, 0.0, "I 99", ("eb", "wb"), (_flat(length), _flat(length)))
-    ls = 500.0
+    ls = 400.0
     c = ls / 2.0
     half = Piecewise([Knot(c - 90.0, STREET_HALF, TRUTH), Knot(c - 50.0, deck_half, TRUTH), Knot(c + 50.0, deck_half, TRUTH), Knot(c + 90.0, STREET_HALF, TRUTH)])
-    st = street("st", "Route 1", ls, math.pi / 2.0 + skew, crest_profile(ls, c, rise, 170.0, 160.0, 60.0), half=half)
-    ramps = _diamond_ramps(eb, wb, st, 0.0, s_exit=100.0)
+    st = street("st", "Route 1", ls, math.pi / 2.0 + skew, crest_profile(ls, c, rise, 140.0, 120.0, 60.0), half=half)
+    ramps = _diamond_ramps(eb, wb, st, 0.0, s_exit=60.0)
     return finish("spui", [eb, wb, st, *ramps], params={"skew": skew, "deck_half": deck_half, "rise": rise, "seed": seed})
 
 
@@ -969,8 +969,8 @@ def parclo(*, skew: float | None = None, radius: float | None = None, spread: fl
     """Diamond ramps on the south side (EB), two loops on the north side (WB): entry from the street's NB half, exit to its SB half."""
     skew = _jitter(seed, skew, 0.0, 0.4, 0.1)
     radius = _jitter(seed and seed + 1, radius, 55.0, 80.0, 65.0)
-    spread = _jitter(seed and seed + 2, spread, 30.0, 70.0, 50.0)
-    length, ls = 1000.0, 500.0
+    spread = _jitter(seed and seed + 2, spread, 20.0, 45.0, 30.0)
+    length, ls = 700.0, 400.0
     eb, wb = twins(length, 0.0, "I 99", ("eb", "wb"), (_flat(length), _flat(length)))
     st = street("st", "Route 1", ls, math.pi / 2.0 + skew, _street_over(ls, rise))
     ex = ramp("exit_eb", eb, _exit_body(spread, -1.0), s=20.0, side=-1.0, target=st, end="terminal")
@@ -983,7 +983,7 @@ def parclo(*, skew: float | None = None, radius: float | None = None, spread: fl
 def cloverleaf(*, skew: float | None = None, radius: float | None = None, rise: float = 8.5, seed: int | None = None) -> Scene:
     skew = _jitter(seed, skew, 0.0, 0.4, 0.1)
     radius = _jitter(seed and seed + 1, radius, 55.0, 80.0, 65.0)
-    length = 800.0
+    length = 600.0
     eb, wb = twins(length, 0.0, "I 99", ("eb", "wb"), (_flat(length), _flat(length)))
     nb, sb = twins(length, math.pi / 2.0 + skew, "I 88", ("nb", "sb"), (_street_over(length, rise), _street_over(length, rise)))
     loops = [_loop("loop_sb_eb", sb, eb, radius), _loop("loop_nb_wb", nb, wb, radius), _loop("loop_eb_nb", eb, nb, radius), _loop("loop_wb_sb", wb, sb, radius)]
@@ -992,9 +992,9 @@ def cloverleaf(*, skew: float | None = None, radius: float | None = None, rise: 
 
 def trumpet(*, radius: float | None = None, rise: float = 8.0, seed: int | None = None) -> Scene:
     radius = _jitter(seed, radius, 60.0, 80.0, 70.0)
-    length = 900.0
+    length = 700.0
     eb, wb = twins(length, 0.0, "I 99", ("eb", "wb"), (_flat(length), _flat(length)))
-    stem_len, j, x_stem = 260.0, -200.0, 6.0
+    stem_len, j, x_stem = 150.0, -260.0, 6.0
     xs2 = _section(FREEWAY_HALF, FREEWAY_HALF, 2)
     nb = _road("nb", "mainline", "motorway", _straight(x_stem, j - stem_len, math.pi / 2.0, stem_len), _flat(stem_len), xs2, oneway=True, lanes=2, ref="I 199")
     sb = _road("sb", "mainline", "motorway", _straight(-x_stem, j, -math.pi / 2.0, stem_len), _flat(stem_len), _section(FREEWAY_HALF, FREEWAY_HALF, 2), oneway=True, lanes=2, ref="I 199")
@@ -1012,11 +1012,13 @@ def trumpet(*, radius: float | None = None, rise: float = 8.0, seed: int | None 
     outer = radius + 2.0 * x_stem
     cy = _loop_centre(loop)[1]
     alpha = 0.7
+    # Outer ramp to EB shares the semi-directional's first metres north of the stem; the semi stays level until they part.
+    outer_ne = ramp("outer_ne", nb, [line(free=True), arc(-(math.pi / 2.0) + THETA, 200.0)], s=stem_len, start="terminal", start_heading=math.pi / 2.0, target=eb, end="merge", target_side=-1.0)
+    shared = outer_ne.alignment.elements[0].length if outer_ne.alignment.elements[0].kind == "line" else 0.0
     semi = ramp(
         "semi_nw", nb, [line(cy - j), arc(math.pi / 2.0 + alpha, outer), line(free=True), arc(-(alpha - THETA), 250.0)],
-        s=stem_len, start="terminal", start_heading=math.pi / 2.0, target=wb, end="merge", target_side=-1.0, peak=top, grade=0.06,
+        s=stem_len, start="terminal", start_heading=math.pi / 2.0, target=wb, end="merge", target_side=-1.0, peak=top, grade=0.06, lead=shared + 15.0,
     )
-    outer_ne = ramp("outer_ne", nb, [line(free=True), arc(-(math.pi / 2.0) + THETA, 150.0)], s=stem_len, start="terminal", start_heading=math.pi / 2.0, target=eb, end="merge", target_side=-1.0)
     outer_es = ramp("outer_es", eb, [arc(-(math.pi / 2.0) + 2.0 * THETA, 150.0), line(60.0)], s=None, side=-1.0, target=sb, end="merge", target_side=-1.0)
     return finish("trumpet", [eb, wb, nb, sb, loop, semi, outer_ne, outer_es], params={"radius": radius, "seed": seed})
 
@@ -1031,26 +1033,26 @@ def _loop_centre(road: Road) -> tuple[float, float]:
 
 def directional(*, skew: float | None = None, radius: float | None = None, rise: float = 8.0, seed: int | None = None) -> Scene:
     skew = _jitter(seed, skew, 0.0, 0.4, 0.0)
-    radius = _jitter(seed and seed + 1, radius, 240.0, 300.0, 260.0)
-    length = 1100.0
+    radius = _jitter(seed and seed + 1, radius, 200.0, 260.0, 220.0)
+    length = 900.0
     eb, wb = twins(length, 0.0, "I 99", ("eb", "wb"), (_flat(length), _flat(length)))
     nb, sb = twins(length, math.pi / 2.0 + skew, "I 88", ("nb", "sb"), (_street_over(length, rise), _street_over(length, rise)))
-    top = GRADE_Z + 2.0 * rise
+    top = GRADE_Z + 2.0 * rise - 1.0
     flys = []
     for fid, parent, target in (("fly_eb_nb", eb, nb), ("fly_wb_sb", wb, sb)):
         h0, h1 = parent.alignment.evaluate(0.0)[2], target.alignment.evaluate(0.0)[2]
         main = turn_to(h0 - THETA, h1 + THETA, 1.0)
-        flys.append(ramp(fid, parent, [line(60.0), arc(main, radius), line(free=True)], s=None, side=-1.0, target=target, end="merge", target_side=-1.0, peak=top, grade=0.065))
+        flys.append(ramp(fid, parent, [line(60.0), arc(main, radius), line(free=True)], s=None, side=-1.0, target=target, end="merge", target_side=-1.0, peak=top, grade=0.075))
     return finish("directional", [eb, wb, nb, sb, *flys], params={"skew": skew, "radius": radius, "seed": seed})
 
 
 def cd_braided(*, spacing: float | None = None, angle: float | None = None, rise: float = 7.5, seed: int | None = None) -> Scene:
-    spacing = _jitter(seed, spacing, 200.0, 250.0, 220.0)
+    spacing = _jitter(seed, spacing, 180.0, 230.0, 200.0)
     angle = _jitter(seed and seed + 1, angle, 0.3, 0.5, 0.4)
-    length = 1200.0
+    length = 1000.0
     eb, wb = twins(length, 0.0, "I 99", ("eb", "wb"), (_flat(length), _flat(length)))
-    # C-D road: leaves EB, runs 18 m off it for 500 m, rejoins (symmetric, so it lands back on EB).
-    cd = ramp("cd", eb, [line(30.0), arc(THETA, LEAVE_R), line(500.0), arc(THETA, LEAVE_R), line(30.0)], s=100.0, side=-1.0, target=eb, end="merge", target_side=-1.0, half=4.0)
+    # C-D road: leaves EB, runs 18 m off it for 450 m, rejoins (symmetric, so it lands back on EB).
+    cd = ramp("cd", eb, [line(60.0), arc(THETA, LEAVE_R), line(450.0), arc(THETA, LEAVE_R), line(60.0)], s=100.0, side=-1.0, target=eb, end="merge", target_side=-1.0, half=4.0)
     cd.kind = "connector"
     s_mid = 0.5 * cd.length
     leg = (300.0, 45.0)
@@ -1067,28 +1069,28 @@ def viaduct(*, skew: float | None = None, n_streets: int = 3, spacing: float | N
     skew = _jitter(seed, skew, 0.0, 0.6, 0.2)
     spacing = _jitter(seed and seed + 1, spacing, 45.0, 80.0, 60.0)
     run = (n_streets - 1) * spacing
-    length = run + 2 * 260.0
-    top_a, top_b = 260.0 - 40.0, 260.0 + run + 40.0
+    length = run + 2 * 220.0
+    top_a, top_b = 220.0 - 40.0, 220.0 + run + 40.0
     pr = pvi_profile([(0.0, GRADE_Z), (60.0, GRADE_Z), (top_a - 30.0, GRADE_Z + rise), (top_b + 30.0, GRADE_Z + rise), (length - 60.0, GRADE_Z), (length, GRADE_Z)], [40.0, 60.0, 60.0, 40.0])
     eb, wb = twins(length, 0.0, "I 99", ("eb", "wb"), (pr, pvi_profile([(0.0, GRADE_Z), (60.0, GRADE_Z), (top_a - 30.0, GRADE_Z + rise), (top_b + 30.0, GRADE_Z + rise), (length - 60.0, GRADE_Z), (length, GRADE_Z)], [40.0, 60.0, 60.0, 40.0])))
     roads = [eb, wb]
     names = ["1st Street", "2nd Street", "3rd Street", "4th Street", "5th Street", "6th Street"]
     for k in range(n_streets):
         x = -run / 2.0 + k * spacing
-        roads.append(street(f"st{k + 1}", names[k], 260.0, math.pi / 2.0 + skew, _flat(260.0), centre=(x, 0.0)))
+        roads.append(street(f"st{k + 1}", names[k], 200.0, math.pi / 2.0 + skew, _flat(200.0), centre=(x, 0.0)))
     return finish("viaduct", roads, params={"skew": skew, "n_streets": n_streets, "spacing": spacing, "seed": seed})
 
 
 def twin_different_elevations(*, dz: float | None = None, skew: float | None = None, rise: float = 8.5, seed: int | None = None) -> Scene:
     dz = _jitter(seed, dz, 0.8, 2.5, 1.5)
     skew = _jitter(seed and seed + 1, skew, 0.0, 0.6, 0.25)
-    length = 600.0
+    length = 500.0
     eb_pr = Profile([VerticalElement(0.0, length, GRADE_Z, 0.008, 0.008, TRUTH)])
-    # Westbound runs dz higher at the crossing on its own grade: z(x) = 100 + dz + 0.004 x + 2.4 for x in [-300, 300].
-    wb_pr = Profile([VerticalElement(0.0, length, GRADE_Z + dz + 0.008 * 300.0 + 0.004 * 300.0, -0.004, -0.004, TRUTH)])
+    # Westbound runs dz higher at the crossing on its own grade: z(x) = 100 + dz + 0.004 x + 2.0 for x in [-250, 250].
+    wb_pr = Profile([VerticalElement(0.0, length, GRADE_Z + dz + 0.008 * 250.0 + 0.004 * 250.0, -0.004, -0.004, TRUTH)])
     eb, wb = twins(length, 0.0, "I 99", ("eb", "wb"), (eb_pr, wb_pr))
-    base = GRADE_Z + max(dz, 0.0) + 0.008 * 300.0
-    ls = 500.0
+    base = GRADE_Z + max(dz, 0.0) + 0.008 * 250.0
+    ls = 400.0
     st = street("st", "Route 1", ls, math.pi / 2.0 + skew, crest_profile(ls, ls / 2.0, rise + base - GRADE_Z, ls / 2.0 - 50.0, 160.0, 60.0))
     return finish("twin_different_elevations", [eb, wb, st], params={"dz": dz, "skew": skew, "seed": seed})
 
@@ -1125,3 +1127,95 @@ SCENES: dict[str, Callable[..., Scene]] = {
     "twin_different_elevations": twin_different_elevations,
     "stack": stack,
 }
+
+
+# ---------------------------------------------------------------- one scene through the pipeline, solids and gates
+
+
+@dataclass
+class Outcome:
+    """A scene's pipeline run: the gate results by name, or the error that stopped it."""
+
+    scene: Scene
+    error: str | None = None
+    stage: str = ""
+    model: RoadModel | None = None
+    gates: dict = field(default_factory=dict)
+    missing_structures: list[str] = field(default_factory=list)
+    seconds: dict[str, float] = field(default_factory=dict)
+
+
+def mesh_hashes(meshes) -> dict[str, str]:
+    """sha256 per mesh of its id, element, part, vertices and faces: the AC-H5 comparison without writing files."""
+    import hashlib
+
+    out = {}
+    for m in meshes:
+        h = hashlib.sha256()
+        h.update(f"{m.id}|{m.element_id}|{m.part}|{m.source}".encode())
+        h.update(np.ascontiguousarray(m.vertices, dtype=np.float64).tobytes())
+        h.update(np.ascontiguousarray(m.faces, dtype=np.int64).tobytes())
+        out[m.id] = h.hexdigest()
+    return dict(sorted(out.items()))
+
+
+def run_scene(scene: Scene, *, spacing: float = 0.6, seed: int = 7, profiles: tuple[str, ...] = ("analytic",), gates: bool = True, val3dity_exe: str | None = None) -> Outcome:
+    """Points and vectors of ``scene`` through ``run_pipeline`` (D-018 holdout), solids and every section 9 gate.
+
+    Solids are rendered twice, from the model and from its canonical reload; AC-H5 compares
+    the two renderings mesh by mesh (``mesh_hashes``) instead of writing exports. With
+    ``gates=False`` only the pipeline and the solids run. Exceptions are caught and returned
+    with the stage that raised, so a crash is a reported outcome.
+    """
+    import time
+
+    from roader.io import from_synthetic
+    from roader.model.serialize import dumps, loads
+    from roader.pipeline import holdout_for, run_pipeline
+    from roader.solids import generate
+    from roader.validate import surface_accuracy
+    from roader.validate.gates import compare_runs, run_gates
+
+    out = Outcome(scene)
+    t0 = time.perf_counter()
+    sp = scene_points(scene, spacing=spacing, seed=seed)
+    pts = from_synthetic(sp)
+    vectors = scene_vectors(scene)
+    pav = pavement_xyz(sp)
+    hold = holdout_for(pts, pav)
+    out.seconds["sample"] = time.perf_counter() - t0
+    t0 = time.perf_counter()
+    try:
+        res = run_pipeline(pts, vectors, scene.model.frame, scene.model.unit, holdout=hold)
+    except Exception as exc:  # a crash is an outcome (robust track)
+        out.error, out.stage = f"{type(exc).__name__}: {exc}", "pipeline"
+        return out
+    out.seconds["pipeline"] = time.perf_counter() - t0
+    out.model = model = res.model
+    dz, at = truth_dz_at(scene, model)
+    stations, out.missing_structures = truth_stations(scene, model)
+    measured = {"crossing_dz": dz, "crossing_points": at, "structure_stations": stations}
+    ref = crossing_reference(scene)
+    for profile in profiles:
+        t0 = time.perf_counter()
+        stage = f"solids ({profile})"
+        try:
+            meshes = generate(model, profile=profile)
+            again = generate(loads(dumps(model)), profile=profile)
+            if not gates:
+                out.seconds[profile] = time.perf_counter() - t0
+                continue
+            stage = f"gates ({profile})"
+            report = run_gates(model, meshes, crossings_ref=ref, measured=measured, val3dity_exe=val3dity_exe, profile=profile)
+        except Exception as exc:
+            out.error, out.stage = f"{type(exc).__name__}: {exc}", stage
+            return out
+        out.seconds[profile] = time.perf_counter() - t0
+        for r in report.results:
+            if profile == "analytic" or r.gate.startswith("AC-H1"):
+                out.gates[r.gate] = r
+        if profile == "analytic":
+            out.gates["AC-H5"] = compare_runs(mesh_hashes(meshes), mesh_hashes(again))
+    if gates:
+        out.gates["AC-A1"] = surface_accuracy(model, pav)
+    return out
