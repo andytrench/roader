@@ -91,3 +91,17 @@ def test_fr_ex_1_failing_structure_inference_is_flagged_and_the_unit_held(monkey
     assert not report.publishable and "held" in paths
     gate = next(r for r in report.results if r.gate == "FR-EX-1")
     assert {v.element_id for v in gate.violations} == {f.element_id for f in failed}
+
+
+def test_fr_ex_1_failing_terrain_surface_is_left_out_and_flagged(monkeypatch):
+    model = overpass_model()
+
+    def terrain_meshes(*args, **kwargs):
+        raise ValueError("injected terrain failure")
+
+    monkeypatch.setattr(solids, "terrain_meshes", terrain_meshes)
+    failures = []
+    meshes = generate(model, failures=failures)
+    assert [(f.element_id, f.req) for f in failures] == [(model.terrain.id, "FR-SG-6")]
+    assert "ValueError: injected terrain failure" in failures[0].message
+    assert meshes and not any(m.part == "terrain" for m in meshes)

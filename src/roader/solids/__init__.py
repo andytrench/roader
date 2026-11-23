@@ -48,8 +48,8 @@ def generate(model: RoadModel, chord_tol_m: float = 0.01, profile: str = "analyt
     ``failures``: None raises on the first element that cannot be built. A list makes
     generation tolerant (FR-EX-1, D-119): a road whose sweep fails is retried with its
     structures squared (support skew 0), then dropped; a junction area that fails is
-    left out so its roads are swept through it; any other element whose bodies fail is
-    dropped. Each replacement appends an ``ELEMENT_FAILED`` flag naming the element,
+    left out so its roads are swept through it; a terrain surface that fails is left out;
+    any other element whose bodies fail is dropped. Each replacement appends an ``ELEMENT_FAILED`` flag naming the element,
     the requirement and the exception, so the unit is held.
     """
     if not chord_tol_m > 0.0:
@@ -115,9 +115,15 @@ def _generate(model: RoadModel, chord_tol_m: float, profile: str, failures: list
     frames = {road.id: RoadFrame(road) for road in model.roads}
     meshes = [finish(raw, pv, frames, realtime=realtime) for raw in result.raw]
     if sampler is not None and model.terrain is not None:
-        terrain = terrain_meshes(
-            sampler, result.footprints, result.ring, model.terrain.id, model.terrain.prov.source, chord_tol_m
-        )
+        try:
+            terrain = terrain_meshes(
+                sampler, result.footprints, result.ring, model.terrain.id, model.terrain.prov.source, chord_tol_m
+            )
+        except Exception as exc:
+            if failures is None:
+                raise
+            failures.append(Flag(ELEMENT_FAILED, model.terrain.id, "FR-SG-6", f"terrain surface dropped; {describe(exc)}"))
+            terrain = []
         meshes += [terrain_attributes(m) for m in terrain]
     return meshes
 
