@@ -28,7 +28,14 @@ fitted pavement gets no link and a ``FR-AF-3:no_seam`` flag.
 
 from __future__ import annotations
 
+import concurrent.futures
+import concurrent.futures.process
 import math
+import multiprocessing
+import os
+import pickle
+import shutil
+import tempfile
 from dataclasses import dataclass
 
 import numpy as np
@@ -118,24 +125,109 @@ def child_anchors(seed: RoadSeed, js: list[Junction], fitted: dict[str, RoadFit]
     return tuple(anchors)
 
 
-def fit_network(seeds: list[RoadSeed], ev, rules, *, strip_factor: float = 1.0) -> tuple[list[RoadFit], list[Junction]]:
-    """Every seed fitted, parents before children; returns fits in seed order and the junctions."""
+def fit_network(
+    seeds: list[RoadSeed], ev, rules, *, strip_factor: float = 1.0, workers: int | None = None
+) -> tuple[list[RoadFit], list[Junction]]:
+    """Every seed fitted, parents before children; returns fits in seed order and the junctions.
+
+    Roads of one depth depend only on fitted parents, so a level of at least
+    ``PARALLEL_MIN`` roads is fitted in ``workers`` spawned processes (default
+    ``ROADER_FIT_WORKERS``, else up to ``MAX_WORKERS``; 1 fits serially). Each road's
+    fit is deterministic, so the result does not depend on the worker count.
+    """
     js = junctions(seeds)
     depth = {s.id: 0 for s in seeds}
     for _ in range(len(js)):
         for j in js:
             depth[j.child] = max(depth[j.child], min(depth[j.parent] + 1, len(seeds)))
     by_id = {s.id: s for s in seeds}
+    halves = {s.id: least_half_width(s, rules) for s in seeds}
     fitted: dict[str, RoadFit] = {}
-    for sid in sorted(by_id, key=lambda i: (depth[i], i)):
-        seed = by_id[sid]
-        anchors = child_anchors(seed, js, fitted)
-        neighbours = [Neighbour(other.line, least_half_width(other, rules)) for other in seeds if other.id != sid]
-        fitted[sid] = fit_road(seed, ev, rules, strip_factor=strip_factor, anchors=tuple(anchors), neighbours=neighbours)
+    n_workers = _workers(workers)
+    pool = None
+    try:
+        for level in sorted(set(depth.values())):
+            ids = sorted(i for i in by_id if depth[i] == level)
+            tasks = []
+            for sid in ids:
+                seed = by_id[sid]
+                anchors = child_anchors(seed, js, fitted)
+                neighbours = [Neighbour(other.line, halves[other.id]) for other in seeds if other.id != sid]
+                tasks.append((seed, tuple(anchors), neighbours))
+            done = None
+            if n_workers > 1 and (len(tasks) >= PARALLEL_MIN or (pool is not None and len(tasks) > 1)):
+                if pool is None:
+                    pool = _Pool(ev, n_workers)
+                try:
+                    done = pool.map(tasks, strip_factor)
+                except concurrent.futures.process.BrokenProcessPool:
+                    # Workers could not start (a caller's script without a __main__ guard): fit serially.
+                    pool.close()
+                    pool, n_workers = None, 1
+            if done is not None:
+                for sid, fit in zip(ids, done, strict=True):
+                    fitted[sid] = fit
+            else:
+                for sid, (seed, anchors, neighbours) in zip(ids, tasks, strict=True):
+                    fitted[sid] = fit_road(seed, ev, rules, strip_factor=strip_factor, anchors=anchors, neighbours=neighbours)
+    finally:
+        if pool is not None:
+            pool.close()
     fits = [fitted[s.id] for s in seeds]
     # Twin carriageways stop at their median (L3, FR-XS-4): with every road fitted, so both inner edges are known.
     split_twin_medians(fits, ev.xyz[~np.asarray(ev.transient, dtype=bool)])
     return fits, js
+
+
+PARALLEL_MIN = 12  # roads in one level before starting worker processes pays; once started, later levels use them too
+MAX_WORKERS = 8
+
+
+def _workers(workers: int | None) -> int:
+    if workers is not None:
+        return max(1, int(workers))
+    env = os.environ.get("ROADER_FIT_WORKERS")
+    if env:
+        return max(1, int(env))
+    return max(1, min(MAX_WORKERS, (os.cpu_count() or 2) // 2))
+
+
+_WORKER_EV = None
+
+
+def _worker_init(path: str) -> None:
+    global _WORKER_EV
+    with open(path, "rb") as fh:
+        _WORKER_EV = pickle.load(fh)
+
+
+def _worker_fit(task):
+    from roader.rules import RuleBook
+
+    seed, anchors, neighbours, strip_factor = task
+    return fit_road(seed, _WORKER_EV, RuleBook.load(), strip_factor=strip_factor, anchors=anchors, neighbours=neighbours)
+
+
+class _Pool:
+    """Spawned workers holding the unit's evidence, loaded once from a temporary pickle."""
+
+    def __init__(self, ev, n: int) -> None:
+        self.dir = tempfile.mkdtemp(prefix="roader_fit_")
+        path = os.path.join(self.dir, "evidence.pkl")
+        with open(path, "wb") as fh:
+            pickle.dump(ev, fh, protocol=pickle.HIGHEST_PROTOCOL)
+        ctx = multiprocessing.get_context("spawn")
+        self.ex = concurrent.futures.ProcessPoolExecutor(max_workers=n, mp_context=ctx, initializer=_worker_init, initargs=(path,))
+
+    def map(self, tasks, strip_factor: float):
+        # Longest roads first so the pool stays busy; results back in task order.
+        order = sorted(range(len(tasks)), key=lambda i: -tasks[i][0].line.length)
+        futures = {i: self.ex.submit(_worker_fit, (*tasks[i], strip_factor)) for i in order}
+        return [futures[i].result() for i in range(len(tasks))]
+
+    def close(self) -> None:
+        self.ex.shutdown()
+        shutil.rmtree(self.dir, ignore_errors=True)
 
 
 def least_half_width(seed: RoadSeed, rules) -> float:

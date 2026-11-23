@@ -56,6 +56,10 @@ class LinePoints:
 
 def near_points(line: Polyline, ev: Evidence, max_u: float = SEARCH_U_M) -> LinePoints:
     usable = (ev.layer_label[ev.point_layer] == 0) & ~ev.transient
+    # Only points in the line's bounding box widened by max_u can be within max_u of it.
+    lo, hi = line.xy.min(axis=0) - max_u, line.xy.max(axis=0) + max_u
+    xy = ev.xyz[:, :2]
+    usable &= (xy[:, 0] >= lo[0]) & (xy[:, 0] <= hi[0]) & (xy[:, 1] >= lo[1]) & (xy[:, 1] <= hi[1])
     idx = np.flatnonzero(usable)
     s, u, ok = line.project(ev.xyz[idx, :2], max_dist=max_u)
     idx = idx[ok]

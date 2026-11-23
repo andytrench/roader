@@ -51,6 +51,7 @@ STALL_PIECES = 3
 STALL_GAIN = 0.98
 STALL_DEV_M = 4.0 * MAX_DEV_M
 LSQ_TOL = 1e-6
+JAC_STEP = np.finfo(np.float64).eps ** 0.5  # scipy's 2-point relative step
 
 
 @dataclass
@@ -119,47 +120,109 @@ def _n_free(m: int, ties: dict) -> int:
 
 
 def _residuals(params, m, length, ties, s_data, xy_data, w_data, rules, road_class, ends):
-    chain = _pieces_from(params, m, length, ties, ends[3])
-    s, pts, h = chain.sample()
-    sd = np.clip(s_data, 0.0, chain.knots[-1])
-    px = np.interp(sd, s, pts[:, 0])
-    py = np.interp(sd, s, pts[:, 1])
-    hh = np.interp(sd, s, h)
-    dx, dy = xy_data[:, 0] - px, xy_data[:, 1] - py
-    lat = -dx * np.sin(hh) + dy * np.cos(hh)
-    along = dx * np.cos(hh) + dy * np.sin(hh)
-    res = [w_data * lat, ALONG_WEIGHT * w_data * along]
-    # Stations are anchored at both ends of the registered line, so the chain cannot slide along itself.
-    # An end pinned to a junction node (FR-AF-3) is held in both directions, in heading and curvature.
-    for (ex, ey), (px_, py_), hh_, pin, k_end in (
-        (ends[0], pts[0], h[0], ends[2][0], chain.kappa[0]),
-        (ends[1], pts[-1], h[-1], ends[2][1], chain.kappa[-1]),
-    ):
-        res.append(np.array([END_WEIGHT * ((ex - px_) * math.cos(hh_) + (ey - py_) * math.sin(hh_))]))
-        if pin is not None:
-            res.append(np.array([ANCHOR_WEIGHT * (-(ex - px_) * math.sin(hh_) + (ey - py_) * math.cos(hh_))]))
-            if pin[2] is not None:
-                res.append(np.array([ANCHOR_WEIGHT * PIN_HEADING_M * math.remainder(hh_ - pin[2], 2.0 * math.pi)]))
-            if len(pin) > 3 and pin[3] is not None:
-                res.append(np.array([ANCHOR_WEIGHT * PIN_HEADING_M**2 * (k_end - pin[3])]))
-    if rules is not None:
-        # roader.fit.priors.curvature_penalty, with the rule read once per fit (ends[4]).
-        k_rule = ends[4]
-        pen = np.maximum(np.abs(chain.kappa) - k_rule, 0.0) / k_rule
-        res.append(RULE_WEIGHT * math.sqrt(max(len(s_data), 1)) * pen)
-    # Keep pieces from collapsing.
-    lengths = np.diff(chain.knots)
-    res.append(np.maximum(0.0, MIN_PIECE_M - lengths) * 10.0)
-    # The chain is as long as the line it follows; a free length lets an end with no
-    # samples curl into a loop.
-    res.append(np.array([END_WEIGHT * (chain.knots[-1] - length)]))
-    return np.concatenate(res)
+    return _residuals_batch(np.asarray(params, dtype=float)[None, :], m, length, ties, s_data, xy_data, w_data, rules, ends)[0]
+
+
+def _merge(a: np.ndarray, b: np.ndarray) -> np.ndarray:
+    """Row-wise merge of two row-sorted arrays (B, p) and (B, q) into (B, p + q), sorted."""
+    nb, p = a.shape
+    q = b.shape[1]
+    pos = np.stack([np.searchsorted(a[i], b[i]) for i in range(nb)]) + np.arange(q)
+    out = np.empty((nb, p + q))
+    mask = np.ones((nb, p + q), dtype=bool)
+    rows = np.repeat(np.arange(nb), q)
+    out[rows, pos.ravel()] = b.ravel()
+    mask[rows, pos.ravel()] = False
+    out[mask] = a.ravel()
+    return out
+
+
+def _residuals_batch(params, m, length, ties, s_data, xy_data, w_data, rules, ends) -> np.ndarray:
+    """Residuals (B, R) of a batch of parameter vectors.
+
+    Every row is bit for bit the residual of one chain sampled by ``_Chain.sample``
+    (np.interp stays per row: its fused multiply-add has no vectorized equivalent),
+    so the least-squares path, and the fitted alignment, do not depend on batching.
+    """
+    chains = [_pieces_from(p, m, length, ties, ends[3]) for p in params]
+    nb = len(chains)
+    knots = np.stack([c.knots for c in chains])
+    kappa = np.stack([c.kappa for c in chains])
+    total = knots[:, -1]
+    n = [max(2, math.ceil(float(t) / GRID_M) + 1) for t in total]
+    if len(set(n)) > 1:
+        return np.stack([_residuals_batch(p[None, :], m, length, ties, s_data, xy_data, w_data, rules, ends)[0] for p in params])
+    s = _merge(np.linspace(0.0, total, n[0], axis=1), knots[:, 1:-1])
+    if nb > 1 and (np.diff(s, axis=1) == 0.0).any():
+        # A knot on a grid node: np.union1d keeps one of the two.
+        return np.stack([_residuals_batch(p[None, :], m, length, ties, s_data, xy_data, w_data, rules, ends)[0] for p in params])
+    if nb == 1:
+        s = np.union1d(np.linspace(0.0, float(total[0]), n[0]), knots[0])[None, :]
+    k = np.stack([np.interp(s[b], knots[b], kappa[b]) for b in range(nb)])
+    ds = np.diff(s, axis=1)
+    h0 = np.array([c.h0 for c in chains])[:, None]
+    h = h0 + np.concatenate([np.zeros((nb, 1)), np.cumsum(0.5 * (k[:, 1:] + k[:, :-1]) * ds, axis=1)], axis=1)
+    hm = 0.5 * (h[:, 1:] + h[:, :-1]) - (k[:, 1:] - k[:, :-1]) * ds / 8.0
+    dx = ds / 6.0 * (np.cos(h[:, :-1]) + 4.0 * np.cos(hm) + np.cos(h[:, 1:]))
+    dy = ds / 6.0 * (np.sin(h[:, :-1]) + 4.0 * np.sin(hm) + np.sin(h[:, 1:]))
+    x = np.array([c.x0 for c in chains])[:, None] + np.concatenate([np.zeros((nb, 1)), np.cumsum(dx, axis=1)], axis=1)
+    y = np.array([c.y0 for c in chains])[:, None] + np.concatenate([np.zeros((nb, 1)), np.cumsum(dy, axis=1)], axis=1)
+    out = np.empty((nb, 0))
+    rows = []
+    for b in range(nb):
+        sd = np.clip(s_data, 0.0, knots[b, -1])
+        px = np.interp(sd, s[b], x[b])
+        py = np.interp(sd, s[b], y[b])
+        hh = np.interp(sd, s[b], h[b])
+        ddx, ddy = xy_data[:, 0] - px, xy_data[:, 1] - py
+        lat = -ddx * np.sin(hh) + ddy * np.cos(hh)
+        along = ddx * np.cos(hh) + ddy * np.sin(hh)
+        res = [w_data * lat, ALONG_WEIGHT * w_data * along]
+        # Stations are anchored at both ends of the registered line, so the chain cannot slide along itself.
+        # An end pinned to a junction node (FR-AF-3) is held in both directions, in heading and curvature.
+        for (ex, ey), px_, py_, hh_, pin, k_end in (
+            (ends[0], x[b, 0], y[b, 0], h[b, 0], ends[2][0], kappa[b, 0]),
+            (ends[1], x[b, -1], y[b, -1], h[b, -1], ends[2][1], kappa[b, -1]),
+        ):
+            res.append(np.array([END_WEIGHT * ((ex - px_) * math.cos(hh_) + (ey - py_) * math.sin(hh_))]))
+            if pin is not None:
+                res.append(np.array([ANCHOR_WEIGHT * (-(ex - px_) * math.sin(hh_) + (ey - py_) * math.cos(hh_))]))
+                if pin[2] is not None:
+                    res.append(np.array([ANCHOR_WEIGHT * PIN_HEADING_M * math.remainder(hh_ - pin[2], 2.0 * math.pi)]))
+                if len(pin) > 3 and pin[3] is not None:
+                    res.append(np.array([ANCHOR_WEIGHT * PIN_HEADING_M**2 * (k_end - pin[3])]))
+        if rules is not None:
+            # roader.fit.priors.curvature_penalty, with the rule read once per fit (ends[4]).
+            k_rule = ends[4]
+            pen = np.maximum(np.abs(kappa[b]) - k_rule, 0.0) / k_rule
+            res.append(RULE_WEIGHT * math.sqrt(max(len(s_data), 1)) * pen)
+        # Keep pieces from collapsing.
+        res.append(np.maximum(0.0, MIN_PIECE_M - np.diff(knots[b])) * 10.0)
+        # The chain is as long as the line it follows; a free length lets an end with no
+        # samples curl into a loop.
+        res.append(np.array([END_WEIGHT * (knots[b, -1] - length)]))
+        rows.append(np.concatenate(res))
+    return np.stack(rows) if rows else out
+
+
+def _jacobian(params, m, length, ties, s_data, xy_data, w_data, rules, road_class, ends):
+    """scipy's 2-point Jacobian of ``_residuals`` (same steps, same arithmetic), all columns in one batch."""
+    x0 = np.asarray(params, dtype=float)
+    sign = (x0 >= 0).astype(float) * 2 - 1
+    h = JAC_STEP * sign * np.maximum(1.0, np.abs(x0))
+    batch = np.repeat(x0[None, :], len(x0) + 1, axis=0)
+    idx = np.arange(len(x0))
+    batch[idx + 1, idx] = x0 + h
+    f = _residuals_batch(batch, m, length, ties, s_data, xy_data, w_data, rules, ends)
+    dx = (x0 + h) - x0
+    return ((f[1:] - f[0]) / dx[:, None]).T
 
 
 def _fit(m, length, ties, init, s_data, xy_data, w_data, rules, road_class, ends, loss="soft_l1"):
     sol = least_squares(
         _residuals,
         init,
+        jac=_jacobian,
         args=(m, length, ties, s_data, xy_data, w_data, rules, road_class, ends),
         loss=loss,
         f_scale=0.1,
