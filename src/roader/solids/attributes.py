@@ -60,6 +60,7 @@ CHUNK_M = 32.0  # longest UV1 chart side along the road or outline, m
 UV1_ATLAS_PX = 1024
 UV1_PAD_PX = 2
 MITER_LIMIT = 4.0
+ROW_ORIGIN_TOL_M = 1e-3  # a top row touching the reference line within this is measured from it
 
 ALONG, ACROSS, OTHER = 0, 1, 2
 
@@ -286,8 +287,9 @@ def _row_across(raw: RawMesh, vertices: np.ndarray, u: np.ndarray, row: np.ndarr
         verts.sort(key=lambda v: (u[v], v))
         uu = u[verts]
         arc = np.concatenate([[0.0], np.cumsum(np.hypot(np.diff(uu), np.diff(vertices[verts, 2])))])
-        # Measured from the reference line when the row crosses it, else from the first u-line.
-        origin = float(np.interp(0.0, uu, arc)) if uu[0] <= 0.0 <= uu[-1] else -float(uu[0])
+        # Measured from the reference line when the row crosses or touches it (a real-time inset moves a
+        # reference-line vertex by a fraction of a millimetre, D-092), else from the first u-line.
+        origin = float(np.interp(0.0, uu, arc)) if uu[0] <= ROW_ORIGIN_TOL_M and uu[-1] >= -ROW_ORIGIN_TOL_M else -float(uu[0])
         for v, a in zip(verts, arc.tolist(), strict=True):
             out[v] = a - origin
     return out

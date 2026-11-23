@@ -335,3 +335,26 @@ def test_d090_split_tip_left_inside_a_neighbour_is_dropped():
     out = _unpoke([a, b], [(0, -1), (1, -1)], set())
     assert (5.0, 4.016) not in out[0] and out[1] == b
     assert Polygon(out[0]).intersection(Polygon(out[1])).area == 0.0
+
+
+def test_d092_realtime_uv_on_partly_trimmed_gore_fill():
+    """Real-time profile: a fill trimmed over part of its length keeps uv0 within AC-P4 (D-092 guard; the
+    Woburn case needs a curved, high fill to show the jump and is checked on that unit)."""
+    from roader.model.schema import SideSlope
+    from roader.validate.assets import check_uv_stretch
+
+    a = _road("ta", [("line", 300.0, 0.0)], -150.0, 0.0, 0.0, 4.0, 4.0)
+    b = _road("tb", [("line", 300.0, 0.0)], -150.0, 13.0, 0.06, 4.5, 4.5)
+    for r in (a, b):  # 3.7 m of fill: the slope arc is well longer than its plan width
+        r.profile = Profile([VerticalElement(0.0, 300.0, Z + 3.0, 0.0, 0.0, TRUTH)])
+    slopes = [
+        SideSlope(stable_id("ss", a.id), a.id, "left", 0.0, 300.0, "fill", 2.0, RULE),
+        SideSlope(stable_id("ss", b.id), b.id, "right", 0.0, 300.0, "fill", 2.0, RULE),
+    ]
+    model = dataclasses.replace(_model([a, b], terrain=True), side_slopes=slopes)
+    analytic = generate(model)
+    fills = [m for m in analytic if m.part == "embankment"]
+    assert any(len(m.faces) for m in fills)
+    rt = generate(model, profile="realtime")
+    result = check_uv_stretch([m for m in rt if m.closed])
+    assert result.passed, result.violations
