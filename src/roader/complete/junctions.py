@@ -771,7 +771,7 @@ def _split_two(ai, aj, pi, pj, give_i, give_j, roads) -> tuple[list[JunctionArea
     fixed = []
     for k, a in enumerate((ai, aj)):
         outline = next(rg for rg, (kk, h) in zip(rings, index, strict=True) if kk == k and h == -1)
-        holes = [rg for rg, (kk, h) in zip(rings, index, strict=True) if kk == k and h == 0]
+        holes = [rg for rg, (kk, h) in zip(rings, index, strict=True) if kk == k and h == 0 and len(set(rg)) >= 3]
         for sm in a.seams:
             problem = _check_rows(roads[sm.road_id], [(sm.s, sm.side)], outline)
             if problem:
@@ -1235,7 +1235,7 @@ def _shared_group(model, roads, group: list[_Stretch], zone_map, covered, *, mid
     out = []
     for k, (r, lo, hi, _poly) in enumerate(regions):
         outline = next(rg for rg, (kk, h) in zip(rings, index, strict=True) if kk == k and h == -1)
-        holes = [rg for rg, (kk, h) in zip(rings, index, strict=True) if kk == k and h >= 0]
+        holes = [rg for rg, (kk, h) in zip(rings, index, strict=True) if kk == k and h >= 0 and len(set(rg)) >= 3]
         area, problem = _shared_area(roads[r], lo, hi, outline, holes, sorted(set(names) - {r}))
         if area is None:
             return [], problem
