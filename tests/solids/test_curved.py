@@ -230,17 +230,20 @@ def test_skew_follows_supports_fr_st_4(model, meshes):
 
 
 def test_fr_sg_2_only_the_inside_of_a_curve_can_fold():
-    """A reach beyond the radius on the outside of a curve is buildable; on the inside it is refused."""
+    """A reach beyond the radius on the outside of a curve is buildable; on the inside it only shortens the step.
+
+    The reach ``sides`` gives is padded, so it no longer refuses the sweep (D-142): lines that
+    really reach the centre are held short of it in the bodies, and the grid still refuses a fold.
+    """
     from roader.solids.stations import max_step
 
     road = curved_model().roads[0]
     a, b = 100.0, 140.0  # on the left-turning 120 m arc: the centre is on the left
     far = 150.0
-    assert max_step(road, a, b, 0.01, far, lambda _a, _b: (10.0, far)) > 0.0
-    with pytest.raises(ValueError, match="centre of curvature"):
-        max_step(road, a, b, 0.01, far, lambda _a, _b: (far, 10.0))
-    with pytest.raises(ValueError, match="centre of curvature"):
-        max_step(road, a, b, 0.01, far)
+    outside = max_step(road, a, b, 0.01, far, lambda _a, _b: (10.0, far))
+    inside = max_step(road, a, b, 0.01, far, lambda _a, _b: (far, 10.0))
+    assert 0.0 < inside < outside
+    assert 0.0 < max_step(road, a, b, 0.01, far) <= inside
 
 
 def test_fr_sg_2_a_width_kink_refines_only_the_station_lines_that_meet_its_side():
