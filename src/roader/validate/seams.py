@@ -18,8 +18,8 @@ still load:
 - ``JunctionArea.surface_z(x, y) -> float``: top of pavement inside the area
   (NaN or an exception outside it).
 
-A link whose seam point lies inside an at-grade intersection area of both its
-roads is checked on the area's seams only (D-128): neither road is rendered there.
+A link whose child meets its parent more than 25 degrees off its direction, inside
+an L6 area of both roads, is checked on the area's seams only (D-128).
 """
 
 from __future__ import annotations
@@ -41,6 +41,7 @@ JOINT_CURVATURE_TOL = 1e-6  # 1/m: mainline element joints are fitted curvature-
 SEAM_INSET = 0.25  # m kept clear of pavement edges and of the crown
 SEAM_LATERAL = 1.0  # m between samples across the road
 DIFF_STEP = 0.05  # m, finite-difference step on road and junction surfaces
+TERMINAL_ANGLE = math.radians(25.0)  # D-051: a child meeting its parent more steeply keeps its own heading
 
 
 def road_gradient(road: Road, s: float, u: float) -> np.ndarray:
@@ -232,19 +233,26 @@ def curvature_violations(road: Road) -> list[Violation]:
 
 
 def _inside_intersection(link: Link, roads: Mapping[str, Road], junctions) -> bool:
-    """The link's seam point lies in an at-grade intersection area of both its roads (D-128).
+    """The link meets its parent at an angle inside an L6 area of both its roads (D-128).
 
-    Neither road is rendered there: they meet the area along its own seams, which
-    ``junction_violations`` checks, so the link has no surface seam of its own.
+    A child leaving more than TERMINAL_ANGLE off its parent's direction keeps its own
+    heading (D-051), so its single crown cannot follow the parent's crowned surface
+    along one line; neither road is rendered there and they meet the area along its
+    own seams, which ``junction_violations`` checks.
     """
-    src = roads.get(link.from_road)
-    if src is None or link.to_road not in roads:
+    src, dst = roads.get(link.from_road), roads.get(link.to_road)
+    if src is None or dst is None:
         return False
-    from_s = getattr(link, "from_s", None)
+    from_s, to_s = getattr(link, "from_s", None), getattr(link, "to_s", None)
     s = float(from_s) if from_s is not None else (src.length if link.from_end == "end" else 0.0)
-    point = shapely.Point(src.alignment.offset_point(s, 0.0))
+    x, y, h_src, _k = src.alignment.evaluate(s)
+    s_dst = float(to_s) if to_s is not None else dst.alignment.project(x, y)[0]
+    h_dst = dst.alignment.evaluate(s_dst)[2]
+    if abs(math.remainder(h_src - h_dst, math.pi)) <= TERMINAL_ANGLE:
+        return False
+    point = shapely.Point(x, y)
     for j in junctions:
-        if getattr(j, "kind", "") != "intersection" or not {link.from_road, link.to_road} <= set(j.road_ids):
+        if not {link.from_road, link.to_road} <= set(getattr(j, "road_ids", ())):
             continue
         outline = list(getattr(j, "outline", []) or [])
         if len(outline) >= 3 and shapely.Polygon(outline, getattr(j, "holes", None) or None).covers(point):
