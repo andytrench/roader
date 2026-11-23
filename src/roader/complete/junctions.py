@@ -39,6 +39,7 @@ Outline vertices closer than ``MIN_EDGE_M`` are merged (FR-SV-5).
 
 from __future__ import annotations
 
+import dataclasses
 import math
 from dataclasses import dataclass
 
@@ -97,6 +98,7 @@ SHARED_REACH_M = 100.0  # the other road's footprint considered beyond the overl
 EDGE_TOL_M = 0.05  # a chord end this close to a road's edge lies on that edge
 CONTAINED_FRACTION = 0.8  # chords wholly inside the narrower road: it keeps the overlap
 SPLIT_EXTEND_M = 2.0
+SKEW_SECTION_M = 1.0  # lifted sections of a road across its skewed seam row
 ROW_MATCH_M = 0.01  # overlay may move a seam row end by millimetres; the row itself is written
 MIN_CHORD_M = 0.05  # shorter chords near an overlap tip are left out of the split line (FR-SV-5)
 SHARED_RULE_ID = "junction.shared_split"
@@ -828,7 +830,7 @@ def _junction(model, roads, nodes, intervals) -> tuple[JunctionArea | None, str]
     if not poly.is_valid or not poly.exterior.is_ccw or poly.area < union.area - 1e-4:
         return None, "outline is not a valid polygon"
 
-    seams = [_patch(roads[rid], s, side) for rid, s, side in seam_defs]
+    seams = [dataclasses.replace(_patch(roads[rid], s, side), skew=_end_skew(rid, s)) for rid, s, side in seam_defs]
     sections = []
     for rid, (lo, hi) in sorted(intervals.items()):
         road = roads[rid]
@@ -838,6 +840,16 @@ def _junction(model, roads, nodes, intervals) -> tuple[JunctionArea | None, str]
             if any(r == rid and abs(s - ss) < SECTION_CLEAR_M for r, ss, _ in seam_defs):
                 continue
             sections.append(_patch(road, s, 0))
+
+    for sm in seams:
+        if sm.skew != 0.0:
+            # Across a skewed row the surface is the road's own on both sides of the straight section (D-073).
+            road = roads[sm.road_id]
+            reach = abs(sm.skew) * max(-sm.u0, sm.u1)
+            for k in range(1, math.ceil(reach / SKEW_SECTION_M) + 1):
+                for st in (sm.s - k * SKEW_SECTION_M, sm.s + k * SKEW_SECTION_M):
+                    if 0.0 <= st <= road.length:
+                        sections.append(_patch(road, st, 0))
 
     srcs = [_source(roads[r]) for r in sorted(intervals)]
     worst = max(srcs, key=lambda item: _TRUST[item[0]])

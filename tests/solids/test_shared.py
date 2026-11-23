@@ -248,6 +248,9 @@ def test_d073_seam_in_a_skewed_deck_ramp_follows_the_station_line():
     t = math.tan(0.4)
     corner = fwy.alignment.offset_point(seam.s + t * 5.5, 5.5)
     assert min(math.dist(v[:2], corner) for v in slab.vertices) < 1e-3  # the row is the deck's skewed end
+    assert seam.skew == pytest.approx(t)
+    # AC-H4 reads the straight section at the seam: the area answers for it on both sides of the skewed row.
+    assert junction_violations(jn, {r.id: r for r in model.roads})[0] == []
     deck = next(m for m in meshes if m.part == "deck")
     keys = {tuple(np.round(v, 9)) for v in deck.vertices}
     shared = [v for v in slab.vertices if tuple(np.round(v, 9)) in keys]

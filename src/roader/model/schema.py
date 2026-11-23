@@ -328,6 +328,8 @@ class JunctionSeam:
     slope_left_rate: float = 0.0
     slope_right_rate: float = 0.0
     thickness: float = 0.0
+    # tan of the seam row's skew: the row runs through station s + skew * u (a deck's skewed end, D-073).
+    skew: float = 0.0
 
     def local(self, x: float, y: float) -> tuple[float, float]:
         """(station, offset) of a plan point relative to the seam, on the osculating circle of the road."""
@@ -414,7 +416,20 @@ class JunctionArea:
         if len(rings[0]) < 3:
             return False
         inside = _in_ring(rings[0], x, y) and not any(_in_ring(h, x, y) for h in rings[1:])
-        return inside or min(_ring_distance(r, x, y) for r in rings) <= tol
+        return inside or min(_ring_distance(r, x, y) for r in rings) <= tol or self._in_skew_wedge(x, y)
+
+    def _in_skew_wedge(self, x: float, y: float) -> bool:
+        """Between a skewed seam row and the straight section at its station: the seam lies on the skewed row,
+        and the straight section of the road there is read from the area (D-073)."""
+        for sm in self.seams:
+            if sm.skew == 0.0 or sm.z is None:
+                continue
+            t, u = sm.local(x, y)
+            if sm.u0 - JUNCTION_EDGE_TOL_M <= u <= sm.u1 + JUNCTION_EDGE_TOL_M:
+                lo, hi = sorted((0.0, sm.skew * u))
+                if lo - JUNCTION_EDGE_TOL_M <= t <= hi + JUNCTION_EDGE_TOL_M:
+                    return True
+        return False
 
     def _blend(self, x: float, y: float, value) -> float:
         patches = [*self.seams, *self.sections]
