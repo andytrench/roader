@@ -55,6 +55,7 @@ from roader.solids.assemble import (
 from roader.solids.grid import PlanVertices
 
 PSI_MAX = 0.25  # rad of turning per UV0 segment
+FACE_STRETCH_MAX = 0.04  # a top face the road mapping stretches more than this is mapped on its plane (D-148)
 UV0_SAMPLE_M = 1.0  # station step used to place UV0 segment ends
 CHUNK_M = 32.0  # longest UV1 chart side along the road or outline, m
 UV1_ATLAS_PX = 1024
@@ -310,10 +311,23 @@ def _uv0(
     for f in np.nonzero(top_ok)[0].tolist():
         frame = frames[road[int(faces[f, 0])]]
         seg = int(frame.segment(np.array([s[faces[f]].mean()]))[0])
-        ref = float(frame.refs[seg])
+        heads = [frame.heading(float(s[v])) for v in faces[f].tolist()]
+        # A skewed row reaches stations beyond its segment's ends: take the neighbouring
+        # segment whose reference keeps the face's turning smallest (D-148).
+        best = None
+        for j in (seg, seg - 1, seg + 1):
+            if 0 <= j < len(frame.refs):
+                worst = max(abs(math.remainder(h - float(frame.refs[j]), 2.0 * math.pi)) for h in heads)
+                if best is None or worst < best[0] - 1e-12:
+                    best = (worst, j)
+        ref = float(frame.refs[best[1]])
         for k, v in enumerate(faces[f].tolist()):
-            psi = math.remainder(frame.heading(float(s[v])) - ref, 2.0 * math.pi)
+            psi = math.remainder(heads[k] - ref, 2.0 * math.pi)
             uv[f, k] = (s[v] - u[v] * psi, across[v])
+        if _distortion(vertices[faces[f]], uv[f]) > FACE_STRETCH_MAX:
+            # A long skewed sliver on a tight curve the road mapping cannot hold: map it isometrically
+            # onto its own plane, a UV seam on one face rather than a stretched one.
+            uv[f] = _planar(vertices[faces[[f]]], fn[[f]])[0]
     wall = np.nonzero(kind == WALL)[0]
     for f in wall.tolist():
         a, b = (int(x) for x in raw.wall_edge[f])
@@ -337,6 +351,17 @@ def _uv0(
     if len(rest):
         uv[rest] = _planar(vertices[faces[rest]], fn[rest])
     return uv, across, top_ok
+
+
+def _distortion(tri: np.ndarray, q: np.ndarray) -> float:
+    """Largest stretch of the uv mapping of one triangle along either uv axis (as AC-P4 measures it)."""
+    e = np.column_stack([tri[1] - tri[0], tri[2] - tri[0]])  # (3, 2)
+    d = np.column_stack([q[1] - q[0], q[2] - q[0]])  # (2, 2)
+    det = d[0, 0] * d[1, 1] - d[0, 1] * d[1, 0]
+    if abs(det) <= 1e-12:
+        return math.inf
+    jac = e @ np.array([[d[1, 1], -d[0, 1]], [-d[1, 0], d[0, 0]]]) / det
+    return max(abs(float(np.linalg.norm(jac[:, 0])) - 1.0), abs(float(np.linalg.norm(jac[:, 1])) - 1.0))
 
 
 def _along(frame: RoadFrame, s: float, u: float) -> float:

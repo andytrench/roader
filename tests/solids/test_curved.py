@@ -293,3 +293,34 @@ def test_toe_reaching_the_centre_of_curvature_is_held_and_flagged_fr_sg_2():
         s, u = road.alignment.project_many(x.vertices[:, :2])
         k = np.array([road.alignment.evaluate(float(v))[3] for v in s])
         assert np.all(1.0 - k * u >= FOLD_LIMIT - 1e-6)
+
+
+def test_ac_p4_skewed_rows_take_the_uv_segment_that_keeps_their_turning_smallest():
+    """A skewed deck row reaches stations past its UV0 segment's end; the face takes the neighbouring segment
+    whose reference heading keeps its turning smallest, so deck, cap and pavement tops stay well under AC-P4 (D-148).
+
+    Before, faces kept the segment of their mean station and reached about 3 % across here, and over 5 % on the
+    55-degree ramp deck on a 40 m radius at New Orleans.
+    """
+    import dataclasses
+
+    from roader.validate.assets import uv_stretch
+
+    m = curved_model()
+    st = m.structures[0]
+    m.structures = [dataclasses.replace(st, supports=[dataclasses.replace(sp, skew_rad=0.5) for sp in st.supports])]
+    worst: dict[str, float] = {}
+    for x in generate(m, chord_tol_m=TOL):
+        if x.uv0 is not None and len(x.faces):
+            worst[x.part] = max(worst.get(x.part, 0.0), float(uv_stretch(x)[1].max()))
+    for part in ("deck", "pier_cap", "pavement", "parapet"):
+        assert worst[part] < 0.02, (part, worst[part])
+
+
+def test_ac_p4_face_distortion_measures_the_uv_mapping_as_the_gate_does():
+    """D-148: the per-face fallback to an isometric plane mapping is judged by the AC-P4 measure."""
+    from roader.solids.attributes import _distortion
+
+    tri = np.array([[0.0, 0.0, 0.0], [4.0, 0.0, 0.0], [0.0, 3.0, 0.0]])
+    assert _distortion(tri, np.array([[0.0, 0.0], [4.0, 0.0], [0.0, 3.0]])) < 1e-12
+    assert abs(_distortion(tri, np.array([[0.0, 0.0], [4.0, 0.0], [0.0, 3.0 / 1.06]])) - 0.06) < 1e-9
