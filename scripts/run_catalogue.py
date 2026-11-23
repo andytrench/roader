@@ -91,9 +91,11 @@ def site_row(site_id: str, profile: str, out: Path, run: dict | None) -> dict:
     row["status"], d = found
     report = json.loads((d / "report.json").read_text())
     for g in report["gates"]["results"]:
-        row["gates"][g["gate"]] = "skip" if g["skipped_reason"] else ("pass" if g["passed"] else f"FAIL({g['violation_count']})")
-        row["metrics"][g["gate"]] = g["metrics"]
-    row["ready"] = row["status"] == "published" and all(row["gates"].get(g) == "pass" for g in HARD)
+        name = g["gate"].split(":")[0]  # the realtime profile reports e.g. "AC-H1:realtime"
+        row["gates"][name] = "skip" if g["skipped_reason"] else ("pass" if g["passed"] else f"FAIL({g['violation_count']})")
+        row["metrics"][name] = g["metrics"]
+    hard_failed = any(g["hard"] and not g["passed"] and not g["skipped_reason"] for g in report["gates"]["results"])
+    row["ready"] = row["status"] == "published" and not hard_failed and all(row["gates"].get(g) == "pass" for g in HARD)
     return row
 
 
