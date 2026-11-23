@@ -7,7 +7,7 @@ import pytest
 from roader.model import Link, Mesh, stable_id
 from roader.model.geometry import AlignElement, Alignment, Profile, VerticalElement
 from roader.model.provenance import Provenance, Source
-from roader.model.schema import Road
+from roader.model.schema import JunctionArea, Road
 from roader.model.synthetic import overpass_model
 from roader.validate.gates import (
     check_continuity,
@@ -124,6 +124,19 @@ def test_ac_h3_lower_road_body_and_low_terrain_are_ignored(model):
     own = box("eb:pavement", (c.x - 3, c.y - 3, 99.7), (c.x + 3, c.y + 3, 100.0), element_id=eb.id)
     ground = box("terrain", (c.x - 3, c.y - 3, 98.0), (c.x + 3, c.y + 3, 99.0), element_id="terrain")
     assert check_voids(model, [own, ground]).passed
+
+
+def test_ac_h3_junction_area_covering_the_lower_road_is_its_surface(model):
+    """D-097: a junction area whose road_ids include the lower road carries that road's surface under the deck."""
+    eb = model.roads[0]
+    c = model.crossings[0]
+    slab = box("jn:pavement", (c.x - 3, c.y - 3, 99.7), (c.x + 3, c.y + 3, 100.3), element_id="jn")
+    outline = [(c.x - 3, c.y - 3), (c.x + 3, c.y - 3), (c.x + 3, c.y + 3), (c.x - 3, c.y + 3)]
+    assert not check_voids(model, [slab]).passed
+    model.junctions.append(JunctionArea(id="jn", road_ids=["other"], outline=outline, prov=TRUTH))
+    assert not check_voids(model, [slab]).passed
+    model.junctions[-1].road_ids.append(eb.id)
+    assert check_voids(model, [slab]).passed
 
 
 def test_ac_h3_mesh_beside_the_deck_passes(model):

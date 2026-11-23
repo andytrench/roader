@@ -174,8 +174,8 @@ def check_voids(
     they fall under the deck footprint (carried road between the structure ends,
     within the pavement width plus overhang). Each ray runs from the lower
     surface + ``floor_m`` to the soffit (upper surface minus deck depth) less
-    ``soffit_tol_m``. Meshes produced by the lower road itself (its id or its
-    barriers) are ignored. Crossings under a structure in ``skip_structures`` (one
+    ``soffit_tol_m``. Meshes produced by the lower road itself (its id, its
+    barriers, or a junction area that includes it, D-097) are ignored. Crossings under a structure in ``skip_structures`` (one
     replaced by its coarsest proxy, FR-AS-1) are not tested.
     """
     gate = "AC-H3"
@@ -214,7 +214,8 @@ def check_voids(
             result.violations.append(Violation(gate, c.id, f"{int(blocked.sum())} samples with soffit at or below the lower road"))
         if tree is None:
             continue
-        own = {lower.id, *(b.id for b in lower.cross_section.barriers)}
+        # A junction area covering the lower road carries that road's surface there (D-097).
+        own = {lower.id, *(b.id for b in lower.cross_section.barriers), *(a.id for a in model.junctions if lower.id in a.road_ids)}
         pi, ti, z = vertical_hits(tri, xy, tree=tree)
         mine = np.array([meshes[o].element_id in own for o in owner[ti]], dtype=bool)
         hit = ~mine & (z > z_low[pi] + floor_m) & (z < soffit[pi] - soffit_tol_m)
