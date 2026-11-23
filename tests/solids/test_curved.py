@@ -260,3 +260,33 @@ def test_fr_sg_2_a_width_kink_refines_only_the_station_lines_that_meet_its_side(
     behind = np.diff(out[(out >= 140.0) & (out <= 150.0)])  # these cross s = 140 only on the right side
     assert meets.max() <= fine + 1e-9
     assert behind.max() > fine
+
+
+def test_padded_reach_never_aborts_a_sweep_that_does_not_fold_fr_sg_2():
+    """Toes at 0.8 R on the inside of the curve sweep; only the padded reach used to come near the centre (D-142)."""
+    m = curved_model(ground=lambda x, y: _tilted(x, y) - 25.0)
+    notes = []
+    meshes = generate(m, chord_tol_m=TOL, failures=notes)
+    assert notes == []
+    assert all(mc.solid_problems(x) == [] for x in meshes if x.closed)
+
+
+def test_toe_reaching_the_centre_of_curvature_is_held_and_flagged_fr_sg_2():
+    """A toe past the centre of curvature is held at 1 - k u = FOLD_LIMIT and flagged, not a crash (D-142)."""
+    import dataclasses
+
+    from roader.solids.bodies import FOLD_LIMIT
+
+    m = curved_model(ground=lambda x, y: _tilted(x, y) - 45.0)
+    st = m.structures[0]
+    m.structures = [dataclasses.replace(st, supports=[dataclasses.replace(sp, skew_rad=0.0) for sp in st.supports])]
+    notes = []
+    meshes = generate(m, chord_tol_m=TOL, failures=notes)
+    assert {(f.code, f.element_id) for f in notes} == {("FR-SG-2:fold_limited", "ss_l")}
+    assert all(mc.solid_problems(x) == [] for x in meshes if x.closed)
+    road = m.roads[0]
+    emb = [x for x in meshes if x.element_id == "ss_l"]
+    for x in emb:
+        s, u = road.alignment.project_many(x.vertices[:, :2])
+        k = np.array([road.alignment.evaluate(float(v))[3] for v in s])
+        assert np.all(1.0 - k * u >= FOLD_LIMIT - 1e-6)

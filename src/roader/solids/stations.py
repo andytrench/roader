@@ -160,9 +160,8 @@ def max_step(road: Road, a: float, b: float, tol: float, umax: float, sides: Cal
     if k > 1e-12:
         reach = sides(a, b) if sides is not None else (umax, umax)
         inner = max(reach[0] if v > 0.0 else reach[1] for v in ks)
-        denom = 1.0 - k * inner
-        if denom < 0.05:
-            raise ValueError(f"road {road.id}: lateral extent {inner:.1f} m reaches the centre of curvature near s={a:.1f}")
+        # ``sides`` pads the reach; an actual fold is caught on the grid (D-142), so the padded reach only shortens the step.
+        denom = max(1.0 - k * inner, 0.05)
         step = min(step, math.sqrt(8.0 * tol * denom / k))
     zpp = abs(road.profile.grade(sb) - road.profile.grade(sa)) / (sb - sa)
     xs = road.cross_section

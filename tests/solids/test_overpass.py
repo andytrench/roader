@@ -359,3 +359,24 @@ def test_skewed_deck_at_a_road_end_stays_on_the_road_fr_sg_2_fr_st_4(end):
     for mesh in _closed(meshes):
         assert not mc.solid_problems(mesh), (mesh.id, mc.solid_problems(mesh))
     assert any(x.part == "deck" for x in meshes)
+
+
+def test_deck_edge_never_crosses_its_own_pavement_lines_fr_sg_2():
+    """A twin joint that leaves a negative per-side overhang past the pavement (FR-CR-3) stops at the edge limit (D-141).
+
+    -6 m beside 5.45 m of pavement and parapet would put the right deck edge left of the centre line.
+    """
+    from roader.solids.bodies import DECK_EDGE_MIN_M
+
+    m = overpass_model()
+    st = m.structures[0]
+    st.deck.overhang_right_m = -6.0
+    notes = []
+    meshes = generate(m, failures=notes)
+    deck = next(x for x in meshes if x.part == "deck")
+    assert not mc.solid_problems(deck)
+    assert [(f.code, f.element_id, f.req) for f in notes] == [("FR-SG-2:deck_edge_limited", st.id, "FR-CR-3")]
+    over = m.roads[2]
+    _s, u = over.alignment.project_many(deck.vertices[:, :2])
+    assert abs(u.min() + DECK_EDGE_MIN_M) < 1e-3
+    assert generate(m)  # strict mode renders the limited deck too, without a flag sink

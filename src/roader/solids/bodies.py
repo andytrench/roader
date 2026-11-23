@@ -16,7 +16,15 @@ import shapely
 from shapely.geometry import Polygon
 
 from roader.model.provenance import Source
-from roader.model.schema import Barrier, Road, RoadModel, SideSlope, Structure, Support
+from roader.model.schema import (
+    Barrier,
+    Flag,
+    Road,
+    RoadModel,
+    SideSlope,
+    Structure,
+    Support,
+)
 from roader.solids.assemble import Body, boundary_edges, chain_ring
 from roader.solids.grid import Cell, PlanVertices, RoadGrid, ULine
 from roader.solids.stations import (
@@ -36,6 +44,8 @@ from roader.solids.stations import (
 from roader.solids.terrain import TerrainSampler
 
 MIN_FILL_M = 1e-3
+FOLD_LIMIT = 0.1  # a u-line on the inside of a curve keeps 1 - k u at least this (D-142); twice the grid's FOLD_MARGIN
+DECK_EDGE_MIN_M = 0.5  # a deck edge stays this far from its road's centre line (D-141)
 # Real-time export profile (FR-SV-7, D-038): resting bodies embed into what carries
 # them, and every outline is inset in plan by a per-class amount so faces that touch
 # in the analytic profile end up at least 0.2 mm apart (coplanar means within 0.1 mm).
@@ -178,10 +188,56 @@ def _fill_top(road: Road, sign: float, ratio: float) -> Callable[[float, float],
     return top
 
 
+def _fold_limited(road: Road, lines: list[ULine], limits: list[Flag] | None) -> list[ULine]:
+    """u-lines kept short of the centre of curvature on the inside of a curve (FR-SG-2, D-142).
+
+    A line (an embankment toe on a tight ramp) whose offset u would reach 1 - k u <
+    FOLD_LIMIT is held at (1 - FOLD_LIMIT) / |k| there; each limited line is flagged once.
+    Lines that cannot come near the centre are returned unchanged.
+    """
+    kmax = max((max(abs(e.k0), abs(e.k1)) for e in road.alignment.elements), default=0.0)
+    if kmax <= 1e-12:
+        return lines
+    out = []
+    for line in lines:
+        probe = [line.s0 + (line.s1 - line.s0) * i / 20 for i in range(21)]
+        if max(abs(line.func(s)) for s in probe) * kmax < 0.5 * (1.0 - FOLD_LIMIT):
+            out.append(line)
+            continue
+        hits: list[float] = []
+
+        def func(s: float, f=line.func, hits=hits) -> float:
+            u = f(s)
+            k = road.alignment.evaluate(min(max(s, 0.0), road.length))[3]
+            if u * k > 0.0 and abs(u * k) > 1.0 - FOLD_LIMIT:
+                hits.append(s)
+                return math.copysign((1.0 - FOLD_LIMIT) / abs(k), u)
+            return u
+
+        out.append(ULine(line.key, func, line.s0, line.s1))
+        if limits is not None and any(func(s) != line.func(s) for s in probe):
+            element = line.key.split(":")[1] if ":" in line.key else road.id
+            limits.append(Flag(
+                "FR-SG-2:fold_limited", element, "FR-SG-2",
+                f"u-line {line.key} on {road.id} held at 1 - k u = {FOLD_LIMIT} on the inside of the curve over s={line.s0:.1f}-{line.s1:.1f}",
+            ))
+    return out
+
+
 def road_bodies(
-    model: RoadModel, road: Road, sampler: TerrainSampler | None, tol: float, pv: PlanVertices, *, realtime: bool = False
+    model: RoadModel,
+    road: Road,
+    sampler: TerrainSampler | None,
+    tol: float,
+    pv: PlanVertices,
+    *,
+    realtime: bool = False,
+    limits: list[Flag] | None = None,
 ) -> list[Body]:
-    """Bodies of one road. ``realtime`` switches to the real-time profile's levels and insets."""
+    """Bodies of one road. ``realtime`` switches to the real-time profile's levels and insets.
+
+    ``limits`` collects a flag wherever the model's geometry had to be limited to be swept (D-141).
+    """
     xs = road.cross_section
     embed = REALTIME_EMBED_M if realtime else 0.0
     length = road.length
@@ -240,6 +296,16 @@ def road_bodies(
                 default=0.0,
             )
             overhang = st.deck.overhang(side)
+            # D-141: a twin joint's negative overhang (FR-CR-3) never takes the edge within DECK_EDGE_MIN_M of the centre line.
+            samples = [st.s_start, st.s_end] + [k.s for k in width.knots if st.s_start < k.s < st.s_end]
+            least = min(max(width(s), zone) for s in samples) - DECK_EDGE_MIN_M
+            if overhang < -least:
+                if limits is not None:
+                    limits.append(Flag(
+                        "FR-SG-2:deck_edge_limited", st.id, "FR-CR-3",
+                        f"{side} overhang {overhang:.2f} m would take the deck edge past its pavement; limited to {-least:.2f} m ({DECK_EDGE_MIN_M} m from the centre line)",
+                    ))
+                overhang = -least
 
             def edge(s: float, width=width, zone=zone, overhang=overhang, sign=sign) -> float:
                 return sign * (max(width(s), zone) + overhang)
@@ -270,6 +336,7 @@ def road_bodies(
             lines.append(ULine(f"toe:{ss.id}:{k}", _toe(road, sign, ss.ratio, sampler, ss.id), a, b))
         fills.append((ss, sign, pieces))
 
+    lines = _fold_limited(road, lines, limits)
     for line in lines:
         bps += [(line.s0, PRIORITY_OTHER), (line.s1, PRIORITY_OTHER)]
     base = merge_breakpoints(bps, length)

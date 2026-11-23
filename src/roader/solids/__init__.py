@@ -91,19 +91,20 @@ def _generate(model: RoadModel, chord_tol_m: float, profile: str, failures: list
     pv = PlanVertices()
     plan = JunctionPlan(model, pv)  # L6 areas replace the road sweeps they cover (FR-SG-3)
     bodies = []
+    notes: list[Flag] = []  # geometry limited to be swept (D-141), kept only when the road's bodies are used
     for road in model.roads:
         if road.id in dropped:
             continue
         try:
             source = _squared(model, road.id) if road.id in squared else model
-            bodies.extend(plan.clip(road_bodies(source, plan.road(road), sampler, chord_tol_m, pv, realtime=realtime)))
+            bodies.extend(plan.clip(road_bodies(source, plan.road(road), sampler, chord_tol_m, pv, realtime=realtime, limits=notes)))
         except Exception as exc:
             if failures is None:
                 raise
             if road.id in squared or not any(st.carried_road == road.id for st in model.structures):
                 raise ElementFailure(road.id, exc) from exc
             try:
-                bodies.extend(plan.clip(road_bodies(_squared(model, road.id), plan.road(road), sampler, chord_tol_m, pv, realtime=realtime)))
+                bodies.extend(plan.clip(road_bodies(_squared(model, road.id), plan.road(road), sampler, chord_tol_m, pv, realtime=realtime, limits=notes)))
             except Exception as again:  # noqa: BLE001
                 raise ElementFailure(road.id, again) from exc
             failures.append(Flag(ELEMENT_FAILED, road.id, "FR-ST-4", f"structures on the road squared (support skew 0); {describe(exc)}"))
@@ -125,6 +126,12 @@ def _generate(model: RoadModel, chord_tol_m: float, profile: str, failures: list
             failures.append(Flag(ELEMENT_FAILED, model.terrain.id, "FR-SG-6", f"terrain surface dropped; {describe(exc)}"))
             terrain = []
         meshes += [terrain_attributes(m) for m in terrain]
+    if failures is not None:
+        seen = {(f.code, f.element_id, f.message) for f in failures}
+        for f in notes:
+            if (f.code, f.element_id, f.message) not in seen:
+                seen.add((f.code, f.element_id, f.message))
+                failures.append(f)
     return meshes
 
 
