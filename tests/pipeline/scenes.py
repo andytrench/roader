@@ -17,19 +17,18 @@ crossings; links; optional terrain) plus what the pipeline sees of it:
 * ``crossing_reference``: the hand-labelled AC-H2 list (D-044 entries
   ``{upper_name, lower_name, x, y}``) in the names the vector graph gives roads.
 
-Scene builders (keyword parameters; every builder takes ``seed`` for its fuzz
-jitter, which only moves the defaults when a parameter is not given):
+Scene builders (keyword parameters, defaults give the catalogue scene):
 
 * ``simple_overpass(skew, rise, length)``: two-lane street on a crest bridge over twin carriageways.
-* ``diamond(skew, spread, rise)``: freeway on a crest bridge over an at-grade street; four
-  ramps meet the street at grade (terminals).
-* ``spui(skew, deck_half, rise)``: street over the freeway on one wide short deck; all four
-  ramps meet it at one point on the deck.
-* ``parclo(skew, radius, spread)``: street over the freeway; two loops from the street to the
-  freeway, two diagonal exit ramps to at-grade terminals on the street.
+* ``diamond(skew, spread, rise)``: street on a crest bridge over the freeway; four ramps meet it
+  at grade on its approach embankments (terminals; exit and entry ways share the terminal node).
+* ``spui(skew, deck_half, rise)``: street over the freeway on one wide short deck; the four
+  ramps climb onto it and meet it at grade near the deck.
+* ``parclo(skew, radius, spread)``: street over the freeway; diamond ramps on one side, two
+  270-degree loops (entry from the street, exit to it) on the other.
 * ``cloverleaf(skew, radius)``: freeway over freeway, four 270-degree loops.
 * ``trumpet(radius)``: freeway stem ending at the mainline: a loop and a semi-directional ramp
-  side by side over the mainline, two outer ramps.
+  side by side over the mainline (the semi round the outside of the loop), two outer ramps.
 * ``directional(skew, radius)``: freeway over freeway, two left-turn flyovers a level higher.
 * ``cd_braided(spacing, angle)``: collector-distributor road beside the mainline and a braided
   exit / entry pair crossing over each other.
@@ -38,9 +37,13 @@ jitter, which only moves the defaults when a parameter is not given):
 * ``twin_different_elevations(dz, skew)``: twin carriageways with independent profiles and a
   median slope, crossed by a street bridge.
 * ``stack(levels, skew)``: ``levels`` levels at one point (ground twins plus ``levels - 1``
-  straight ramps on crest viaducts, as ``tests.pipeline.stack_scene``).
+  straight ramps on crest viaducts, profiles from ``tests.pipeline.stack_scene``).
 
-``SCENES`` maps type name to builder; ``PARAM_RANGES`` gives the fuzz ranges.
+Every ramp is built by ``ramp``: tangent legs on its parent / target surfaces (exact),
+free lines solved so it lands on its target, its own profile between.
+
+``SCENES`` maps type name to builder; ``PARAM_RANGES`` / ``fuzz_params`` give the fuzz ranges;
+``run_scene`` takes a scene through the pipeline, solids and gates.
 """
 
 from __future__ import annotations
@@ -679,20 +682,24 @@ def truth_dz_at(scene: Scene, model: RoadModel, match_m: float = 15.0) -> tuple[
     return measured, at
 
 
-def truth_stations(scene: Scene, model: RoadModel) -> tuple[dict[str, tuple[float, float]], list[str]]:
-    """AC-A5 reference: truth deck ends projected onto the matching model structure's road, and unmatched truth structures."""
+def truth_stations(scene: Scene, model: RoadModel, near_m: float = 4.0) -> tuple[dict[str, tuple[float, float]], list[str]]:
+    """AC-A5 reference: truth deck ends projected onto the model structure carried along the same line, and unmatched truth structures.
+
+    Matched in plan, not by name: OSM-like ways of two ramps meeting end to end chain into one model road.
+    """
     truth = scene.model
     out, missing = {}, []
     for ts in truth.structures:
         tr = truth.road(ts.carried_road)
         name = model_name(tr)
-        ends = [tr.alignment.offset_point(ts.s_start, 0.0), tr.alignment.offset_point(ts.s_end, 0.0)]
+        probe = [tr.alignment.offset_point(float(s), 0.0) for s in np.linspace(ts.s_start, ts.s_end, 5)]
         hit = None
         for st in model.structures:
             road = model.road(st.carried_road)
-            if road.name != name:
+            su = [road.alignment.project(x, y) for x, y in probe]
+            if any(abs(u) > near_m or not 0.0 <= s <= road.length for s, u in su):
                 continue
-            ss = sorted(road.alignment.project(x, y)[0] for x, y in ends)
+            ss = sorted((su[0][0], su[-1][0]))
             if ss[0] <= st.s_end and ss[1] >= st.s_start and st.id not in out:
                 hit = (st.id, (ss[0], ss[1]))
                 break
@@ -891,22 +898,14 @@ def pavement_xyz(points: SyntheticPoints) -> np.ndarray:
 # ---------------------------------------------------------------- scene builders
 
 
-def _jitter(seed: int | None, given, lo: float, hi: float, default: float) -> float:
-    if given is not None:
-        return float(given)
-    if seed is None:
-        return default
-    return float(np.random.default_rng(seed).uniform(lo, hi))
-
-
 def _flat(length: float, z: float = GRADE_Z) -> Profile:
     return Profile([VerticalElement(0.0, length, z, 0.0, 0.0, TRUTH)])
 
 
-def simple_overpass(*, skew: float = 0.17, rise: float = 8.5, length: float = 400.0, seed: int | None = None) -> Scene:
+def simple_overpass(*, skew: float = 0.17, rise: float = 8.5, length: float = 400.0) -> Scene:
     eb, wb = twins(length, 0.0, "I 99", ("eb", "wb"), (_flat(length), _flat(length)))
     st = street("st", "Route 1", length, math.pi / 2.0 + skew, crest_profile(length, length / 2.0, rise, length / 2.0 - 50.0, 160.0, 60.0))
-    return finish("simple_overpass", [eb, wb, st], params={"skew": skew, "rise": rise, "length": length, "seed": seed})
+    return finish("simple_overpass", [eb, wb, st], params={"skew": skew, "rise": rise, "length": length})
 
 
 def _freeway_over(length: float, rise: float) -> Profile:
@@ -935,24 +934,24 @@ def _diamond_ramps(eb: Road, wb: Road, st: Road, spread: float, s_exit: float = 
     return ramps
 
 
-def diamond(*, skew: float | None = None, spread: float | None = None, rise: float = 8.0, length: float = 600.0, seed: int | None = None) -> Scene:
-    skew = _jitter(seed, skew, 0.0, 0.5, 0.0)
-    spread = _jitter(seed and seed + 1, spread, 15.0, 35.0, 20.0)
+def diamond(*, skew: float | None = None, spread: float | None = None, rise: float = 8.0, length: float = 600.0) -> Scene:
+    skew = 0.0 if skew is None else float(skew)
+    spread = 20.0 if spread is None else float(spread)
     eb, wb = twins(length, 0.0, "I 99", ("eb", "wb"), (_flat(length), _flat(length)))
     st = street("st", "Route 1", 400.0, math.pi / 2.0 + skew, _street_over(400.0, rise))
     ramps = _diamond_ramps(eb, wb, st, spread)
-    return finish("diamond", [eb, wb, st, *ramps], params={"skew": skew, "spread": spread, "rise": rise, "seed": seed})
+    return finish("diamond", [eb, wb, st, *ramps], params={"skew": skew, "spread": spread, "rise": rise})
 
 
-def spui(*, skew: float | None = None, deck_half: float = 12.0, rise: float = 8.5, length: float = 600.0, seed: int | None = None) -> Scene:
-    skew = _jitter(seed, skew, 0.0, 0.5, 0.0)
+def spui(*, skew: float | None = None, deck_half: float = 12.0, rise: float = 8.5, length: float = 600.0) -> Scene:
+    skew = 0.0 if skew is None else float(skew)
     eb, wb = twins(length, 0.0, "I 99", ("eb", "wb"), (_flat(length), _flat(length)))
     ls = 400.0
     c = ls / 2.0
     half = Piecewise([Knot(c - 90.0, STREET_HALF, TRUTH), Knot(c - 50.0, deck_half, TRUTH), Knot(c + 50.0, deck_half, TRUTH), Knot(c + 90.0, STREET_HALF, TRUTH)])
     st = street("st", "Route 1", ls, math.pi / 2.0 + skew, crest_profile(ls, c, rise, 140.0, 120.0, 60.0), half=half)
     ramps = _diamond_ramps(eb, wb, st, 0.0, s_exit=60.0)
-    return finish("spui", [eb, wb, st, *ramps], params={"skew": skew, "deck_half": deck_half, "rise": rise, "seed": seed})
+    return finish("spui", [eb, wb, st, *ramps], params={"skew": skew, "deck_half": deck_half, "rise": rise})
 
 
 def _loop(fid: str, parent: Road, target: Road, radius: float, peak: float | None = None) -> Road:
@@ -965,11 +964,11 @@ def _loop(fid: str, parent: Road, target: Road, radius: float, peak: float | Non
     return ramp(fid, parent, [arc(main, radius)], s=None, side=-1.0, target=target, end="merge", target_side=-1.0, leg=LOOP_LEG, peak=peak)
 
 
-def parclo(*, skew: float | None = None, radius: float | None = None, spread: float | None = None, rise: float = 8.0, seed: int | None = None) -> Scene:
+def parclo(*, skew: float | None = None, radius: float | None = None, spread: float | None = None, rise: float = 8.0) -> Scene:
     """Diamond ramps on the south side (EB), two loops on the north side (WB): entry from the street's NB half, exit to its SB half."""
-    skew = _jitter(seed, skew, 0.0, 0.4, 0.1)
-    radius = _jitter(seed and seed + 1, radius, 55.0, 80.0, 65.0)
-    spread = _jitter(seed and seed + 2, spread, 20.0, 45.0, 30.0)
+    skew = 0.1 if skew is None else float(skew)
+    radius = 65.0 if radius is None else float(radius)
+    spread = 30.0 if spread is None else float(spread)
     length, ls = 700.0, 400.0
     eb, wb = twins(length, 0.0, "I 99", ("eb", "wb"), (_flat(length), _flat(length)))
     st = street("st", "Route 1", ls, math.pi / 2.0 + skew, _street_over(ls, rise))
@@ -977,21 +976,21 @@ def parclo(*, skew: float | None = None, radius: float | None = None, spread: fl
     en = reverse(ramp("entry_eb", reverse(eb), _exit_body(spread, 1.0), s=20.0, side=1.0, target=st, end="terminal"))
     en.cross_section.lanes = list(ex.cross_section.lanes)
     loops = [_loop("loop_nb_wb", st, wb, radius), _loop("loop_wb_sb", wb, reverse(st), radius)]
-    return finish("parclo", [eb, wb, st, ex, en, *loops], params={"skew": skew, "radius": radius, "spread": spread, "seed": seed})
+    return finish("parclo", [eb, wb, st, ex, en, *loops], params={"skew": skew, "radius": radius, "spread": spread})
 
 
-def cloverleaf(*, skew: float | None = None, radius: float | None = None, rise: float = 8.5, seed: int | None = None) -> Scene:
-    skew = _jitter(seed, skew, 0.0, 0.4, 0.1)
-    radius = _jitter(seed and seed + 1, radius, 55.0, 80.0, 65.0)
+def cloverleaf(*, skew: float | None = None, radius: float | None = None, rise: float = 8.5) -> Scene:
+    skew = 0.1 if skew is None else float(skew)
+    radius = 65.0 if radius is None else float(radius)
     length = 600.0
     eb, wb = twins(length, 0.0, "I 99", ("eb", "wb"), (_flat(length), _flat(length)))
     nb, sb = twins(length, math.pi / 2.0 + skew, "I 88", ("nb", "sb"), (_street_over(length, rise), _street_over(length, rise)))
     loops = [_loop("loop_sb_eb", sb, eb, radius), _loop("loop_nb_wb", nb, wb, radius), _loop("loop_eb_nb", eb, nb, radius), _loop("loop_wb_sb", wb, sb, radius)]
-    return finish("cloverleaf", [eb, wb, nb, sb, *loops], params={"skew": skew, "radius": radius, "seed": seed})
+    return finish("cloverleaf", [eb, wb, nb, sb, *loops], params={"skew": skew, "radius": radius})
 
 
-def trumpet(*, radius: float | None = None, rise: float = 8.0, seed: int | None = None) -> Scene:
-    radius = _jitter(seed, radius, 60.0, 80.0, 70.0)
+def trumpet(*, radius: float | None = None, rise: float = 8.0) -> Scene:
+    radius = 70.0 if radius is None else float(radius)
     length = 700.0
     eb, wb = twins(length, 0.0, "I 99", ("eb", "wb"), (_flat(length), _flat(length)))
     stem_len, j, x_stem = 150.0, -260.0, 6.0
@@ -1020,7 +1019,7 @@ def trumpet(*, radius: float | None = None, rise: float = 8.0, seed: int | None 
         s=stem_len, start="terminal", start_heading=math.pi / 2.0, target=wb, end="merge", target_side=-1.0, peak=top, grade=0.06, lead=shared + 15.0,
     )
     outer_es = ramp("outer_es", eb, [arc(-(math.pi / 2.0) + 2.0 * THETA, 150.0), line(60.0)], s=None, side=-1.0, target=sb, end="merge", target_side=-1.0)
-    return finish("trumpet", [eb, wb, nb, sb, loop, semi, outer_ne, outer_es], params={"radius": radius, "seed": seed})
+    return finish("trumpet", [eb, wb, nb, sb, loop, semi, outer_ne, outer_es], params={"radius": radius})
 
 
 def _loop_centre(road: Road) -> tuple[float, float]:
@@ -1031,9 +1030,9 @@ def _loop_centre(road: Road) -> tuple[float, float]:
     return x - r * math.sin(el.heading0), y + r * math.cos(el.heading0)
 
 
-def directional(*, skew: float | None = None, radius: float | None = None, rise: float = 8.0, seed: int | None = None) -> Scene:
-    skew = _jitter(seed, skew, 0.0, 0.4, 0.0)
-    radius = _jitter(seed and seed + 1, radius, 200.0, 260.0, 220.0)
+def directional(*, skew: float | None = None, radius: float | None = None, rise: float = 8.0) -> Scene:
+    skew = 0.0 if skew is None else float(skew)
+    radius = 220.0 if radius is None else float(radius)
     length = 900.0
     eb, wb = twins(length, 0.0, "I 99", ("eb", "wb"), (_flat(length), _flat(length)))
     nb, sb = twins(length, math.pi / 2.0 + skew, "I 88", ("nb", "sb"), (_street_over(length, rise), _street_over(length, rise)))
@@ -1043,12 +1042,12 @@ def directional(*, skew: float | None = None, radius: float | None = None, rise:
         h0, h1 = parent.alignment.evaluate(0.0)[2], target.alignment.evaluate(0.0)[2]
         main = turn_to(h0 - THETA, h1 + THETA, 1.0)
         flys.append(ramp(fid, parent, [line(60.0), arc(main, radius), line(free=True)], s=None, side=-1.0, target=target, end="merge", target_side=-1.0, peak=top, grade=0.075))
-    return finish("directional", [eb, wb, nb, sb, *flys], params={"skew": skew, "radius": radius, "seed": seed})
+    return finish("directional", [eb, wb, nb, sb, *flys], params={"skew": skew, "radius": radius})
 
 
-def cd_braided(*, spacing: float | None = None, angle: float | None = None, rise: float = 7.5, seed: int | None = None) -> Scene:
-    spacing = _jitter(seed, spacing, 180.0, 230.0, 200.0)
-    angle = _jitter(seed and seed + 1, angle, 0.3, 0.5, 0.4)
+def cd_braided(*, spacing: float | None = None, angle: float | None = None, rise: float = 7.5) -> Scene:
+    spacing = 200.0 if spacing is None else float(spacing)
+    angle = 0.4 if angle is None else float(angle)
     length = 1000.0
     eb, wb = twins(length, 0.0, "I 99", ("eb", "wb"), (_flat(length), _flat(length)))
     # C-D road: leaves EB, runs 18 m off it for 450 m, rejoins (symmetric, so it lands back on EB).
@@ -1062,12 +1061,12 @@ def cd_braided(*, spacing: float | None = None, angle: float | None = None, rise
     entry = ramp("braid_entry", back, [arc(angle - th, 300.0), line(320.0)], s=back.length - (s_mid + spacing), side=1.0, end="free", peak=GRADE_Z + rise, grade=0.07, leg=leg)
     entry = reverse(entry)
     entry.cross_section.lanes = list(exit_.cross_section.lanes)
-    return finish("cd_braided", [eb, wb, cd, exit_, entry], params={"spacing": spacing, "angle": angle, "seed": seed})
+    return finish("cd_braided", [eb, wb, cd, exit_, entry], params={"spacing": spacing, "angle": angle})
 
 
-def viaduct(*, skew: float | None = None, n_streets: int = 3, spacing: float | None = None, rise: float = 8.5, seed: int | None = None) -> Scene:
-    skew = _jitter(seed, skew, 0.0, 0.6, 0.2)
-    spacing = _jitter(seed and seed + 1, spacing, 45.0, 80.0, 60.0)
+def viaduct(*, skew: float | None = None, n_streets: int = 3, spacing: float | None = None, rise: float = 8.5) -> Scene:
+    skew = 0.2 if skew is None else float(skew)
+    spacing = 60.0 if spacing is None else float(spacing)
     run = (n_streets - 1) * spacing
     length = run + 2 * 220.0
     top_a, top_b = 220.0 - 40.0, 220.0 + run + 40.0
@@ -1078,12 +1077,12 @@ def viaduct(*, skew: float | None = None, n_streets: int = 3, spacing: float | N
     for k in range(n_streets):
         x = -run / 2.0 + k * spacing
         roads.append(street(f"st{k + 1}", names[k], 200.0, math.pi / 2.0 + skew, _flat(200.0), centre=(x, 0.0)))
-    return finish("viaduct", roads, params={"skew": skew, "n_streets": n_streets, "spacing": spacing, "seed": seed})
+    return finish("viaduct", roads, params={"skew": skew, "n_streets": n_streets, "spacing": spacing})
 
 
-def twin_different_elevations(*, dz: float | None = None, skew: float | None = None, rise: float = 8.5, seed: int | None = None) -> Scene:
-    dz = _jitter(seed, dz, 0.8, 2.5, 1.5)
-    skew = _jitter(seed and seed + 1, skew, 0.0, 0.6, 0.25)
+def twin_different_elevations(*, dz: float | None = None, skew: float | None = None, rise: float = 8.5) -> Scene:
+    dz = 1.5 if dz is None else float(dz)
+    skew = 0.25 if skew is None else float(skew)
     length = 500.0
     eb_pr = Profile([VerticalElement(0.0, length, GRADE_Z, 0.008, 0.008, TRUTH)])
     # Westbound runs dz higher at the crossing on its own grade: z(x) = 100 + dz + 0.004 x + 2.0 for x in [-250, 250].
@@ -1092,13 +1091,13 @@ def twin_different_elevations(*, dz: float | None = None, skew: float | None = N
     base = GRADE_Z + max(dz, 0.0) + 0.008 * 250.0
     ls = 400.0
     st = street("st", "Route 1", ls, math.pi / 2.0 + skew, crest_profile(ls, ls / 2.0, rise + base - GRADE_Z, ls / 2.0 - 50.0, 160.0, 60.0))
-    return finish("twin_different_elevations", [eb, wb, st], params={"dz": dz, "skew": skew, "seed": seed})
+    return finish("twin_different_elevations", [eb, wb, st], params={"dz": dz, "skew": skew})
 
 
-def stack(*, levels: int = 3, skew: float | None = None, level_dz: float = 8.0, seed: int | None = None) -> Scene:
+def stack(*, levels: int = 3, skew: float | None = None, level_dz: float = 8.0) -> Scene:
     from tests.pipeline.stack_scene import _level_profile
 
-    skew = _jitter(seed, skew, -0.3, 0.3, 0.0)
+    skew = 0.0 if skew is None else float(skew)
     headings = [math.radians(96.0), math.radians(45.0), math.radians(135.0)]
     ramps_ = []
     longest = 0.0
@@ -1111,7 +1110,32 @@ def stack(*, levels: int = 3, skew: float | None = None, level_dz: float = 8.0, 
         longest = max(longest, length)
     fl = max(500.0, longest * 0.75)
     eb, wb = twins(fl, 0.0, "I 99", ("eb", "wb"), (_flat(fl), _flat(fl)))
-    return finish("stack", [eb, wb, *ramps_], params={"levels": levels, "skew": skew, "seed": seed})
+    return finish("stack", [eb, wb, *ramps_], params={"levels": levels, "skew": skew})
+
+
+# Fuzz ranges per type: name -> {parameter: (low, high)}; integers where both bounds are int.
+PARAM_RANGES: dict[str, dict[str, tuple[float, float]]] = {
+    "simple_overpass": {"skew": (0.0, math.radians(60.0)), "rise": (7.5, 9.5)},
+    "diamond": {"skew": (0.0, math.radians(25.0)), "spread": (15.0, 30.0)},
+    "spui": {"skew": (0.0, math.radians(25.0)), "deck_half": (9.0, 14.0)},
+    "parclo": {"skew": (0.0, math.radians(20.0)), "radius": (55.0, 80.0), "spread": (20.0, 45.0)},
+    "cloverleaf": {"skew": (0.0, math.radians(20.0)), "radius": (55.0, 80.0)},
+    "trumpet": {"radius": (60.0, 80.0)},
+    "directional": {"skew": (0.0, math.radians(20.0)), "radius": (200.0, 240.0)},
+    "cd_braided": {"spacing": (180.0, 230.0), "angle": (0.3, 0.5)},
+    "viaduct": {"skew": (0.0, math.radians(60.0)), "n_streets": (3, 4), "spacing": (45.0, 80.0)},
+    "twin_different_elevations": {"dz": (0.8, 2.5), "skew": (0.0, math.radians(60.0))},
+    "stack": {"levels": (3, 4), "skew": (-0.3, 0.3)},
+}
+
+
+def fuzz_params(name: str, seed: int) -> dict:
+    """Seeded parameters for ``SCENES[name]`` drawn from ``PARAM_RANGES``."""
+    rng = np.random.default_rng([seed, sorted(SCENES).index(name)])
+    out = {}
+    for key, (lo, hi) in sorted(PARAM_RANGES[name].items()):
+        out[key] = int(rng.integers(lo, hi + 1)) if isinstance(lo, int) and isinstance(hi, int) else round(float(rng.uniform(lo, hi)), 4)
+    return out
 
 
 SCENES: dict[str, Callable[..., Scene]] = {
@@ -1187,7 +1211,7 @@ def run_scene(scene: Scene, *, spacing: float = 0.6, seed: int = 7, profiles: tu
     t0 = time.perf_counter()
     try:
         res = run_pipeline(pts, vectors, scene.model.frame, scene.model.unit, holdout=hold)
-    except Exception as exc:  # a crash is an outcome (robust track)
+    except Exception as exc:  # noqa: BLE001 - a crash is an outcome (robust track)
         out.error, out.stage = f"{type(exc).__name__}: {exc}", "pipeline"
         return out
     out.seconds["pipeline"] = time.perf_counter() - t0
@@ -1207,7 +1231,7 @@ def run_scene(scene: Scene, *, spacing: float = 0.6, seed: int = 7, profiles: tu
                 continue
             stage = f"gates ({profile})"
             report = run_gates(model, meshes, crossings_ref=ref, measured=measured, val3dity_exe=val3dity_exe, profile=profile)
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001
             out.error, out.stage = f"{type(exc).__name__}: {exc}", stage
             return out
         out.seconds[profile] = time.perf_counter() - t0
