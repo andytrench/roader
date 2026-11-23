@@ -37,9 +37,7 @@ KNOWN: dict[tuple[str, str | None], str] = {
     ("spui", "AC-H4"): "decks: ramps ending on the street's wide deck ride it end to end (D-076 shared span never clears sideways), so no terminal area is built and their links meet the street's own surface",
     ("spui", "AC-A1"): "decks: surface RMS 0.8 m where the ramps join the wide deck",
     ("spui", "AC-A5"): "decks: the ramps riding the wide street deck get no structure of their own, and the street deck is not matched to the truth",
-    ("cloverleaf", "AC-H1"): "decks: embankment from the I-88 deck end self-intersects beside the loop gore",
     ("cloverleaf", "AC-A5"): "decks: I-88 deck end 3 m off beside the diverging loop",
-    ("directional", "AC-H1"): "decks: embankment from an I-88 deck end self-intersects beside the flyover",
     ("directional", "AC-A5"): "decks: stacked-level deck ends 20-26 m off (flyover over the I-88 deck)",
     ("spui", "FR-EX-1"): "decks: a pier column falls outside its cap on a ramp deck at the wide street deck; the ramp is swept with square structures",
     ("trumpet", "FR-EX-1"): "parallel: where the semi-directional and the outer ramp share their first metres, a junction seam is off the outline, station lines cross and the terrain footprint breaks",
@@ -47,14 +45,7 @@ KNOWN: dict[tuple[str, str | None], str] = {
     ("trumpet", "AC-H2"): "parallel: the semi-directional is reported crossing over the outer ramp it shares pavement with",
     ("trumpet", "AC-H3"): "parallel: the false semi-over-outer-ramp crossing has no clearance; rays start inside parapets",
     ("trumpet", "AC-A5"): "decks: loop deck end 44 m past the truth end where it lands beside the stem",
-    ("directional", "AC-H3"): "decks: rays under a flyover crossing start inside the abutment of the I-88 deck below",
-    ("directional", "AC-A1"): "decks: surface RMS 0.6 m where the flyover passes over the I-88 deck",
-    ("directional", "AC-A4"): "decks: flyover-over-I-88 crossings measured against the wrong level (dz off by up to 14 m)",
     ("stack", "AC-H3"): "decks: rays under the level-1 crossings hit the level-2 deck and its parapet (stacked levels)",
-    ("viaduct", "AC-H1"): "decks: viaduct deck faces self-intersect over the streets",
-    ("viaduct", "AC-A1"): "decks: surface RMS 1.0 m on the viaduct that never rejoins the ground",
-    ("viaduct", "AC-A4"): "decks: crossing dz 0.15-0.43 m low under the viaduct",
-    ("viaduct", "AC-A5"): "decks: viaduct deck ends 10-26 m off",
 }
 
 
