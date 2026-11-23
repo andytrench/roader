@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import functools
 
+import pytest
+
 from roader.model.schema import ELEMENT_FAILED
 from tests.pipeline import scenes as S
 
@@ -43,3 +45,25 @@ def test_fr_vc_2_street_under_a_viaduct_is_not_fitted_onto_its_deck():
         assert model.road(c.lower_road).id == street.id and c.dz_m > 7.0, (c.id, c.dz_m)
     for gate in ("AC-H2", "AC-H3", "AC-H4"):
         assert out.gates[gate].passed, (gate, [v.message for v in out.gates[gate].violations][:3])
+
+
+@functools.cache
+def _crest_under_deck():
+    """A street cresting under the eastbound deck (its cross street's crown), with the D-018 holdout."""
+    return S.run_scene(S.viaduct(n_streets=1, skew=0.0, crest=0.3))
+
+
+@pytest.mark.xfail(strict=True, reason="D-147 pending: a holdout block beside the deck leaves the gap carried from one side, 0.28 m low")
+def test_fr_oc_1_holdout_never_starves_a_gap_under_a_deck():
+    """Withholding the block beside a deck left the gap carried from one side, 0.28 m low (New Orleans, D-147)."""
+    out = _crest_under_deck()
+    assert out.error is None, out.error
+    model, truth = out.model, out.scene.model
+    road = next(r for r in model.roads if r.name == "1st Street")
+    t = next(r for r in truth.roads if r.name == "1st Street")
+    assert not [iv for iv in road.support if iv.kind == "unsupported" and "withheld" in iv.reason and iv.s1 > 60.0 and iv.s0 < 125.0]
+    x0 = t.alignment.offset_point(0.0, 0.0)[0]
+    for y in (-15.0, -12.0, -9.0, -6.0, -3.0):
+        s, _u = road.alignment.project(x0, y)
+        ts, _tu = t.alignment.project(x0, y)
+        assert abs(road.profile.z(s) - t.profile.z(ts)) < 0.1, (y, road.profile.z(s), t.profile.z(ts))
