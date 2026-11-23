@@ -500,3 +500,23 @@ def test_fr_sg_2_skew_field_is_sweepable_and_only_rounds_supports_toward_square(
             assert skew_at(out, k.s - h) == skew_at(out, k.s + h) == v  # a cap is one support line
     feasible = [SkewKnot(10.0, 0.0, True), SkewKnot(40.0, 0.2, False), SkewKnot(60.0, 0.2, False), SkewKnot(90.0, 0.0, True)]
     assert [(k.s, k.t) for k in _sweepable(feasible, [0.0] * 4, rate, 100.0)][1:-1] == [(k.s, k.t) for k in feasible]
+
+
+def test_fr_st_3_long_span_over_merged_clear_zones_takes_piers_in_gores_off_the_pavements():
+    from roader.rules import RuleBook
+    from roader.structures.infer import _even_piers
+
+    rules = RuleBook.load()
+    # A 300 m stack deck whose crossed roads' clear zones merge into one 20-280 m zone;
+    # their pavements leave gores at 100-120 and 180-200 m.
+    extent = StructureExtent("rd", 0.0, 300.0, "class17", None, None)
+    zones = [(20.0, 280.0)]
+    pavements = [(25.0, 100.0), (120.0, 180.0), (200.0, 275.0)]
+    piers, even, in_zone = _even_piers(extent, [], zones, 2.0, rules, "*", pavements)
+    spans = np.diff([0.0, *piers, 300.0])
+    assert in_zone and in_zone <= set(piers) and even >= in_zone
+    assert all(not (a - 1.0 < p < b + 1.0) for p in piers for a, b in pavements)  # never on a lower pavement
+    assert spans.max() < 120.0
+    # Clear zones with room between them: no pier goes inside one.
+    _piers2, _even2, in_zone2 = _even_piers(extent, [], [(20.0, 100.0), (180.0, 280.0)], 2.0, rules, "*", [(25.0, 95.0), (185.0, 275.0)])
+    assert not in_zone2

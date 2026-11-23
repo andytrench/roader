@@ -382,13 +382,21 @@ def _merged(zones: list[tuple[float, float]]) -> list[tuple[float, float]]:
 
 
 def _even_piers(
-    extent: StructureExtent, piers: list[float], zones: list[tuple[float, float]], need: float, rules: RuleBook, era: str
-) -> tuple[list[float], set[float]]:
+    extent: StructureExtent,
+    piers: list[float],
+    zones: list[tuple[float, float]],
+    need: float,
+    rules: RuleBook,
+    era: str,
+    pavements: list[tuple[float, float]] = (),
+) -> tuple[list[float], set[float], set[float]]:
     """FR-ST-3, last priority: split spans longer than ``structure.even_span`` high into equal spans.
 
     A pier that would land in a crossed road's clear zone moves to the nearer
     zone edge (never into a travel lane); one that then crowds a neighbour is
-    dropped. Returns all piers, sorted, and the set added here.
+    dropped. Where the zones of a stack's roads merge and a span is still too
+    long, its piers stand inside the zone in a gore, median or shoulder off every
+    lower pavement. Returns all piers, sorted, the set added here, and those in a zone.
     """
     rule = rules.get("structure.even_span")
     typical, _ = rules.fill("structure.even_span", era=era)
@@ -410,7 +418,21 @@ def _even_piers(
             if added and s - added[-1] < MIN_PIER_GAP_M:
                 continue
             added.append(s)
-    return sorted([*piers, *added]), set(added)
+    stations = sorted([extent.s_start, *piers, *added, extent.s_end])
+    in_zone: list[float] = []
+    for a, b in itertools.pairwise(stations):
+        if b - a <= rule.high:
+            continue
+        n = math.ceil((b - a) / typical)
+        for k in range(1, n):
+            s = clear_of_lanes(a + k * (b - a) / n, pavements, need, snap=0.5 * typical)
+            if s is None or not a + PIER_END_CLEAR_M <= s <= b - PIER_END_CLEAR_M:
+                continue
+            if any(abs(s - q) < MIN_PIER_GAP_M for q in [*stations, *in_zone]):
+                continue
+            in_zone.append(s)
+    added += in_zone
+    return sorted([*piers, *added]), set(added), set(in_zone)
 
 
 def parapet_fill(road, structure: Structure, existing: list[Barrier], rules: RuleBook) -> list[Barrier]:
@@ -531,7 +553,7 @@ def infer_structure(
         mid = 0.5 * (gap0 + gap1)
         if gap1 - gap0 >= need and inner[0] <= mid <= inner[1] and not any(gap0 - need <= p <= gap1 + need for p in observed):
             piers.append(mid)
-    piers, even = _even_piers(extent, sorted(piers), zones, need, rules, era)
+    piers, even, in_zone = _even_piers(extent, sorted(piers), zones, need, rules, era, pavements)
     stations = [extent.s_start, *piers, extent.s_end]
     spans = list(np.diff(stations))
     max_span = float(max(spans)) if spans else extent.length
@@ -575,7 +597,7 @@ def infer_structure(
             ground = float(min(lows)) if lows else road.profile.z(s) - depth - 5.0
             flags.append(Flag("FR-OC-3:ground_by_neighbour", sid, "FR-OC-3", f"no ground returns beside the deck at s={s:.1f}; footing from the lower road"))
         label = f"a{1 if n == 0 else 2}" if kind == "abutment" else f"p{n}"
-        layout = "FR-ST-3:even_spacing" if s in even else "FR-ST-3:layout_rule"
+        layout = "FR-ST-3:in_clear_zone" if s in in_zone else "FR-ST-3:even_spacing" if s in even else "FR-ST-3:layout_rule"
         prov = Provenance(Source.RULE, cap_prov.confidence, rule_id=foot_prov.rule_id if kind == "abutment" else col_prov.rule_id, flags=[layout if kind == "pier" else "FR-ST-3:measured_end", *skew_flags])
         if kind == "pier" and s in observed:
             # Located from returns; columns, cap and footing are still sized by rule (FR-ST-5).
