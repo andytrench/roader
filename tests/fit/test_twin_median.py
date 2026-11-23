@@ -99,7 +99,7 @@ def test_fr_xs_4_overlapping_twins_split_at_the_midline():
     fits = _overlapping(9.0)
     flags = split_twin_medians(fits, np.zeros((0, 3)))
     y_eb, y_wb = _inner_y(fits)
-    assert abs(y_eb) < 0.05 and abs(y_wb) < 0.05
+    assert -0.1 < y_eb < 0.0 and 0.0 < y_wb < 0.1
     assert any(f.code == "FR-XS-4:median_split" for f in flags)
     # Outer edges untouched.
     assert fits[0].road.cross_section.width_right(300.0) == pytest.approx(5.5)
@@ -114,7 +114,9 @@ def test_fr_xs_1_twins_stop_at_the_median_barrier_face():
     barrier = np.vstack([np.column_stack([x, np.full(x.size, dy), z]) for dy in (-0.28, -0.1, 0.1, 0.28)])
     # An overpass parapet crossing the median 6 m up is not a median barrier.
     deck = np.column_stack([np.full(40, 0.0), np.linspace(-6.0, 6.0, 40), np.full(40, scenes.MAIN_Z + 9.0)])
-    split_twin_medians(fits, np.vstack([barrier, deck]))
+    # Flush ground across the median is not a barrier either.
+    ground = np.column_stack([x, np.full(x.size, 2.0), scenes.MAIN_Z + 0.01 * (x + 300.0) - 0.05])
+    split_twin_medians(fits, np.vstack([barrier, deck, ground]))
     y_eb, y_wb = _inner_y(fits)
     assert abs(y_eb + 0.28) < 0.05 and abs(y_wb - 0.28) < 0.05
 

@@ -358,25 +358,28 @@ FACE_WINDOW_M = 2.5  # barrier returns this close in station set the face at a s
 FACE_MIN_POINTS = 3
 FACE_INSET_M = 0.5  # a barrier face nearer either crown than this is not in the median
 CAP_SMOOTH_M = 12.5
-BARRIER_BELOW_M = 0.5
-BARRIER_ABOVE_M = 2.0
+RAISED_MIN_M = 0.3  # a median barrier or parapet stands this much above the road's plane
+RAISED_MAX_M = 2.0  # and no more (an overpass is not a median barrier)
+SPLIT_MARGIN_M = 0.05
 SPLIT_TOL_M = 0.15
+SIMPLIFY_TOL_M = 0.02
 
 
-def split_twin_medians(fits, barrier_xyz: np.ndarray) -> list[Flag]:
+def split_twin_medians(fits, xyz: np.ndarray) -> list[Flag]:
     """No inner edge of twin one-way mainlines passes their median (FR-XS-1, FR-XS-4, D-063).
 
     For every pair of one-way mainlines running alongside within the D-075 envelope,
     each road's facing width is capped, station by station, at the face on its side
-    of the median barrier when ``barrier_xyz`` (linear raised returns, standing on
-    the road: from ``BARRIER_BELOW_M`` below to ``BARRIER_ABOVE_M`` above its surface)
-    lie between the two, else at the line midway between the two inner edges where those overlap.
-    Widths short of the cap are kept. Each changed side is flagged.
+    of the median barrier: the nearest returns in ``xyz`` between the two roads that
+    stand ``RAISED_MIN_M`` to ``RAISED_MAX_M`` above its surface plane carried across
+    the median. Where there is none and the two inner edges overlap, the cap is the
+    line midway between them, less ``SPLIT_MARGIN_M``. Widths short of the cap are
+    kept. Each changed side is flagged.
     """
     fits = sorted([f for f in fits if f.road.oneway and f.road.kind == "mainline"], key=lambda f: f.road.id)
     caps: dict[str, dict[int, list[tuple[np.ndarray, np.ndarray]]]] = {}
     for a, b in itertools.permutations(fits, 2):
-        res = _caps(a, b, barrier_xyz)
+        res = _caps(a, b, xyz)
         if res is not None:
             side, st, cap = res
             caps.setdefault(a.road.id, {}).setdefault(side, []).append((st, cap))
@@ -390,7 +393,7 @@ def split_twin_medians(fits, barrier_xyz: np.ndarray) -> list[Flag]:
     return flags
 
 
-def _caps(a, b, barrier_xyz: np.ndarray):
+def _caps(a, b, xyz: np.ndarray):
     """(facing side of a, stations, cap) where b runs alongside a; None when it never does."""
     ra, rb, la, lb = a.road, b.road, a.line, b.line
     st = np.arange(0.0, ra.length, SPLIT_STEP_M)
@@ -415,22 +418,26 @@ def _caps(a, b, barrier_xyz: np.ndarray):
     side_b = 1 if np.median(np.nan_to_num(ub)[near]) > 0 else -1
     wb = _width(rb, side_b, sb)
     edge_b = dist - wb  # b's inner edge, measured from a's line toward b
-    cap = np.where(wa > edge_b, 0.5 * (wa + edge_b), np.inf)
-    if len(barrier_xyz):
-        s_bar, u_bar, ok_bar = la.project(barrier_xyz[:, :2], max_dist=TWIN_REACH_M)
-        s_bar = np.nan_to_num(s_bar)
-        above = barrier_xyz[:, 2] - np.interp(s_bar, st, za)
-        keep = ok_bar & (np.sign(u_bar) == side) & (above >= -BARRIER_BELOW_M) & (above <= BARRIER_ABOVE_M)
-        s_bar, t_bar = s_bar[keep], np.abs(u_bar[keep])
-        order = np.argsort(s_bar)
-        s_bar, t_bar = s_bar[order], t_bar[order]
-        lo = np.searchsorted(s_bar, st - FACE_WINDOW_M)
-        hi = np.searchsorted(s_bar, st + FACE_WINDOW_M)
+    cap = np.where(wa > edge_b, 0.5 * (wa + edge_b) - SPLIT_MARGIN_M, np.inf)
+    if len(xyz):
+        lo, hi = la.xy.min(axis=0) - TWIN_REACH_M, la.xy.max(axis=0) + TWIN_REACH_M
+        box = np.all((xyz[:, :2] >= lo) & (xyz[:, :2] <= hi), axis=1)
+        pts = xyz[box]
+        s_p, u_p, ok_p = la.project(pts[:, :2], max_dist=TWIN_REACH_M)
+        s_p, u_p = np.nan_to_num(s_p), np.nan_to_num(u_p)
+        slope = _slope(ra, side, s_p)
+        above = pts[:, 2] - (np.interp(s_p, st, za) + slope * u_p)
+        keep = ok_p & (np.sign(u_p) == side) & (above >= RAISED_MIN_M) & (above <= RAISED_MAX_M)
+        order = np.argsort(s_p[keep])
+        s_bar, t_bar = s_p[keep][order], np.abs(u_p[keep])[order]
+        lo_i = np.searchsorted(s_bar, st - FACE_WINDOW_M)
+        hi_i = np.searchsorted(s_bar, st + FACE_WINDOW_M)
         for i in np.flatnonzero(near):
-            t = t_bar[lo[i] : hi[i]]
+            t = t_bar[lo_i[i] : hi_i[i]]
             t = t[(t > FACE_INSET_M) & (t < dist[i] - FACE_INSET_M)]
             if len(t) >= FACE_MIN_POINTS:
-                cap[i] = min(float(np.min(t)), cap[i]) if np.isfinite(cap[i]) else float(np.min(t))
+                face = float(np.min(t))
+                cap[i] = min(face, cap[i]) if np.isfinite(cap[i]) else face
     cap = np.where(near, cap, np.inf)
     if not np.isfinite(cap).any():
         return None
@@ -445,6 +452,11 @@ def _smooth_cap(st: np.ndarray, cap: np.ndarray) -> np.ndarray:
         w = fin & (np.abs(st - st[i]) <= CAP_SMOOTH_M)
         out[i] = float(np.median(cap[w]))
     return out
+
+
+def _slope(road: Road, side: int, s: np.ndarray) -> np.ndarray:
+    pw = road.cross_section.slope_left if side > 0 else road.cross_section.slope_right
+    return np.interp(s, [k.s for k in pw.knots], [k.value for k in pw.knots])
 
 
 def _width(road: Road, side: int, s: np.ndarray) -> np.ndarray:
@@ -472,7 +484,7 @@ def _apply(road: Road, side: int, parts) -> bool:
     new = np.minimum(old, np.maximum(cap, 0.0))
     if float(np.max(old - new)) <= SPLIT_TOL_M:
         return False
-    kn, vals = simplify(st, new, 0.5 * SPLIT_TOL_M)
+    kn, vals = simplify(st, new, SIMPLIFY_TOL_M)
     base = pw.knots[0].prov
     prov = Provenance(base.source, base.confidence, rms_m=base.rms_m, n_points=base.n_points, observed_fraction=base.observed_fraction, flags=[*base.flags, "FR-XS-4:median_split"])
     piece = Piecewise([Knot(float(k), float(v), prov) for k, v in zip(kn, vals, strict=True)])
