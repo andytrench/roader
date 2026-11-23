@@ -24,6 +24,7 @@ import numpy as np
 from roader.conflate.structures import Share
 from roader.model.provenance import Source
 from roader.model.schema import Barrier, Crossing, Flag, Road, SharedSpan, Structure
+from roader.validate._align import projector_for
 
 TWIN_STEP_M = 1.0
 TWIN_MIN_SAMPLES = 5
@@ -34,6 +35,28 @@ JOINT_GAP_M = 0.02  # open longitudinal joint between twin decks; touching decks
 CLEAR_STEP_M = 0.5
 CLEAR_TOL_M = 1e-3
 FOOTPRINT_STEP_M = 1.0
+BOX_STEP_M = 5.0
+BOX_PAD_M = 30.0  # half width of a wide deck: plan boxes this far apart hold no twin
+
+
+def _proj(road: Road, xy) -> tuple[np.ndarray, np.ndarray]:
+    return projector_for(road.alignment).project(np.asarray(xy, dtype=np.float64).reshape(-1, 2))
+
+
+def _proj1(road: Road, xy) -> tuple[float, float]:
+    s, u = _proj(road, xy)
+    return float(s[0]), float(u[0])
+
+
+def _box(road: Road, st: Structure) -> tuple[float, float, float, float]:
+    ss = np.append(np.arange(st.s_start, st.s_end, BOX_STEP_M), st.s_end)
+    xy = np.array([road.alignment.evaluate(float(s))[:2] for s in ss])
+    lo, hi = xy.min(axis=0) - BOX_PAD_M, xy.max(axis=0) + BOX_PAD_M
+    return float(lo[0]), float(lo[1]), float(hi[0]), float(hi[1])
+
+
+def _apart(p: tuple[float, float, float, float], q: tuple[float, float, float, float], reach: float) -> bool:
+    return p[0] > q[2] + reach or q[0] > p[2] + reach or p[1] > q[3] + reach or q[1] > p[3] + reach
 
 
 def _side_sign(side: str) -> float:
@@ -62,10 +85,13 @@ def _beside(a: Structure, b: Structure, ra: Road, rb: Road) -> list[tuple[float,
     """Stations of ``a`` with ``b``'s road alongside its deck: (s on a, s on b, u of a's line on b)."""
     margin = max(abs(_end_slope(b, b.s_start)), abs(_end_slope(b, b.s_end))) * (max(k.value for k in rb.cross_section.width_left.knots) + b.deck.overhang_m) + 1.0
     out = []
-    for s in np.arange(a.s_start, a.s_end + 1e-9, TWIN_STEP_M):
-        s = float(s)
-        x, y, ha, _k = ra.alignment.evaluate(s)
-        sb, ub = rb.alignment.project(x, y)
+    ss = np.arange(a.s_start, a.s_end + 1e-9, TWIN_STEP_M)
+    ev = [ra.alignment.evaluate(float(s)) for s in ss]
+    if not ev:
+        return out
+    sbs, ubs = _proj(rb, [(e[0], e[1]) for e in ev])
+    for s, (_x, _y, ha, _k), sb, ub in zip(ss, ev, sbs, ubs, strict=True):
+        s, sb, ub = float(s), float(sb), float(ub)
         if not b.s_start - margin <= sb <= b.s_end + margin or abs(ub) > TWIN_REACH_M:
             continue
         hb = rb.alignment.evaluate(sb)[2]
@@ -78,13 +104,9 @@ def _beside(a: Structure, b: Structure, ra: Road, rb: Road) -> list[tuple[float,
 def _gaps(a: Structure, ra: Road, side_a: str, b: Structure, rb: Road, side_b: str, reach_a: float, reach_b: float, samples) -> list[float]:
     """Plan gap between the two facing edges (pavement, or a barrier standing beyond it) at each sample."""
     sign_a, sign_b = _side_sign(side_a), _side_sign(side_b)
-    out = []
-    for s, _sb, _ub in samples:
-        edge_a = max(_width(ra, side_a)(s), reach_a)
-        x, y = ra.alignment.offset_point(s, sign_a * edge_a)
-        sb, ub = rb.alignment.project(x, y)
-        out.append(sign_b * ub - max(_width(rb, side_b)(sb), reach_b))
-    return out
+    xy = [ra.alignment.offset_point(s, sign_a * max(_width(ra, side_a)(s), reach_a)) for s, _sb, _ub in samples]
+    sbs, ubs = _proj(rb, xy)
+    return [sign_b * float(ub) - max(_width(rb, side_b)(float(sb)), reach_b) for sb, ub in zip(sbs, ubs, strict=True)]
 
 
 def twin_joints(structures: list[Structure], roads: dict[str, Road], crossings: list[Crossing]) -> list[Flag]:
@@ -99,16 +121,19 @@ def twin_joints(structures: list[Structure], roads: dict[str, Road], crossings: 
     crossing_pairs = {frozenset((c.upper_road, c.lower_road)) for c in crossings}
     flags: list[Flag] = []
     ordered = sorted(structures, key=lambda st: st.id)
+    boxes = {st.id: _box(roads[st.carried_road], st) for st in ordered}
     for i, a in enumerate(ordered):
         for b in ordered[i + 1 :]:
             if a.carried_road == b.carried_road or frozenset((a.carried_road, b.carried_road)) in crossing_pairs:
+                continue
+            if _apart(boxes[a.id], boxes[b.id], TWIN_REACH_M):
                 continue
             ra, rb = roads[a.carried_road], roads[b.carried_road]
             samples = _beside(a, b, ra, rb)
             if len(samples) < TWIN_MIN_SAMPLES:
                 continue
             side_b = "left" if float(np.median([ub for _s, _sb, ub in samples])) > 0.0 else "right"
-            ua = [ra.alignment.project(*rb.alignment.offset_point(sb, 0.0))[1] for _s, sb, _ub in samples]
+            ua = _proj(ra, [rb.alignment.offset_point(sb, 0.0) for _s, sb, _ub in samples])[1]
             side_a = "left" if float(np.median(ua)) > 0.0 else "right"
             pavement = min(_gaps(a, ra, side_a, b, rb, side_b, 0.0, 0.0, samples))
             used = (
@@ -150,15 +175,15 @@ def twin_joints(structures: list[Structure], roads: dict[str, Road], crossings: 
 def _clear_of_deck(st: Structure, parent: Road, child: Road, s_seam: float, toward: float, reach: tuple[float, float]) -> float:
     """First station of ``child`` from its seam where its whole section is past the parent's skewed deck end."""
     probe = min(max(s_seam + toward * 20.0, 0.0), child.length)
-    p0 = parent.alignment.project(*child.alignment.offset_point(s_seam, 0.0))[0]
-    p1 = parent.alignment.project(*child.alignment.offset_point(probe, 0.0))[0]
+    p0 = _proj1(parent, child.alignment.offset_point(s_seam, 0.0))[0]
+    p1 = _proj1(parent, child.alignment.offset_point(probe, 0.0))[0]
     to_end = p1 >= p0
     end = st.s_end if to_end else st.s_start
     t = _end_slope(st, end)
 
     def clear(s: float) -> bool:
         for u in (reach[0], 0.0, -reach[1]):
-            ps, pu = parent.alignment.project(*child.alignment.offset_point(s, u))
+            ps, pu = _proj1(parent, child.alignment.offset_point(s, u))
             q = ps - t * pu
             if (q < end - CLEAR_TOL_M) if to_end else (q > end + CLEAR_TOL_M):
                 return False
@@ -188,7 +213,7 @@ def _inside_parent(parent: Road, child: Road, s_from: float, toward: float) -> f
 
     def inside(s: float) -> bool:
         for u in (xs.width_left(s), -xs.width_right(s)):
-            ps, pu = parent.alignment.project(*child.alignment.offset_point(s, u))
+            ps, pu = _proj1(parent, child.alignment.offset_point(s, u))
             if not (0.0 < ps < parent.length and -pxs.width_right(ps) - CLEAR_TOL_M <= pu <= pxs.width_left(ps) + CLEAR_TOL_M):
                 return False
         return True
@@ -276,12 +301,18 @@ def _outside_deck(st: Structure, parent: Road, child: Road, a: float, b: float) 
     """How far the child's pavement edges reach past the parent's deck edges over [a, b] (0 when inside)."""
     worst = 0.0
     t0, t1 = _end_slope(st, st.s_start), _end_slope(st, st.s_end)
-    for s in np.arange(a, b + 1e-9, FOOTPRINT_STEP_M):
-        for u in (child.cross_section.width_left(float(s)), -child.cross_section.width_right(float(s))):
-            ps, pu = parent.alignment.project(*child.alignment.offset_point(float(s), u))
-            if not st.s_start + t0 * pu <= ps <= st.s_end + t1 * pu:
-                continue  # past the deck end: the road's own pavement there
-            left = parent.cross_section.width_left(ps) + st.deck.overhang("left")
-            right = parent.cross_section.width_right(ps) + st.deck.overhang("right")
-            worst = max(worst, pu - left, -right - pu)
+    xs = child.cross_section
+    xy = [
+        child.alignment.offset_point(float(s), u)
+        for s in np.arange(a, b + 1e-9, FOOTPRINT_STEP_M)
+        for u in (xs.width_left(float(s)), -xs.width_right(float(s)))
+    ]
+    if not xy:
+        return worst
+    for ps, pu in zip(*(v.tolist() for v in _proj(parent, xy)), strict=True):
+        if not st.s_start + t0 * pu <= ps <= st.s_end + t1 * pu:
+            continue  # past the deck end: the road's own pavement there
+        left = parent.cross_section.width_left(ps) + st.deck.overhang("left")
+        right = parent.cross_section.width_right(ps) + st.deck.overhang("right")
+        worst = max(worst, pu - left, -right - pu)
     return worst
