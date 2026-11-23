@@ -28,10 +28,14 @@ Scene builders (keyword parameters, defaults give the catalogue scene):
   270-degree loops (entry from the street, exit to it) on the other.
 * ``cloverleaf(skew, radius)``: freeway over freeway, four 270-degree loops.
 * ``trumpet(radius)``: freeway stem ending at the mainline: a loop and a semi-directional ramp
-  side by side over the mainline (the semi round the outside of the loop), two outer ramps.
+  side by side over the mainline (the semi round the outside of the loop), two outer ramps: one
+  sharing the semi's first metres, one merging onto the stem past the loop's end.
 * ``directional(skew, radius)``: freeway over freeway, two left-turn flyovers a level higher.
 * ``cd_braided(spacing, angle)``: collector-distributor road beside the mainline and a braided
   exit / entry pair crossing over each other.
+* ``aux_lane(spacing, gap)``: an auxiliary lane in from one interchange, ``spacing`` m alongside
+  the mainline ``gap`` m off its pavement (0: abutting), out to the next; no shared node.
+* ``cd_parallel(gap)``: a C-D road beside the mainline for the whole scene, never joining it.
 * ``viaduct(skew, n_streets, spacing)``: twin carriageways on one viaduct over 3+ streets in a
   row; the sheet never rejoins the ground.
 * ``twin_different_elevations(dz, skew)``: twin carriageways with independent profiles and a
@@ -1022,7 +1026,8 @@ def trumpet(*, radius: float | None = None, rise: float = 8.0) -> Scene:
         "semi_nw", nb, [line(cy - j), arc(math.pi / 2.0 + alpha, outer), line(free=True), arc(-(alpha - THETA), 250.0)],
         s=stem_len, start="terminal", start_heading=math.pi / 2.0, target=wb, end="merge", target_side=-1.0, peak=top, grade=0.06, lead=shared + 15.0,
     )
-    outer_es = ramp("outer_es", eb, [arc(-(math.pi / 2.0) + 2.0 * THETA, 150.0), line(60.0)], s=None, side=-1.0, target=sb, end="merge", target_side=-1.0)
+    # Outer ramp from EB merges onto the stem past the loop's end, so it comes alongside the loop only where both are at grade.
+    outer_es = ramp("outer_es", eb, [arc(-(math.pi / 2.0) + 2.0 * THETA, 150.0), line(120.0)], s=None, side=-1.0, target=sb, end="merge", target_side=-1.0)
     return finish("trumpet", [eb, wb, nb, sb, loop, semi, outer_ne, outer_es], params={"radius": radius})
 
 
@@ -1066,6 +1071,39 @@ def cd_braided(*, spacing: float | None = None, angle: float | None = None, rise
     entry = reverse(entry)
     entry.cross_section.lanes = list(exit_.cross_section.lanes)
     return finish("cd_braided", [eb, wb, cd, exit_, entry], params={"spacing": spacing, "angle": angle})
+
+
+def _beside(main: Road, half: float, gap: float) -> tuple[float, CrossSection, float]:
+    """Offset to the right of a crowned ``main``, section and height of a road ``gap`` m beside its pavement, on the plane of its right half."""
+    offset = main.cross_section.width_right(0.0) + gap + half
+    slope = main.cross_section.slope_right(0.0)
+    return offset, _section(half, half, 1, slope, slope), main.profile.z(0.0) - slope * offset
+
+
+def aux_lane(*, spacing: float | None = None, gap: float | None = None) -> Scene:
+    """An auxiliary lane between two interchanges: in from one, ``spacing`` m alongside EB ``gap`` m off its pavement, out to the next."""
+    spacing = 300.0 if spacing is None else float(spacing)
+    gap = 0.0 if gap is None else float(gap)
+    length = 900.0
+    eb, wb = twins(length, 0.0, "I 99", ("eb", "wb"), (_flat(length), _flat(length)))
+    offset, xs, z = _beside(eb, RAMP_HALF, gap)
+    a, taper, r = 0.2, 80.0, LEAVE_R
+    els = [line(taper), arc(-a, r), line(spacing), arc(-a, r), line(taper)]
+    dx = taper * math.cos(a) + r * math.sin(a)
+    dy = taper * math.sin(a) + r * (1.0 - math.cos(a))
+    al = _chain(-0.5 * spacing - dx, -MEDIAN_HALF - offset - dy, a, els)
+    aux = _road("aux", "ramp", "motorway_link", al, _flat(al.length, z), xs, oneway=True, lanes=1)
+    return finish("aux_lane", [eb, wb, aux], params={"spacing": spacing, "gap": gap})
+
+
+def cd_parallel(*, gap: float | None = None) -> Scene:
+    """A collector-distributor road beside EB for the whole scene, ``gap`` m off its pavement and never joining it."""
+    gap = 0.5 if gap is None else float(gap)
+    length = 700.0
+    eb, wb = twins(length, 0.0, "I 99", ("eb", "wb"), (_flat(length), _flat(length)))
+    offset, xs, z = _beside(eb, 4.0, gap)
+    cd = _road("cd", "connector", "motorway_link", _straight(-0.5 * length, -MEDIAN_HALF - offset, 0.0, length), _flat(length, z), xs, oneway=True, lanes=1)
+    return finish("cd_parallel", [eb, wb, cd], params={"gap": gap})
 
 
 def viaduct(*, skew: float | None = None, n_streets: int = 3, spacing: float | None = None, rise: float = 8.5) -> Scene:
@@ -1127,6 +1165,8 @@ PARAM_RANGES: dict[str, dict[str, tuple[float, float]]] = {
     "trumpet": {"radius": (60.0, 80.0)},
     "directional": {"skew": (0.0, math.radians(20.0)), "radius": (200.0, 240.0)},
     "cd_braided": {"spacing": (180.0, 230.0), "angle": (0.3, 0.5)},
+    "aux_lane": {"spacing": (200.0, 400.0), "gap": (0.0, 0.5)},
+    "cd_parallel": {"gap": (0.0, 2.0)},
     "viaduct": {"skew": (0.0, math.radians(60.0)), "n_streets": (3, 4), "spacing": (45.0, 80.0)},
     "twin_different_elevations": {"dz": (0.8, 2.5), "skew": (0.0, math.radians(60.0))},
     "stack": {"levels": (3, 4), "skew": (-0.3, 0.3)},
@@ -1151,6 +1191,8 @@ SCENES: dict[str, Callable[..., Scene]] = {
     "trumpet": trumpet,
     "directional": directional,
     "cd_braided": cd_braided,
+    "aux_lane": aux_lane,
+    "cd_parallel": cd_parallel,
     "viaduct": viaduct,
     "twin_different_elevations": twin_different_elevations,
     "stack": stack,

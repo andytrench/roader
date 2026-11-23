@@ -40,11 +40,6 @@ KNOWN: dict[tuple[str, str | None], str] = {
     ("cloverleaf", "AC-A5"): "decks: I-88 deck end 3 m off beside the diverging loop",
     ("directional", "AC-A5"): "decks: stacked-level deck ends 20-26 m off (flyover over the I-88 deck)",
     ("spui", "FR-EX-1"): "decks: a pier column falls outside its cap on a ramp deck at the wide street deck; the ramp is swept with square structures",
-    ("trumpet", "FR-EX-1"): "parallel: where the semi-directional and the outer ramp share their first metres, a junction seam is off the outline, station lines cross and the terrain footprint breaks",
-    ("trumpet", "AC-H1"): "parallel: pavements of the semi-directional and the junction area at the shared stem end pass through each other",
-    ("trumpet", "AC-H2"): "parallel: the semi-directional is reported crossing over the outer ramp it shares pavement with",
-    ("trumpet", "AC-H3"): "parallel: the false semi-over-outer-ramp crossing has no clearance; rays start inside parapets",
-    ("trumpet", "AC-A5"): "decks: loop deck end 44 m past the truth end where it lands beside the stem",
 }
 
 
