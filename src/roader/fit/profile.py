@@ -36,6 +36,7 @@ PRUNE_TRIES = 4
 PRUNE_RMS_RISE_M = 0.005  # a simplification costing less than this RMS is always taken
 MAX_PVI_PER_M = 1.0 / 40.0
 MIN_CURVE_OBSERVED = 0.3  # FR-OC-1
+MIN_END_TANGENT_M = 10.0  # an unobserved end tangent this long, off the grade rule, is merged into its neighbour (D-146)
 RULE_WEIGHT = 0.3
 IRLS_STEPS = 5
 
@@ -263,6 +264,15 @@ def fit_profile(
         # Over the part of each curve on the road: beyond its ends is not an unobserved gap.
         obs = [_observed_fraction(max(p - 0.5 * L, 0.0), min(p + 0.5 * L, length), sb) for p, L in zip(v.pvi, v.lengths, strict=True)]
         invented = [k for k in range(n) if obs[k] < MIN_CURVE_OBSERVED]
+        # An end tangent with almost no returns whose grade breaks the grade rule has nothing
+        # behind that grade: it carries the next tangent instead (FR-OC-1, D-146).
+        head = (0.0, v.pvi[0] - 0.5 * v.lengths[0], v.grades[0])
+        tail = (v.pvi[-1] + 0.5 * v.lengths[-1], length, v.grades[-1])
+        for k, (a, b, g) in ((0, head), (n - 1, tail)):
+            if k in invented or rules is None or b - a < MIN_END_TANGENT_M or _observed_fraction(a, b, sb) >= MIN_CURVE_OBSERVED:
+                continue
+            if not rules.evaluate("grade", abs(float(g)), road_class=road_class)[0]:
+                invented.append(k)
         if invented:
             v, cost = _fit(_remove(v, invented[0]), sb, zb, wb, length, rules, road_class)
             ref = max(ref, cost)
