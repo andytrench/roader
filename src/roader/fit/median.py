@@ -358,22 +358,25 @@ FACE_WINDOW_M = 2.5  # barrier returns this close in station set the face at a s
 FACE_MIN_POINTS = 3
 FACE_INSET_M = 0.5  # a barrier face nearer either crown than this is not in the median
 CAP_SMOOTH_M = 12.5
+BARRIER_BELOW_M = 0.5
+BARRIER_ABOVE_M = 2.0
 SPLIT_TOL_M = 0.15
 
 
-def split_twin_medians(fits, barrier_xy: np.ndarray) -> list[Flag]:
+def split_twin_medians(fits, barrier_xyz: np.ndarray) -> list[Flag]:
     """No inner edge of twin one-way mainlines passes their median (FR-XS-1, FR-XS-4, D-063).
 
     For every pair of one-way mainlines running alongside within the D-075 envelope,
     each road's facing width is capped, station by station, at the face on its side
-    of the median barrier when ``barrier_xy`` (linear raised returns) lie between the
-    two, else at the line midway between the two inner edges where those overlap.
+    of the median barrier when ``barrier_xyz`` (linear raised returns, standing on
+    the road: from ``BARRIER_BELOW_M`` below to ``BARRIER_ABOVE_M`` above its surface)
+    lie between the two, else at the line midway between the two inner edges where those overlap.
     Widths short of the cap are kept. Each changed side is flagged.
     """
     fits = sorted([f for f in fits if f.road.oneway and f.road.kind == "mainline"], key=lambda f: f.road.id)
     caps: dict[str, dict[int, list[tuple[np.ndarray, np.ndarray]]]] = {}
     for a, b in itertools.permutations(fits, 2):
-        res = _caps(a, b, barrier_xy)
+        res = _caps(a, b, barrier_xyz)
         if res is not None:
             side, st, cap = res
             caps.setdefault(a.road.id, {}).setdefault(side, []).append((st, cap))
@@ -387,7 +390,7 @@ def split_twin_medians(fits, barrier_xy: np.ndarray) -> list[Flag]:
     return flags
 
 
-def _caps(a, b, barrier_xy: np.ndarray):
+def _caps(a, b, barrier_xyz: np.ndarray):
     """(facing side of a, stations, cap) where b runs alongside a; None when it never does."""
     ra, rb, la, lb = a.road, b.road, a.line, b.line
     st = np.arange(0.0, ra.length, SPLIT_STEP_M)
@@ -400,7 +403,8 @@ def _caps(a, b, barrier_xy: np.ndarray):
     sa2, ua, oka = la.project(qb, max_dist=TWIN_REACH_M)
     ua = np.nan_to_num(ua)
     parallel = np.abs(np.cos(la.heading(st) - lb.heading(sb))) >= math.cos(math.radians(TWIN_PARALLEL_DEG))
-    dz = np.abs(np.array([ra.profile.z(float(s)) for s in st]) - np.array([rb.profile.z(float(s)) for s in sb]))
+    za = np.array([ra.profile.z(float(s)) for s in st])
+    dz = np.abs(za - np.array([rb.profile.z(float(s)) for s in sb]))
     near = okb & oka & parallel & (dz < TWIN_DZ_M) & (np.abs(ua) > 1.0) & (np.abs(np.nan_to_num(sa2) - st) < TWIN_REACH_M)
     if near.sum() < 3:
         return None
@@ -412,9 +416,11 @@ def _caps(a, b, barrier_xy: np.ndarray):
     wb = _width(rb, side_b, sb)
     edge_b = dist - wb  # b's inner edge, measured from a's line toward b
     cap = np.where(wa > edge_b, 0.5 * (wa + edge_b), np.inf)
-    if len(barrier_xy):
-        s_bar, u_bar, ok_bar = la.project(barrier_xy, max_dist=TWIN_REACH_M)
-        keep = ok_bar & (np.sign(u_bar) == side)
+    if len(barrier_xyz):
+        s_bar, u_bar, ok_bar = la.project(barrier_xyz[:, :2], max_dist=TWIN_REACH_M)
+        s_bar = np.nan_to_num(s_bar)
+        above = barrier_xyz[:, 2] - np.interp(s_bar, st, za)
+        keep = ok_bar & (np.sign(u_bar) == side) & (above >= -BARRIER_BELOW_M) & (above <= BARRIER_ABOVE_M)
         s_bar, t_bar = s_bar[keep], np.abs(u_bar[keep])
         order = np.argsort(s_bar)
         s_bar, t_bar = s_bar[order], t_bar[order]

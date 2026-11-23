@@ -124,8 +124,8 @@ def fit_network(seeds: list[RoadSeed], ev, rules, *, strip_factor: float = 1.0) 
     fits = [fitted[s.id] for s in seeds]
     # Twin carriageways stop at their median (L3, FR-XS-4): with every road fitted, so both inner edges are known.
     feats = _linear_features(ev)
-    barrier_xy = np.vstack([xy for _f, xy in feats]) if feats else np.zeros((0, 2))
-    split_twin_medians(fits, barrier_xy)
+    barrier_xyz = np.vstack([xyz for _f, xyz in feats]) if feats else np.zeros((0, 3))
+    split_twin_medians(fits, barrier_xyz)
     return fits, js
 
 

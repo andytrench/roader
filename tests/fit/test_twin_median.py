@@ -97,7 +97,7 @@ def test_fr_xs_4_overlapping_twins_split_at_the_midline():
     from roader.fit.median import split_twin_medians
 
     fits = _overlapping(9.0)
-    flags = split_twin_medians(fits, np.zeros((0, 2)))
+    flags = split_twin_medians(fits, np.zeros((0, 3)))
     y_eb, y_wb = _inner_y(fits)
     assert abs(y_eb) < 0.05 and abs(y_wb) < 0.05
     assert any(f.code == "FR-XS-4:median_split" for f in flags)
@@ -110,8 +110,11 @@ def test_fr_xs_1_twins_stop_at_the_median_barrier_face():
 
     fits = _overlapping(9.0)
     x = np.arange(-295.0, 295.0, 0.3)
-    barrier = np.vstack([np.column_stack([x, np.full(x.size, dy)]) for dy in (-0.28, -0.1, 0.1, 0.28)])
-    split_twin_medians(fits, barrier)
+    z = scenes.MAIN_Z + 0.01 * (x + 300.0) + 0.5
+    barrier = np.vstack([np.column_stack([x, np.full(x.size, dy), z]) for dy in (-0.28, -0.1, 0.1, 0.28)])
+    # An overpass parapet crossing the median 6 m up is not a median barrier.
+    deck = np.column_stack([np.full(40, 0.0), np.linspace(-6.0, 6.0, 40), np.full(40, scenes.MAIN_Z + 9.0)])
+    split_twin_medians(fits, np.vstack([barrier, deck]))
     y_eb, y_wb = _inner_y(fits)
     assert abs(y_eb + 0.28) < 0.05 and abs(y_wb - 0.28) < 0.05
 
@@ -120,7 +123,7 @@ def test_fr_xs_4_twins_short_of_the_median_are_left_alone():
     from roader.fit.median import split_twin_medians
 
     fits = _overlapping(6.0)
-    assert split_twin_medians(fits, np.zeros((0, 2))) == []
+    assert split_twin_medians(fits, np.zeros((0, 3))) == []
     assert fits[0].road.cross_section.width_left(300.0) == pytest.approx(6.0)
 
 
@@ -131,4 +134,4 @@ def test_fr_xs_4_twins_at_different_levels_are_not_split():
     fits = _overlapping(9.0)
     for k in fits[1].road.profile.elements:
         k.z0 += 3.0
-    assert split_twin_medians(fits, np.zeros((0, 2))) == []
+    assert split_twin_medians(fits, np.zeros((0, 3))) == []

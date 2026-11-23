@@ -212,6 +212,7 @@ def barriers_from_evidence(
     hi = alignment_line.xy.max(axis=0) + BARRIER_SEARCH_M
     for feat, pts in _linear_features(ev):
         # Point positions, not cell centers: the inner face is the nearest returns.
+        pts = pts[:, :2]
         if not len(pts) or np.any(pts.max(axis=0) < lo) or np.any(pts.min(axis=0) > hi):
             continue
         s, u, ok = alignment_line.project(pts, max_dist=BARRIER_SEARCH_M)
@@ -261,7 +262,7 @@ _FEATURE_POINTS: list = []  # [(weakref to evidence, [(feature, xy)])]: every ro
 
 
 def _linear_features(ev: Evidence) -> list:
-    """(feature, point xy) of every linear feature, gathered once per evidence set."""
+    """(feature, point xyz) of every linear feature, gathered once per evidence set."""
     if _FEATURE_POINTS and _FEATURE_POINTS[0][0]() is ev:
         return _FEATURE_POINTS[0][1]
     order = np.argsort(ev.point_layer, kind="stable")
@@ -274,7 +275,7 @@ def _linear_features(ev: Evidence) -> list:
         a = np.searchsorted(layers, idx, side="left")
         b = np.searchsorted(layers, idx, side="right")
         rows = np.concatenate([order[i:j] for i, j in zip(a, b, strict=True)]) if len(idx) else np.zeros(0, dtype=np.int64)
-        out.append((feat, ev.xyz[np.sort(rows), :2]))
+        out.append((feat, ev.xyz[np.sort(rows)]))
     _FEATURE_POINTS[:] = [(weakref.ref(ev), out)]
     return out
 
