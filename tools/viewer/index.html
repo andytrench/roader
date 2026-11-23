@@ -13,6 +13,7 @@
     pts    optional point overlay written by roader.export.write_points_glb
     cam    camera position x,y,z in viewer coordinates (scene recentred on its bbox)
     at     camera target x,y,z
+    frame=unit  cam and at are unit-frame x east, y north, z up (catalogue renders)
     prov=1 keep exported colors (use with meshes_provenance.glb)
     label  caption text
   three.js is loaded from a CDN (MIT); nothing is vendored.
@@ -71,6 +72,12 @@ loader.load(file, (gltf) => {
   const c = box.getCenter(new THREE.Vector3());
   const shift = new THREE.Vector3(-c.x, -box.min.y, -c.z);
   root.position.add(shift);
+  if (q.get('frame') === 'unit') {
+    const toView = (s) => { const [x, y, z] = vec(s, '0,0,0'); return new THREE.Vector3(x, z, -y).add(shift); };
+    camera.position.copy(toView(q.get('cam')));
+    controls.target.copy(toView(q.get('at')));
+    controls.update();
+  }
   root.traverse((o) => {
     if (!o.isMesh) return;
     o.castShadow = true; o.receiveShadow = true;
