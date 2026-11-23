@@ -73,6 +73,33 @@ def test_fr_cr_3_twin_decks_are_disjoint_in_plan(twins):
     assert a.intersection(b).area < 1e-6
 
 
+@pytest.fixture
+def overlapping_twins(monkeypatch):
+    """Fitted pavements 2 m into each other across the median (Woburn I-93 after D-084)."""
+    import tests.pipeline.twin_scene as scene
+
+    monkeypatch.setattr(scene, "CENTRE_GAP", 2.0 * HALF - 2.0)
+    model = scene.twin_model()
+    roads = {r.id: r for r in model.roads}
+    flags = twin_joints(model.structures, roads, model.crossings)
+    return model, flags, generate(model)
+
+
+def test_fr_cr_3_overlapping_twin_pavements_still_give_disjoint_decks(overlapping_twins):
+    model, flags, meshes = overlapping_twins
+    for st in model.structures:
+        assert st.deck.overhang("left") == pytest.approx(-(2.0 + 0.02) / 2.0, abs=0.05)
+    a, b = (_plan(_deck(meshes, st)) for st in model.structures)
+    assert a.intersection(b).area < 1e-6
+    assert sorted(f.element_id for f in flags if f.code == "FR-CR-3:twin_overlap") == sorted(st.id for st in model.structures)
+    # The overlapping approach pavements themselves stay a fit problem; the structures are clean.
+    parts = {st.id for st in model.structures} | {sp.id for st in model.structures for sp in st.supports}
+    result = check_solids([m for m in meshes if m.element_id in parts])
+    assert not result.violations, [v.message for v in result.violations][:3]
+    result = check_voids(model, meshes)
+    assert result.passed, [v.message for v in result.violations]
+
+
 def test_ac_h3_rays_under_a_twin_deck_reach_its_own_soffit(twins):
     model, _flags, meshes = twins
     result = check_voids(model, meshes)

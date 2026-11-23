@@ -129,7 +129,8 @@ def twin_joints(structures: list[Structure], roads: dict[str, Road], crossings: 
                 dropped += len(road.cross_section.barriers) - len(keep)
                 road.cross_section.barriers = keep
             gap = min(_gaps(a, ra, side_a, b, rb, side_b, _barrier_reach(ra, a, side_a), _barrier_reach(rb, b, side_b), samples))
-            half = max(gap - JOINT_GAP_M, 0.0) / 2.0
+            # Negative when the fitted pavements overlap: the decks stop short of their pavement edges.
+            half = (gap - JOINT_GAP_M) / 2.0
             for st, side in ((a, side_a), (b, side_b)):
                 value = min(st.deck.overhang(side), half)
                 if side == "left":
@@ -142,7 +143,7 @@ def twin_joints(structures: list[Structure], roads: dict[str, Road], crossings: 
                 flags.append(Flag("FR-CR-3:twin_joint", st.id, "FR-CR-3", message))
             if gap < JOINT_GAP_M:
                 for st in (a, b):
-                    flags.append(Flag("FR-CR-3:twin_overlap", st.id, "FR-CR-3", f"facing edges {gap:.2f} m apart in plan, under the {JOINT_GAP_M} m joint; the decks cannot be made disjoint by their overhangs"))
+                    flags.append(Flag("FR-CR-3:twin_overlap", st.id, "FR-CR-3", f"facing edges {gap:.2f} m apart in plan, under the {JOINT_GAP_M} m joint; each deck stops {-half:.2f} m inside its pavement edge"))
     return flags
 
 
