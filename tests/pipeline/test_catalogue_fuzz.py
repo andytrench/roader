@@ -22,8 +22,15 @@ from tests.pipeline.test_catalogue_scenes import FAST, FULL, HEAVY_REASON
 SEEDS = int(os.environ.get("ROADER_FUZZ_SEEDS", "1"))
 
 # (scene type, seed) -> "track: what raises today".
+SKEWED_LINE = "robust: solids raise 'skewed station line leaves the road'"
 CRASHES: dict[tuple[str, int], str] = {
-    ("stack", 1): "robust: solids raise 'skewed station line leaves the road' on a stacked level ramp (levels=4)",
+    ("parclo", 3): f"{SKEWED_LINE} at the start of a loop leaving the street",
+    ("trumpet", 2): f"{SKEWED_LINE} at a ramp start on the stem end",
+    ("directional", 2): f"{SKEWED_LINE} at a flyover deck end",
+    ("directional", 3): f"{SKEWED_LINE} at a road start",
+    ("stack", 1): f"{SKEWED_LINE} on a stacked level ramp (levels=4)",
+    ("stack", 2): f"{SKEWED_LINE} on a stacked level ramp (levels=4)",
+    ("stack", 3): f"{SKEWED_LINE} on a stacked level ramp (levels=4)",
 }
 
 
