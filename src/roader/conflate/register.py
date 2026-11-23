@@ -393,18 +393,23 @@ def register_line(line: Polyline, prof: Profiles) -> tuple[Polyline, np.ndarray,
     # Held at its end value beyond the measured stations, never extrapolated.
     held = np.clip(prof.s, prof.s[has][0], prof.s[has][-1])
     offsets = smooth_series(prof.s[has], mid[has], held, sigma=3.0 * SMOOTH_SIGMA_M)
+    # Far from every measured center the kernel has no weight left (NaN): there the
+    # offset is interpolated between the nearest smoothed values along the road.
+    good = np.isfinite(offsets)
+    offsets = np.interp(prof.s, prof.s[good], offsets[good]) if good.any() else np.full(len(prof.s), float(np.median(mid[has])))
     measured = line.offset_point(prof.s[has], mid[has])
     sx = smooth_series(prof.s[has], measured[:, 0], prof.s, sigma=XY_SIGMA_M, weights=weight[has], degree=2)
     sy = smooth_series(prof.s[has], measured[:, 1], prof.s, sigma=XY_SIGMA_M, weights=weight[has], degree=2)
     pts = np.column_stack([sx, sy])
+    plan_ok = np.isfinite(pts).all(axis=1)
     sv = prof.s[has]
     dist = np.min(np.abs(prof.s[:, None] - sv[None, :]), axis=1)
     # The local quadratic plan fit is trusted only within XY_BLEND_SIGMAS of a measured
     # center, and never past the first or last one, where it is an extrapolation.
     blend = np.clip(1.0 - (dist - XY_BLEND_SIGMAS * XY_SIGMA_M) / XY_SIGMA_M, 0.0, 1.0)
-    blend = np.where((prof.s < prof.s[has][0]) | (prof.s > prof.s[has][-1]), 0.0, blend)[:, None]
+    blend = np.where((prof.s < prof.s[has][0]) | (prof.s > prof.s[has][-1]) | ~plan_ok, 0.0, blend)[:, None]
     fallback = line.offset_point(prof.s, offsets)
-    pts = blend * pts + (1.0 - blend) * fallback
+    pts = blend * np.where(plan_ok[:, None], pts, fallback) + (1.0 - blend) * fallback
     # Away from measured centers the plan fit is an extrapolation, and with only a
     # few centers in its window it bunches up: there each point keeps its profile
     # station and only moves sideways, so the line cannot stretch or fold along
