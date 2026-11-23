@@ -358,6 +358,7 @@ FACE_WINDOW_M = 2.5  # barrier returns this close in station set the face at a s
 FACE_MIN_POINTS = 3
 FACE_INSET_M = 0.5  # a barrier face nearer either crown than this is not in the median
 CAP_SMOOTH_M = 12.5
+FACE_RUN = 3  # stations with a face within CAP_SMOOTH_M
 RAISED_MIN_M = 0.3  # a median barrier or parapet stands this much above the road's plane
 RAISED_MAX_M = 2.0  # and no more (an overpass is not a median barrier)
 SPLIT_MARGIN_M = 0.05
@@ -435,12 +436,19 @@ def _caps(a, b, xyz: np.ndarray, others=()):
         s_bar, t_bar = s_p[keep][order], np.abs(u_p[keep])[order]
         lo_i = np.searchsorted(s_bar, st - FACE_WINDOW_M)
         hi_i = np.searchsorted(s_bar, st + FACE_WINDOW_M)
+        inner = max(FACE_INSET_M, _least_half_width(ra))
+        face = np.full(len(st), np.inf)
         for i in np.flatnonzero(near):
             t = t_bar[lo_i[i] : hi_i[i]]
-            t = t[(t > FACE_INSET_M) & (t < dist[i] - FACE_INSET_M)]
+            t = t[(t > inner) & (t < dist[i] - FACE_INSET_M)]
             if len(t) >= FACE_MIN_POINTS:
-                face = float(np.min(t))
-                cap[i] = min(face, cap[i]) if np.isfinite(cap[i]) else face
+                face[i] = float(np.min(t))
+        # A barrier runs along the road: a face seen at a lone station is an object, not the median barrier.
+        fin = np.isfinite(face)
+        for i in np.flatnonzero(fin):
+            if np.sum(fin & (np.abs(st - st[i]) <= CAP_SMOOTH_M)) < FACE_RUN:
+                face[i] = np.inf
+        cap = np.minimum(cap, face)
     cap = np.where(near, cap, np.inf)
     if not np.isfinite(cap).any():
         return None
@@ -455,6 +463,29 @@ def _smooth_cap(st: np.ndarray, cap: np.ndarray) -> np.ndarray:
         w = fin & (np.abs(st - st[i]) <= CAP_SMOOTH_M)
         out[i] = float(np.median(cap[w]))
     return out
+
+
+def _least_half_width(road: Road) -> float:
+    """Half the narrowest pavement the road can have: its lanes inside it are not median (as fit.links.least_half_width)."""
+    counts = []
+    for ref in road.vector_refs:
+        try:
+            counts.append(int(ref.tags.get("lanes", "")))
+        except (ValueError, AttributeError):
+            continue
+    lanes = min(counts) if counts else (1 if road.oneway else 2)
+    return 0.5 * max(lanes, 1) * _rules().get("lane.width", road_class=road.road_class).low
+
+
+_RULES: list = []
+
+
+def _rules():
+    from roader.rules import RuleBook
+
+    if not _RULES:
+        _RULES.append(RuleBook.load())
+    return _RULES[0]
 
 
 def _on_pavement(xy: np.ndarray, others) -> np.ndarray:
