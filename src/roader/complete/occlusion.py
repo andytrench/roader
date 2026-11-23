@@ -19,6 +19,7 @@ import numpy as np
 
 from roader.model.schema import Crossing, Flag, Interval, Road, RoadModel, Structure
 from roader.rules import RuleBook
+from roader.validate._align import projector_for
 
 CLEARANCE_STEP_M = 1.0
 MIN_PHYSICAL_M = 0.05
@@ -53,7 +54,8 @@ def structures_over(road: Road, s: float, model: RoadModel) -> list[str]:
         if st.carried_road == road.id:
             continue
         upper = model.road(st.carried_road)
-        su, u = upper.alignment.project(x, y)
+        sa, ua = projector_for(upper.alignment).project(np.array([[x, y]]))
+        su, u = float(sa[0]), float(ua[0])
         half = max(upper.cross_section.width_left(su), upper.cross_section.width_right(su)) + st.deck.overhang_m + 2.0
         if st.s_start - 2.0 <= su <= st.s_end + 2.0 and abs(u) <= half and upper.profile.z(su) > road.profile.z(s):
             out.append(st.id)
@@ -134,6 +136,19 @@ def split_at_structures(road: Road, structures: list[Structure]) -> None:
     road.support = out
 
 
+_LINES: dict[int, tuple] = {}
+
+
+def _polyline(alignment, polyline_cls):
+    """One sampled polyline per alignment object: a stack has many crossings on each kilometre-long road."""
+    hit = _LINES.get(id(alignment))
+    if hit is None or hit[0] is not alignment:
+        if len(_LINES) >= 1024:
+            _LINES.clear()
+        hit = _LINES[id(alignment)] = (alignment, polyline_cls.from_alignment(alignment))
+    return hit[1]
+
+
 def clearance_profile(model: RoadModel, c: Crossing, st: Structure) -> tuple[float, int]:
     """Minimum lower-surface-to-soffit clearance over the lower road under the deck footprint."""
     from roader.conflate.polyline import Polyline
@@ -149,9 +164,9 @@ def clearance_profile(model: RoadModel, c: Crossing, st: Structure) -> tuple[flo
         rows.append((s, u))
     ss = np.concatenate([r[0] for r in rows])
     uu = np.concatenate([r[1] for r in rows])
-    lower_line = Polyline.from_alignment(lower.alignment)
+    lower_line = _polyline(lower.alignment, Polyline)
     xy = lower_line.offset_point(ss, uu)
-    upper_line = Polyline.from_alignment(upper.alignment)
+    upper_line = _polyline(upper.alignment, Polyline)
     su, us, ok = upper_line.project(xy)
     ux = upper.cross_section
     inside = ok & (su >= st.s_start) & (su <= st.s_end)
