@@ -325,7 +325,7 @@ def _skew_field(
     sides: Callable[[float, float], tuple[float, float]],
     toe_limited: bool,
 ) -> tuple[list[StationLine], list[Flag]]:
-    """Station lines with the skew field limited toward the road's ends (D-118) and, if ``toe_limited``, near steep embankment toes (D-161).
+    """Station lines on the sweepable skew field ``knots`` (D-109), limited toward the road's ends (D-118) and, if ``toe_limited``, near steep embankment toes (D-161).
 
     The toe limit tapers over the lateral reach ``sides`` gives for the breakpoint interval in
     ``base`` around each pair of rows. Each structure whose skew field it limits is flagged once.
@@ -534,7 +534,7 @@ def road_bodies(
                 side = 1.0 if u >= 0.0 else -1.0
                 near[side] = max(near[side], abs(u))
         return 1.25 * near[1.0] + 1.0, 1.25 * near[-1.0] + 1.0
-    knots = skew_knots(structures, umax)
+    knots = skew_knots(structures, umax, length)
     base = merge_breakpoints(bps + [(k.s, PRIORITY_OTHER) for k in knots if k.ramp], length)
     sweep = stations(road, base, tol, umax, knots, spans, sides)
     station_lines, flags = _skew_field(road, structures, lines, knots, sweep, umax, base, sides, toe_limited=tier >= 2)
@@ -689,20 +689,22 @@ def _pier(
 
     ring = chain_ring(boundary_edges(cells))
     outline = Polygon([(pv.x[p], pv.y[p]) for p in ring])
-    t = grid.sl[grid.index(sp.station)].t
     i = grid.index(sp.station)
     u_right, u_left = pv.u[grid.vid[(i, keys[0])]], pv.u[grid.vid[(i, keys[1])]]
+    row = [p for p in grid.row[i] if u_right - 1e-9 <= pv.u[p] <= u_left + 1e-9]
     n = sp.n_columns
     radius = 0.5 * sp.column_width_m / math.cos(math.pi / COLUMN_SIDES)
     columns: list[list[int]] = []
     inner = outline.buffer(-0.01)
     for k in range(n):
+        # On the cap's centre line as drawn (chords between its grid vertices), so a skewed
+        # line on a tight curve keeps its columns inside the cap.
         u = u_right + (k + 0.5) * (u_left - u_right) / n
-        s = sp.station + t * u
-        cx, cy = road.alignment.offset_point(s, u)
-        ax, ay = road.alignment.offset_point(sp.station + t * (u + 0.5), u + 0.5)
-        bx, by = road.alignment.offset_point(sp.station + t * (u - 0.5), u - 0.5)
-        theta = math.atan2(ay - by, ax - bx)
+        j = next((j for j in range(1, len(row)) if pv.u[row[j]] >= u), len(row) - 1)
+        p, q = row[j - 1], row[j]
+        f = (u - pv.u[p]) / (pv.u[q] - pv.u[p])
+        cx, cy = pv.x[p] + f * (pv.x[q] - pv.x[p]), pv.y[p] + f * (pv.y[q] - pv.y[p])
+        theta = math.atan2(pv.y[q] - pv.y[p], pv.x[q] - pv.x[p])
         loop = []
         for j in range(COLUMN_SIDES):
             ang = theta + math.pi / COLUMN_SIDES + 2.0 * math.pi * j / COLUMN_SIDES

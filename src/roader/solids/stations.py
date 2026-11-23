@@ -25,6 +25,7 @@ STRUCTURE_TOL_M = 0.01  # chord tolerance cap along a structure span, every LOD
 STATION_MERGE_M = 0.01
 RAMP_FACTOR = 2.4
 RAMP_MIN_M = 1.0
+SWEEP_ITERATIONS = 200
 SKEW_LINE_EDGE_M = 0.3  # extra deck lines stay this far inside the pavement edge
 TOE_SKEW_MAX = 0.5  # |tan skew| * |du/ds| of an active embankment toe stays at or below this (D-161)
 TOE_SAMPLE_M = 1.0
@@ -70,9 +71,16 @@ def support_block(structure: Structure, support: Support) -> tuple[float, float]
     raise NotImplementedError(f"support {support.id}: kind {support.kind!r} is not generated in milestone 1")
 
 
-def skew_knots(structures: list[Structure], umax: float) -> list[SkewKnot]:
-    """Piecewise-linear skew field t(s) for one road (structures sorted by s_start)."""
+def skew_knots(structures: list[Structure], umax: float, length: float = math.inf) -> list[SkewKnot]:
+    """Piecewise-linear skew field t(s) for one road (structures sorted by s_start).
+
+    The field is what the solids can sweep: zero at the road's ends (a station line
+    there must stay on the road), changing no faster than a ramp, and flat across
+    each pier cap. Where the supports' skews ask for more, the field rounds them
+    toward square (D-109, generalising D-118); the model's skew_rad is left as inferred.
+    """
     knots: list[SkewKnot] = []
+    half: list[float] = []
     for st in structures:
         supports = sorted(st.supports, key=lambda sp: (sp.station, sp.id))
         if supports:
@@ -81,24 +89,79 @@ def skew_knots(structures: list[Structure], umax: float) -> list[SkewKnot]:
         else:
             t_a = t_b = 0.0
         pts = [SkewKnot(st.s_start, t_a, False)]
+        halves = [0.0]
         for sp in supports:
             if st.s_start + STATION_MERGE_M < sp.station < st.s_end - STATION_MERGE_M:
                 pts.append(SkewKnot(sp.station, math.tan(sp.skew_rad), False))
+                halves.append(0.5 * sp.cap_width_m if sp.kind == "pier" else 0.0)
         pts.append(SkewKnot(st.s_end, t_b, False))
+        halves.append(0.0)
         if t_a != 0.0:
             pts.insert(0, SkewKnot(st.s_start - (RAMP_FACTOR * abs(t_a) * umax + RAMP_MIN_M), 0.0, True))
+            halves.insert(0, 0.0)
         if t_b != 0.0:
             pts.append(SkewKnot(st.s_end + (RAMP_FACTOR * abs(t_b) * umax + RAMP_MIN_M), 0.0, True))
+            halves.append(0.0)
         if knots and pts[0].s <= knots[-1].s:
             # Ramps of neighbouring structures overlap: interpolate between their ends.
             if knots[-1].ramp:
                 knots.pop()
+                half.pop()
             if pts[0].ramp:
                 pts.pop(0)
+                halves.pop(0)
             if knots and pts[0].s <= knots[-1].s:
                 raise ValueError(f"structure {st.id} overlaps the previous structure on its road")
         knots.extend(pts)
-    return knots
+        half.extend(halves)
+    return _sweepable(knots, half, 1.0 / (RAMP_FACTOR * umax), length)
+
+
+def _sweepable(knots: list[SkewKnot], half: list[float], rate: float, length: float) -> list[SkewKnot]:
+    """The skew field nearest ``knots`` that is zero at the road ends and changes by at most ``rate`` per metre."""
+    if not knots or not any(k.t != 0.0 for k in knots):
+        return knots
+    s, t, ramp = [k.s for k in knots], [k.t for k in knots], [k.ramp for k in knots]
+    if math.isfinite(length):
+        keep = [i for i, v in enumerate(s) if 0.0 < v < length]
+        s = [0.0, *(s[i] for i in keep), length]
+        t = [0.0, *(t[i] for i in keep), 0.0]
+        ramp = [True, *(ramp[i] for i in keep), True]
+        half = [0.0, *(half[i] for i in keep), 0.0]
+    # Only ever round a skew toward square (a support's cap and columns are sized for its
+    # own skew), the larger of two neighbours first; caps are flat, so the change happens
+    # between their edges.
+    reach = [rate * max(s[i + 1] - s[i] - half[i] - half[i + 1], 0.0) for i in range(len(s) - 1)]
+    for _ in range(SWEEP_ITERATIONS):
+        moved = False
+        for i in [*range(len(reach)), *range(len(reach) - 1, -1, -1)]:
+            a, b = _meet(t[i], t[i + 1], reach[i])
+            if (a, b) != (t[i], t[i + 1]):
+                t[i], t[i + 1], moved = a, b, True
+        if not moved:
+            break
+    else:
+        t = [0.0] * len(t)  # no sweepable field near the supports' skews: square
+    out: list[SkewKnot] = []
+    for i, (x, v, r) in enumerate(zip(s, t, ramp, strict=True)):
+        h = half[i]
+        if h > 0.0 and (i == 0 or s[i - 1] < x - h) and (i == len(s) - 1 or x + h < s[i + 1]):
+            out += [SkewKnot(x - h, v, r), SkewKnot(x + h, v, r)]  # a cap is one support line
+        else:
+            out.append(SkewKnot(x, v, r))
+    return out
+
+
+def _meet(ta: float, tb: float, reach: float) -> tuple[float, float]:
+    """Two neighbouring skews at most ``reach`` apart, each kept between square and itself."""
+    if abs(ta - tb) <= reach + 1e-12:
+        return ta, tb
+    swap = abs(ta) < abs(tb)
+    x, y = (tb, ta) if swap else (ta, tb)
+    x = y + math.copysign(reach, x - y) if x * (y + math.copysign(reach, x - y)) > 0.0 else 0.0
+    if x == 0.0 and abs(y) > reach:
+        y = math.copysign(reach, y)
+    return (y, x) if swap else (x, y)
 
 
 def skew_at(knots: list[SkewKnot], s: float) -> float:

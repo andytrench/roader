@@ -467,12 +467,34 @@ def test_fr_st_4_support_skew_follows_the_crossing_up_to_the_cap():
 
 
 def test_fr_st_4_each_support_takes_the_skew_of_what_it_crosses():
-    from roader.structures.infer import ABUT_SKEW_REACH_M, support_skews
+    from roader.structures.infer import support_skews
 
-    # A viaduct 0-300 m over two roads; the far abutment stands beside the second one.
-    crossed = [(0.3, (60.0, 90.0)), (-0.5, (280.0 - ABUT_SKEW_REACH_M + 1.0, 295.0))]
-    skews = [sk for sk, _f in support_skews([0.0, 75.0, 150.0, 290.0, 300.0], crossed)]
-    assert skews == [0.0, 0.3, 0.3, -0.5, -0.5]  # square over nothing; piers follow the nearest crossing
+    # A viaduct 0-300 m over two roads; only its far end span passes over one.
+    crossed = [(0.3, (60.0, 90.0)), (-0.5, (271.0, 295.0))]
+    skews = [sk for sk, _f in support_skews([0.0, 40.0, 75.0, 150.0, 290.0, 300.0], crossed)]
+    assert skews == [0.0, 0.3, 0.3, 0.3, -0.5, -0.5]  # square over nothing; piers follow the nearest crossing
     assert support_skews([0.0, 20.0], []) == [(0.0, []), (0.0, [])]
     (sk, flags), _ = support_skews([0.0, 20.0], [(math.radians(-75.0), (-5.0, 25.0))])
     assert sk == pytest.approx(-math.radians(60.0)) and flags == ["FR-ST-4:skew_capped_from_-75.0deg"]
+
+
+def test_fr_sg_2_skew_field_is_sweepable_and_only_rounds_supports_toward_square():
+    import itertools
+
+    from roader.solids.stations import SkewKnot, _sweepable, skew_at
+
+    rate = 0.01
+    # Deck 2-60 m on a 100 m road, abutment at the road start; piers at 30 m (+1.0) and 40 m (-1.0); one mild pier.
+    knots = [SkewKnot(2.0, 0.5, False), SkewKnot(30.0, 1.0, False), SkewKnot(40.0, -1.0, False), SkewKnot(50.0, 0.05, False), SkewKnot(60.0, 0.5, False), SkewKnot(90.0, 0.0, True)]
+    half = [0.0, 1.0, 1.0, 1.0, 0.0, 0.0]
+    out = _sweepable(knots, half, rate, 100.0)
+    assert skew_at(out, 0.0) == 0.0 and skew_at(out, 100.0) == 0.0  # a station line at a road end stays on the road
+    for a, b in itertools.pairwise(out):
+        assert abs(b.t - a.t) <= rate * (b.s - a.s) + 1e-12
+    for k, h in zip(knots, half, strict=True):
+        v = skew_at(out, k.s)
+        assert v * k.t >= 0.0 and abs(v) <= abs(k.t) + 1e-12  # never past square, never steeper
+        if h:
+            assert skew_at(out, k.s - h) == skew_at(out, k.s + h) == v  # a cap is one support line
+    feasible = [SkewKnot(10.0, 0.0, True), SkewKnot(40.0, 0.2, False), SkewKnot(60.0, 0.2, False), SkewKnot(90.0, 0.0, True)]
+    assert [(k.s, k.t) for k in _sweepable(feasible, [0.0] * 4, rate, 100.0)][1:-1] == [(k.s, k.t) for k in feasible]

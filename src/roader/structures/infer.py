@@ -51,9 +51,6 @@ MIN_PIER_GAP_M = 8.0
 # FR-ST-4: supports follow the crossing up to this skew; sharper crossings (stack ramps nearly
 # parallel to the roads below) take longer spans in practice, and their skew ramps cannot meet.
 MAX_SUPPORT_SKEW_RAD = math.radians(60.0)
-# FR-ST-4: an abutment takes a crossing's skew only when that crossing's clear zone comes
-# this close to the deck end; a viaduct end over nothing is square.
-ABUT_SKEW_REACH_M = 10.0
 METHOD_CONFIDENCE = {"class17": 0.9, "sheet_break": 0.7, "class17_only": 0.5}
 # FR-ST-3 observed piers: returns under the deck, off every lower pavement, clear of the ground.
 PIER_MIN_RETURNS = 3
@@ -137,13 +134,15 @@ def support_skews(stations: list[float], crossed: list[tuple[float, tuple[float,
 
     ``stations``: abutment, piers..., abutment; ``crossed``: (skew, clear-zone stations)
     of each crossed road. A pier takes the skew of the nearest crossed road; an abutment
-    that of a crossed road within ABUT_SKEW_REACH_M of it, else it is square.
+    that of a crossed road its end span passes over, else (a viaduct end) it is square.
     """
     out: list[tuple[float, list[str]]] = []
+    last = len(stations) - 1
     for n, s in enumerate(stations):
-        near = sorted((max(z0 - s, s - z1, 0.0), skew) for skew, (z0, z1) in crossed)
-        if n in (0, len(stations) - 1):
-            near = [d for d in near if d[0] <= ABUT_SKEW_REACH_M]
+        near = sorted((max(z0 - s, s - z1, 0.0), skew, (z0, z1)) for skew, (z0, z1) in crossed)
+        if n in (0, last) and last > 0:
+            lo, hi = sorted((s, stations[1 if n == 0 else last - 1]))
+            near = [d for d in near if d[2][0] < hi and d[2][1] > lo]
         out.append(support_skew([near[0][1]]) if near else (0.0, []))
     return out
 
