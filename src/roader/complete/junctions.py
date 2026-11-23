@@ -19,10 +19,12 @@ junction area that replaces the overlapping sweeps:
 
 Areas that overlap each other, or that a third road's pavement enters at the same
 level, are merged into one area and regrown (D-069). An area may sit next to a
-deck: a participant's interval stays off its own decks and their skewed station
-ramps, no support may stand in the area, and another road's deck over the area
-must clear it by ``LEVEL_DZ_M``; the lifted surface must stay within ``LEVEL_DZ_M``
-of every participant it covers. Otherwise the node is flagged and left out.
+deck: a participant's interval stops at its own deck's end, where the seam is the
+deck's skewed end row, and leaves out any span the road rides on another deck
+(D-073, D-076); inside a deck's skew ramp a seam is tested clear on every row the
+solids may skew there. No other structure's support may stand in the area, another
+road's deck over it must clear it by ``LEVEL_DZ_M``, and the lifted surface must stay
+within ``LEVEL_DZ_M`` of every participant it covers. Otherwise the node is flagged.
 
 Shared pavement (D-070): two roads at the same level whose pavements still overlap
 outside every junction area (adjacent ramps, twin carriageways, a ramp that never
