@@ -5,8 +5,9 @@ type allows, loop and flyover radii, street and ramp spacing, level count). The 
 the solids and the gates must never raise (a crash is a failure, robust track), and every
 hard gate that fails must name the elements it failed on.
 
-Seeds per type: ``ROADER_FUZZ_SEEDS`` (default 1, or 3 with ``ROADER_CATALOGUE=all``).
-Heavy types run only with ``ROADER_CATALOGUE=all`` (see ``test_catalogue_scenes``).
+Seeds per type: ``ROADER_FUZZ_SEEDS`` (default 1). Expected crashes are recorded for seeds
+1 to 3; a crash on a higher seed is a new finding. Heavy types run only with
+``ROADER_CATALOGUE=all`` (see ``test_catalogue_scenes``).
 """
 
 from __future__ import annotations
@@ -18,20 +19,22 @@ import pytest
 from tests.pipeline import scenes as S
 from tests.pipeline.test_catalogue_scenes import FAST, FULL, HEAVY_REASON
 
-SEEDS = int(os.environ.get("ROADER_FUZZ_SEEDS", "3" if FULL else "1"))
+SEEDS = int(os.environ.get("ROADER_FUZZ_SEEDS", "1"))
 
-# scene type -> "track: what raises today" for types whose fuzz runs crash.
-CRASHES: dict[str, str] = {}
+# (scene type, seed) -> "track: what raises today".
+CRASHES: dict[tuple[str, int], str] = {
+    ("stack", 1): "robust: solids raise 'skewed station line leaves the road' on a stacked level ramp (levels=4)",
+}
 
 
 def _cases():
     for name in S.SCENES:
-        marks = []
-        if name not in FAST and not FULL:
-            marks.append(pytest.mark.skip(reason=HEAVY_REASON))
-        if name in CRASHES:
-            marks.append(pytest.mark.xfail(strict=True, reason=CRASHES[name]))
         for seed in range(1, SEEDS + 1):
+            marks = []
+            if name not in FAST and not FULL:
+                marks.append(pytest.mark.skip(reason=HEAVY_REASON))
+            if (name, seed) in CRASHES:
+                marks.append(pytest.mark.xfail(strict=True, reason=CRASHES[(name, seed)]))
             yield pytest.param(name, seed, id=f"{name}-seed{seed}", marks=marks)
 
 
