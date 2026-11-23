@@ -38,6 +38,7 @@ TOE_SEARCH_M = 40.0
 TOE_STEP_M = 1.0
 STATION_STEP_M = 5.0
 NONE_REACH_M = 1.0  # beyond the pavement edge on sides without a fill
+LOWER_REACH_CELLS = 3.0  # interpolated nodes this many cells beyond a pavement are lowered below its underside
 LOWER_MARGIN_M = 0.1  # terrain below a slab underside or cap bottom by at least this
 CAP_CLEARANCE_M = 0.3
 FOOTING_MARGIN_M = 0.05
@@ -180,7 +181,10 @@ def complete_terrain(points: PointSet, model: RoadModel, rules: RuleBook, cell: 
         s, u = proj[road.id]
         xs = road.cross_section
         wl, wr = _pw(xs.width_left, s), _pw(xs.width_right, s)
-        near = (s >= -1.5 * cell) & (s <= road.length + 1.5 * cell) & (u <= wl + 1.5 * cell) & (u >= -wr - 1.5 * cell)
+        # The re-triangulation band joins nodes up to two cells apart (FR-SG-6), so interpolated nodes
+        # that far beyond the edge are held at the edge's underside too (D-074); measured ones as before.
+        reach = np.where(code == MEASURED, 1.5, LOWER_REACH_CELLS) * cell
+        near = (s >= -reach) & (s <= road.length + reach) & (u <= wl + reach) & (u >= -wr - reach)
         idx = np.flatnonzero(near)
         if idx.size == 0:
             continue
