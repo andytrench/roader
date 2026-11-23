@@ -19,7 +19,6 @@ import numpy as np
 
 from roader.model.schema import Crossing, Flag, Interval, Road, RoadModel, Structure
 from roader.rules import RuleBook
-from roader.validate._align import projector_for
 
 CLEARANCE_STEP_M = 1.0
 MIN_PHYSICAL_M = 0.05
@@ -54,8 +53,7 @@ def structures_over(road: Road, s: float, model: RoadModel) -> list[str]:
         if st.carried_road == road.id:
             continue
         upper = model.road(st.carried_road)
-        sa, ua = projector_for(upper.alignment).project(np.array([[x, y]]))
-        su, u = float(sa[0]), float(ua[0])
+        su, u = upper.alignment.project(x, y)
         half = max(upper.cross_section.width_left(su), upper.cross_section.width_right(su)) + st.deck.overhang_m + 2.0
         if st.s_start - 2.0 <= su <= st.s_end + 2.0 and abs(u) <= half and upper.profile.z(su) > road.profile.z(s):
             out.append(st.id)

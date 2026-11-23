@@ -10,19 +10,6 @@ import numpy as np
 
 from roader.model.geometry import Alignment
 
-_CACHE: dict[int, Projector] = {}
-CACHE_MAX = 1024
-
-
-def projector_for(alignment: Alignment) -> Projector:
-    """One shared ``Projector`` per alignment object, for callers projecting a few points many times."""
-    p = _CACHE.get(id(alignment))
-    if p is None or p.alignment is not alignment:
-        if len(_CACHE) >= CACHE_MAX:
-            _CACHE.clear()
-        p = _CACHE[id(alignment)] = Projector(alignment)
-    return p
-
 
 class Projector:
     def __init__(self, alignment: Alignment, step: float = 1.0) -> None:

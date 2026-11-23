@@ -26,7 +26,6 @@ import numpy as np
 from roader.evidence import Evidence
 from roader.fit.road import RoadFit
 from roader.model.schema import Crossing, Flag, Link, Road
-from roader.validate._align import projector_for
 
 STEP_M = 1.0
 BAND_INNER_M = 1.5
@@ -246,7 +245,7 @@ def absorb_diverging(
         for k in own:
             e = extents[k]
             far = e.s_end if toward > 0 else e.s_start
-            ps = float(projector_for(roads[parent].alignment).project(np.array([road.alignment.offset_point(far, 0.0)]))[0][0])
+            ps = roads[parent].alignment.project(*road.alignment.offset_point(far, 0.0))[0]
             overrun = max(ps - p.s_end, p.s_start - ps)
             if overrun > SHARED_OVERRUN_M:
                 long.append((e, overrun))

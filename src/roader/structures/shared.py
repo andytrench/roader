@@ -24,7 +24,6 @@ import numpy as np
 from roader.conflate.structures import Share
 from roader.model.provenance import Source
 from roader.model.schema import Barrier, Crossing, Flag, Road, SharedSpan, Structure
-from roader.validate._align import projector_for
 
 TWIN_STEP_M = 1.0
 TWIN_MIN_SAMPLES = 5
@@ -42,7 +41,7 @@ BOX_PAD_M = 30.0  # half width of a wide deck: plan boxes this far apart hold no
 
 
 def _proj(road: Road, xy) -> tuple[np.ndarray, np.ndarray]:
-    return projector_for(road.alignment).project(np.asarray(xy, dtype=np.float64).reshape(-1, 2))
+    return road.alignment.project_many(xy)
 
 
 def _proj1(road: Road, xy) -> tuple[float, float]:
