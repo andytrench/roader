@@ -376,10 +376,11 @@ def split_twin_medians(fits, xyz: np.ndarray) -> list[Flag]:
     line midway between them, less ``SPLIT_MARGIN_M``. Widths short of the cap are
     kept. Each changed side is flagged.
     """
+    every = list(fits)
     fits = sorted([f for f in fits if f.road.oneway and f.road.kind == "mainline"], key=lambda f: f.road.id)
     caps: dict[str, dict[int, list[tuple[np.ndarray, np.ndarray]]]] = {}
     for a, b in itertools.permutations(fits, 2):
-        res = _caps(a, b, xyz)
+        res = _caps(a, b, xyz, [f for f in every if f is not a and f is not b])
         if res is not None:
             side, st, cap = res
             caps.setdefault(a.road.id, {}).setdefault(side, []).append((st, cap))
@@ -393,7 +394,7 @@ def split_twin_medians(fits, xyz: np.ndarray) -> list[Flag]:
     return flags
 
 
-def _caps(a, b, xyz: np.ndarray):
+def _caps(a, b, xyz: np.ndarray, others=()):
     """(facing side of a, stations, cap) where b runs alongside a; None when it never does."""
     ra, rb, la, lb = a.road, b.road, a.line, b.line
     st = np.arange(0.0, ra.length, SPLIT_STEP_M)
@@ -428,6 +429,8 @@ def _caps(a, b, xyz: np.ndarray):
         slope = _slope(ra, side, s_p)
         above = pts[:, 2] - (np.interp(s_p, st, za) + slope * u_p)
         keep = ok_p & (np.sign(u_p) == side) & (above >= RAISED_MIN_M) & (above <= RAISED_MAX_M)
+        # A third road's pavement standing above this road's plane (a ramp between the twins) is not a barrier.
+        keep[keep] &= ~_on_pavement(pts[keep, :2], others)
         order = np.argsort(s_p[keep])
         s_bar, t_bar = s_p[keep][order], np.abs(u_p[keep])[order]
         lo_i = np.searchsorted(s_bar, st - FACE_WINDOW_M)
@@ -451,6 +454,21 @@ def _smooth_cap(st: np.ndarray, cap: np.ndarray) -> np.ndarray:
     for i in np.flatnonzero(fin):
         w = fin & (np.abs(st - st[i]) <= CAP_SMOOTH_M)
         out[i] = float(np.median(cap[w]))
+    return out
+
+
+def _on_pavement(xy: np.ndarray, others) -> np.ndarray:
+    """Points inside any of these roads' fitted pavement."""
+    out = np.zeros(len(xy), dtype=bool)
+    if not len(xy):
+        return out
+    for f in others:
+        s, u, ok = f.line.project(xy, max_dist=TWIN_REACH_M)
+        if not ok.any():
+            continue
+        s, u = np.nan_to_num(s), np.nan_to_num(u)
+        w = np.where(u >= 0.0, _width(f.road, 1, s), _width(f.road, -1, s))
+        out |= ok & (np.abs(u) <= w)
     return out
 
 

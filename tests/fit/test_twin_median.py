@@ -137,3 +137,19 @@ def test_fr_xs_4_twins_at_different_levels_are_not_split():
     for k in fits[1].road.profile.elements:
         k.z0 += 3.0
     assert split_twin_medians(fits, np.zeros((0, 3))) == []
+
+
+def test_fr_xs_1_another_roads_pavement_between_the_twins_is_not_a_barrier():
+    """A ramp deck 1 m above the twins, lying in their median, is not their barrier: they split at the midline."""
+    from types import SimpleNamespace
+
+    from roader.fit.median import split_twin_medians
+
+    fits = _overlapping(9.0)
+    ramp = scenes.road("ramp", "ramp", "motorway_link", True, scenes.alignment(-300.0, 0.0, 0.0, [("line", 600.0, 0.0, 0.0)]), scenes.profile(scenes.MAIN_Z + 1.0, 0.01, [(600.0, 0.01)]), scenes.section(1.0, 1.0, 0.02, 0.02))
+    fits.append(SimpleNamespace(road=ramp, line=Polyline.from_alignment(ramp.alignment), flags=[]))
+    x = np.arange(-295.0, 295.0, 0.3)
+    deck = np.vstack([np.column_stack([x, np.full(x.size, dy), scenes.MAIN_Z + 0.01 * (x + 300.0) + 1.0]) for dy in (-0.5, 0.0, 0.5)])
+    split_twin_medians(fits, deck)
+    y_eb, y_wb = _inner_y(fits)
+    assert -0.1 < y_eb < 0.0 and 0.0 < y_wb < 0.1
