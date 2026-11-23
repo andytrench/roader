@@ -37,6 +37,7 @@ import math
 from dataclasses import dataclass, field
 
 import numpy as np
+from scipy.spatial import cKDTree
 
 from roader.fit import profile as fp
 from roader.model.geometry import Knot, Piecewise
@@ -97,6 +98,45 @@ class Seam:
     parent_u: float
 
 
+_PROJECTORS: dict[int, tuple] = {}
+PROJECT_STEP_M = 1.0
+
+
+def _project(road: Road, x: float, y: float) -> tuple[float, float]:
+    """``road.alignment.project``, seeded from a cached 1 m sample tree of the alignment and refined by Newton steps.
+
+    The alignment's own projection scans the whole road, which is slow on kilometre-long
+    stack roads; this one is exact to the same tolerance.
+    """
+    al = road.alignment
+    key = id(al)
+    cached = _PROJECTORS.get(key)
+    if cached is None or cached[0] is not al:
+        n = max(2, math.ceil(al.length / PROJECT_STEP_M) + 1)
+        st = np.linspace(0.0, al.length, n)
+        pts = np.array([al.evaluate(float(s))[:2] for s in st])
+        cached = (al, st, cKDTree(pts))
+        _PROJECTORS[key] = cached
+    _al, st, tree = cached
+    _d, i = tree.query([x, y])
+    s = float(st[i])
+    lateral = 0.0
+    for _ in range(8):
+        px, py, h, k = al.evaluate(s)
+        tx, ty = math.cos(h), math.sin(h)
+        dx, dy = x - px, y - py
+        along, lateral = dx * tx + dy * ty, -dx * ty + dy * tx
+        denom = 1.0 - k * lateral
+        if abs(denom) < 1e-6:
+            break
+        ds = along / denom
+        s = min(max(s + ds, 0.0), al.length)
+        if abs(ds) < 1e-9:
+            break
+    px, py, h, _k = al.evaluate(s)
+    return s, -(x - px) * math.sin(h) + (y - py) * math.cos(h)
+
+
 def seam_of(link: Link, roads: dict[str, Road]) -> Seam:
     """The child is the road whose seam station is one of its own ends; ``to_road`` when both are."""
     src, dst = roads[link.from_road], roads[link.to_road]
@@ -112,7 +152,7 @@ def seam_of(link: Link, roads: dict[str, Road]) -> Seam:
     else:
         child, cs, parent = src, (0.0 if abs(s_from) < 1e-6 else src.length), dst
     x, y, _h, _k = child.alignment.evaluate(cs)
-    ps, pu = parent.alignment.project(x, y)
+    ps, pu = _project(parent, x, y)
     return Seam(link, child.id, cs, parent.id, float(ps), float(pu))
 
 
@@ -175,7 +215,7 @@ def _slope_across(child: Road, parent: Road, s: float, side: float, fallback: tu
     vals = []
     for u in _side_offsets(child, s, side):
         x, y = child.alignment.offset_point(s, u)
-        ps, pu = parent.alignment.project(x, y)
+        ps, pu = _project(parent, x, y)
         wl, wr = parent.cross_section.width_left(ps), parent.cross_section.width_right(ps)
         if not (-wr <= pu <= wl):
             continue
@@ -370,7 +410,7 @@ def _overlap_points(seam: Seam, roads: dict[str, Road], items: dict[str, JointRo
     for t in np.arange(OVERLAP_STEP_M, min(OVERLAP_REACH_M, child.length), OVERLAP_STEP_M):
         s = seam.child_s + d * t
         x, y = child.alignment.offset_point(s, 0.0)
-        ps, pu = parent.alignment.project(x, y)
+        ps, pu = _project(parent, x, y)
         if not (-xs.width_right(ps) + SEAM_INSET_M <= pu <= xs.width_left(ps) - SEAM_INSET_M) or not (0.0 < ps < parent.length):
             break
         unobserved = any(a <= s <= b for a, b in items[seam.child].gaps)
@@ -473,8 +513,8 @@ def _seam_rows(seam: Seam, roads: dict[str, Road], verts: dict[str, fp._Vert]):
 
 def _crossing_rows(c: Crossing, roads: dict[str, Road], verts: dict[str, fp._Vert], dz0: float):
     up, lo = roads[c.upper_road], roads[c.lower_road]
-    su, uu = up.alignment.project(c.x, c.y)
-    sl, ul = lo.alignment.project(c.x, c.y)
+    su, uu = _project(up, c.x, c.y)
+    sl, ul = _project(lo, c.x, c.y)
     rows = {c.upper_road: _z_row(verts[c.upper_road], su)}
     rows[c.lower_road] = rows.get(c.lower_road, 0.0) - _z_row(verts[c.lower_road], sl)
     return [(rows, dz0 - _slope(up, su, uu) * uu + _slope(lo, sl, ul) * ul, (c.id, "clearance"))]
@@ -621,7 +661,7 @@ def _on_parent_crossings(crossings: list[Crossing], seams: list[Seam], roads: di
                 if found is not None or sm.child != road_id or sm.parent == other:
                     continue
                 parent = roads[sm.parent]
-                ps, pu = parent.alignment.project(c.x, c.y)
+                ps, pu = _project(parent, c.x, c.y)
                 if not (-parent.cross_section.width_right(ps) <= pu <= parent.cross_section.width_left(ps)):
                     continue
                 twins = [d for d in crossings if d.id != c.id and {d.upper_road, d.lower_road} == {other, sm.parent}]
@@ -660,6 +700,14 @@ def joint_fit(items: list[JointRoad], links: list[Link], crossings: list[Crossin
     ``FR-AF-3:infeasible`` when a component's constraints cannot all hold, and the
     rule overrides of the refitted elements (FR-AF-4).
     """
+    _PROJECTORS.clear()
+    try:
+        return _joint_fit(items, links, crossings, rules)
+    finally:
+        _PROJECTORS.clear()
+
+
+def _joint_fit(items: list[JointRoad], links: list[Link], crossings: list[Crossing], rules: RuleBook) -> list[Flag]:
     by_id = {it.road.id: it for it in items}
     roads = {i: it.road for i, it in by_id.items()}
     links = [lk for lk in links if lk.from_road in roads and lk.to_road in roads]
