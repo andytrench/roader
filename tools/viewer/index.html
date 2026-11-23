@@ -14,6 +14,7 @@
     cam    camera position x,y,z in viewer coordinates (scene recentred on its bbox)
     at     camera target x,y,z
     frame=unit  cam and at are unit-frame x east, y north, z up (catalogue renders)
+    fog    fog near,far in metres (default 500,1400; widen for large units)
     prov=1 keep exported colors (use with meshes_provenance.glb)
     label  caption text
   three.js is loaded from a CDN (MIT); nothing is vendored.
@@ -45,7 +46,7 @@ document.body.appendChild(renderer.domElement);
 
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0xcfe0ee);
-scene.fog = new THREE.Fog(0xcfe0ee, 500, 1400);
+scene.fog = new THREE.Fog(0xcfe0ee, ...vec(q.get('fog'), '500,1400'));
 const camera = new THREE.PerspectiveCamera(40, innerWidth / innerHeight, 0.3, 6000);
 camera.position.set(...vec(q.get('cam'), '150,90,180'));
 const controls = new OrbitControls(camera, renderer.domElement);
