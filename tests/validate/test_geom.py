@@ -48,6 +48,23 @@ def test_fr_sv_4_near_coplanar_faces_sharing_a_vertex_do_not_intersect():
     assert vertex_overlap(a, c, 0, 0)
 
 
+def test_fr_sv_4_near_parallel_faces_sharing_a_vertex_with_snapped_corners_do_not_intersect():
+    """Two deck-top faces around one vertex, planes about 6e-6 apart in angle, disjoint sectors (Woburn twin deck, D-121).
+
+    A corner of each lies within PLANE_EPS of the other's plane but 3 cm from the
+    planes' common line, so the common-line rays are meaningless; the pair must take
+    the sector test.
+    """
+    from roader.validate._geom import vertex_overlap
+
+    a = np.array([[-0.64313194, -39.74461061, 37.58523089], [-0.46626311, -39.72833922, 37.58225354], [-0.66198349, -39.67475649, 37.58605169]])
+    b = np.array([[-0.67213472, -39.73667085, 37.58579362], [-0.66198349, -39.67475649, 37.58605169], [-0.69018006, -39.66703829, 37.58659870]])
+    assert not vertex_overlap(a, b, 2, 1)
+    # Rotating B into A's sector makes them overlap.
+    c = np.array([0.5 * (a[0] + a[1]), b[1], b[2]])
+    assert vertex_overlap(a, c, 2, 1)
+
+
 def test_fr_sv_4_near_coplanar_disjoint_faces_do_not_intersect():
     """Two bottom faces of a solid on a tilted plane, 0.4 m apart in plan, coplanar to 1e-6.
 

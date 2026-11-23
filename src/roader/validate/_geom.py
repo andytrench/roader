@@ -219,9 +219,12 @@ def vertex_overlap(tri_a: np.ndarray, tri_b: np.ndarray, ca: int, cb: int, eps: 
     nb /= np.linalg.norm(nb)
     off_b = [float(na @ d) for d in db_dirs]
     off_a = [float(nb @ d) for d in da_dirs]
-    near_parallel = float(np.linalg.norm(_cross3(na, nb))) < PARALLEL_EPS
+    sine = float(np.linalg.norm(_cross3(na, nb)))
+    snapped = min(abs(x) for x in off_a + off_b) <= eps
+    near_parallel = sine < PARALLEL_EPS or (snapped and sine < SNAPPED_SINE and float(na @ nb) > 0.0)
     if near_parallel or (max(abs(x) for x in off_b) <= eps and max(abs(x) for x in off_a) <= eps):
-        # Planes this close to parallel have no meaningful intersection line (FR-SV-4).
+        # Planes this close to parallel have no meaningful intersection line, nor does a corner
+        # snapped onto the other plane far from it (FR-SV-4, D-121).
         return _sectors_overlap(da_dirs, db_dirs, na)
     sa = _ray_section(da_dirs, off_a, eps)
     sb = _ray_section(db_dirs, off_b, eps)
