@@ -55,6 +55,7 @@ from shapely.ops import split as split_polygon
 
 from roader.model.provenance import Provenance, Source
 from roader.model.schema import (
+    ELEMENT_FAILED,
     Flag,
     JunctionArea,
     JunctionSeam,
@@ -538,8 +539,34 @@ def _grow(road: Road, lo: float, hi: float, others: list[Polygon], gap: float = 
 # ---------------------------------------------------------------- build
 
 
+def _failed(rids, what: str, exc: BaseException, effect: str = "left out, roads swept through it") -> list[Flag]:
+    """FR-EX-1 flags, one per participant, for an area or region left out because building it raised (D-119, D-150)."""
+    return [Flag(ELEMENT_FAILED, rid, "FR-SG-3", f"{what} {effect}; {type(exc).__name__}: {exc}") for rid in sorted(set(rids))]
+
+
+def _safe_junction(model, roads, nodes, intervals, flags: list[Flag]) -> tuple[JunctionArea | None, str]:
+    """``_junction`` under the no-crash contract: a raise drops the area and flags its participants (D-150)."""
+    try:
+        return _junction(model, roads, nodes, intervals)
+    except Exception as exc:  # noqa: BLE001 - one area never aborts the unit (FR-EX-1, D-119)
+        flags.extend(_failed(intervals, f"junction area of {sorted(intervals)}", exc))
+        return None, f"building it raised {type(exc).__name__}"
+
+
 def build_junctions(model: RoadModel) -> tuple[list[JunctionArea], list[Flag]]:
-    """L6 junction and shared areas of the model (FR-SG-3, FR-SV-7). Deterministic; ids from content (D-011)."""
+    """L6 junction and shared areas of the model (FR-SG-3, FR-SV-7). Deterministic; ids from content (D-011).
+
+    Never raises (FR-EX-1, D-119, D-150): an area, split or shared region whose construction
+    raises is left out and its roads flagged ``FR-EX-1:element_failed``, which holds the unit;
+    anything else that raises leaves the unit with no areas, flagged the same way.
+    """
+    try:
+        return _build_junctions(model)
+    except Exception as exc:  # noqa: BLE001 - the areas never abort the unit (FR-EX-1, D-119)
+        return [], _failed([r.id for r in model.roads], "every junction area", exc)
+
+
+def _build_junctions(model: RoadModel) -> tuple[list[JunctionArea], list[Flag]]:
     roads = {r.id: r for r in model.roads}
     _SAMPLES.clear()
     _set_spans(model)
@@ -552,7 +579,11 @@ def build_junctions(model: RoadModel) -> tuple[list[JunctionArea], list[Flag]]:
         intervals: dict[str, tuple[float, float]] = {}
         ok = True
         for rid, s in sorted(node.anchors.items()):
-            iv = _interval(roads[rid], s, [fp for other, fp in fps.items() if other != rid])
+            try:
+                iv = _interval(roads[rid], s, [fp for other, fp in fps.items() if other != rid])
+            except Exception as exc:  # noqa: BLE001 - one node never aborts the unit (FR-EX-1, D-150)
+                flags.extend(_failed(node.anchors, f"junction area at ({node.x:.1f}, {node.y:.1f})", exc))
+                iv = None
             if iv is None:
                 ok = False
                 break
@@ -569,8 +600,15 @@ def build_junctions(model: RoadModel) -> tuple[list[JunctionArea], list[Flag]]:
     for area in areas:
         for rid, iv in group_of[area.id][1].items():
             zone_map.setdefault(rid, []).append((area.id, iv))
+    kept = []
     for area in areas:
-        flags.extend(_step_flags(area, roads, group_of[area.id][0]))
+        try:
+            flags.extend(_step_flags(area, roads, group_of[area.id][0]))
+        except Exception as exc:  # noqa: BLE001 - one area never aborts the unit (FR-EX-1, D-150)
+            flags.extend(_failed(area.road_ids, f"junction area {area.id}", exc))
+            continue
+        kept.append(area)
+    areas = kept
     shared, shared_flags = _shared(model, roads, full, areas, zone_map)
     flags.extend(shared_flags)
     placed = [Polygon(a.outline, a.holes) for a in [*areas, *shared]]
@@ -581,7 +619,10 @@ def build_junctions(model: RoadModel) -> tuple[list[JunctionArea], list[Flag]]:
                           f"roads {sorted(node.anchors)} meeting at ({node.x:.1f}, {node.y:.1f}) do not separate within "
                           f"{MAX_REACH_M:.0f} m (or one lies wholly on the other); no junction area"))
     out = sorted([*areas, *shared], key=lambda a: a.id)
-    flags.extend(_overlaps_left(model, roads, out))
+    try:
+        flags.extend(_overlaps_left(model, roads, out))
+    except Exception as exc:  # noqa: BLE001 - the overlap report never aborts the unit (FR-EX-1, D-150)
+        flags.extend(_failed([r.id for r in model.roads], "the FR-SV-7 overlap check", exc, "did not run"))
     return out, flags
 
 
@@ -663,23 +704,24 @@ def _settle(model: RoadModel, roads: dict[str, Road], groups):
     for _round in range(MAX_ROUNDS):
         built: list[tuple[int, JunctionArea, Polygon]] = []
         problems: list[Flag] = []
+        raised: list[Flag] = []
         for k, (group_nodes, intervals) in enumerate(groups):
-            area, problem = _junction(model, roads, group_nodes, intervals)
+            area, problem = _safe_junction(model, roads, group_nodes, intervals, raised)
             if area is None:
                 problems.append(Flag("FR-SG-3:skipped", min(intervals), "FR-SG-3", f"junction of {sorted(intervals)} not built: {problem}"))
                 continue
             built.append((k, area, Polygon(area.outline, area.holes)))
         action = _overlapping_pair(built, nomerge)
         if action is None:
-            joined = _join_entering(model, roads, groups, built, nojoin, fulls)
+            joined = _join_entering(model, roads, groups, built, nojoin, fulls, dropped)
             if joined:
                 groups = _merge(groups)
                 continue
-            return [a for _k, a, _p in built], {a.id: groups[k] for k, a, _p in built}, dropped + problems
+            return [a for _k, a, _p in built], {a.id: groups[k] for k, a, _p in built}, dropped + problems + raised
         i, j = action[1], action[2]
         (na, ia), (nb, ib) = groups[i], groups[j]
         merged = _regrow(roads, _union_intervals(ia, ib))
-        trial = None if merged is None else _junction(model, roads, na + nb, merged)[0]
+        trial = None if merged is None else _safe_junction(model, roads, na + nb, merged, dropped)[0]
         if trial is None:
             ids = {k: a.id for k, a, _p in built}
             nomerge.add(frozenset((ids[i], ids[j])))
@@ -726,7 +768,7 @@ def _entering(roads: dict[str, Road], area: JunctionArea, poly: Polygon, interva
     return None
 
 
-def _join_entering(model, roads, groups, built, nojoin: set[tuple[str, str]], fulls) -> bool:
+def _join_entering(model, roads, groups, built, nojoin: set[tuple[str, str]], fulls, flags: list[Flag]) -> bool:
     """Grow the first area that a same-level road runs into by that road, if the grown area builds (D-136)."""
     for k, area, poly in built:
         nodes, intervals = groups[k]
@@ -735,7 +777,7 @@ def _join_entering(model, roads, groups, built, nojoin: set[tuple[str, str]], fu
             continue
         rid, iv = hit
         merged = _regrow(roads, {**intervals, rid: iv})
-        if merged is not None and _junction(model, roads, nodes, merged)[0] is not None:
+        if merged is not None and _safe_junction(model, roads, nodes, merged, flags)[0] is not None:
             groups[k] = (nodes, merged)
             return True
         nojoin.add((area.id, rid))
@@ -783,6 +825,26 @@ def _split_two(ai, aj, pi, pj, give_i, give_j, roads) -> tuple[list[JunctionArea
     return fixed, ""
 
 
+def _split_pair(ai, aj, pi, pj, pieces, fp_i, fp_j, roads) -> tuple[list[JunctionArea], str]:
+    """Split two areas' overlap midway, else wholly to one of them (D-090)."""
+    fixed, problem = [], "no overlap pieces"
+    for mode in ("midway", "to_i", "to_j"):
+        give_i, give_j = [], []
+        for piece in pieces:
+            if mode == "midway":
+                ra = max(fp_i, key=lambda r, piece=piece: fp_i[r].intersection(piece).area)
+                rb = max(fp_j, key=lambda r, piece=piece: fp_j[r].intersection(piece).area)
+                qa, qb = _split_piece(roads[ra], roads[rb], piece)
+            else:
+                qa, qb = (piece, Polygon()) if mode == "to_i" else (Polygon(), piece)
+            give_i.append(qb)
+            give_j.append(qa)
+        fixed, problem = _split_two(ai, aj, pi, pj, give_i, give_j, roads)
+        if not problem:
+            break
+    return fixed, problem
+
+
 def _split_overlaps(areas: list[JunctionArea], roads: dict[str, Road], group_of, flags: list[Flag]) -> list[JunctionArea]:
     """Areas whose merge cannot be built (twin carriageways at a median) split their overlap: midway,
     else wholly to whichever keeps every seam row whole (D-090). Pairs that cannot be split stay flagged."""
@@ -799,21 +861,11 @@ def _split_overlaps(areas: list[JunctionArea], roads: dict[str, Road], group_of,
         fp_i = {r: _rfp(roads[r], *group_of[ai.id][1][r]) for r in ai.road_ids}
         fp_j = {r: _rfp(roads[r], *group_of[aj.id][1][r]) for r in aj.road_ids}
         pieces = [g for g in shapely.get_parts(polys[i].intersection(polys[j])) if g.geom_type == "Polygon" and g.area > 0.0]
-        fixed, problem = [], "no overlap pieces"
-        for mode in ("midway", "to_i", "to_j"):
-            give_i, give_j = [], []
-            for piece in pieces:
-                if mode == "midway":
-                    ra = max(fp_i, key=lambda r, piece=piece: fp_i[r].intersection(piece).area)
-                    rb = max(fp_j, key=lambda r, piece=piece: fp_j[r].intersection(piece).area)
-                    qa, qb = _split_piece(roads[ra], roads[rb], piece)
-                else:
-                    qa, qb = (piece, Polygon()) if mode == "to_i" else (Polygon(), piece)
-                give_i.append(qb)
-                give_j.append(qa)
-            fixed, problem = _split_two(ai, aj, polys[i], polys[j], give_i, give_j, roads)
-            if not problem:
-                break
+        try:
+            fixed, problem = _split_pair(ai, aj, polys[i], polys[j], pieces, fp_i, fp_j, roads)
+        except Exception as exc:  # noqa: BLE001 - one split never aborts the unit (FR-EX-1, D-150)
+            flags.extend(_failed([*ai.road_ids, *aj.road_ids], f"split of junction areas {ai.id} and {aj.id}", exc))
+            fixed, problem = [], f"splitting raised {type(exc).__name__}"
         if problem:
             failed.add(frozenset((ai.id, aj.id)))
             flags.append(Flag("FR-SG-3:overlap", aj.id, "FR-SG-3",
@@ -1081,20 +1133,28 @@ def _shared(model: RoadModel, roads: dict[str, Road], full: dict[str, Polygon], 
                 inter = inter.difference(covered)
             parts = [g for g in shapely.get_parts(inter) if g.geom_type == "Polygon" and g.area >= SHARED_MIN_M2]
             for g in sorted(parts, key=lambda g: (round(g.centroid.x, 3), round(g.centroid.y, 3))):
-                st = _stretch(roads, full, a, b, g, flags)
+                try:
+                    st = _stretch(roads, full, a, b, g, flags)
+                except Exception as exc:  # noqa: BLE001 - one overlap never aborts the unit (FR-EX-1, D-150)
+                    flags.extend(_failed([a, b], f"shared pavement of {[a, b]}", exc))
+                    st = None
                 if st is not None:
                     stretches.append(st)
     out: list[JunctionArea] = []
     for group in _stretch_groups(stretches):
         names = sorted({r for st in group for r in (st.a, st.b)})
-        built, problem = _shared_group(model, roads, group, zone_map, covered, midway=True)
-        if problem and "outline" in problem:
-            # Near-touching split vertices: give each overlap wholly to the narrower road instead.
-            built, fallback = _shared_group(model, roads, group, zone_map, covered, midway=False)
-            if not fallback:
-                flags.append(Flag("FR-SG-3:shared_to_narrower", names[0], "FR-SG-3",
-                                  f"shared pavement of {names} could not be split midway ({problem}); the narrower road keeps it"))
-            problem = fallback
+        try:
+            built, problem = _shared_group(model, roads, group, zone_map, covered, midway=True)
+            if problem and "outline" in problem:
+                # Near-touching split vertices: give each overlap wholly to the narrower road instead.
+                built, fallback = _shared_group(model, roads, group, zone_map, covered, midway=False)
+                if not fallback:
+                    flags.append(Flag("FR-SG-3:shared_to_narrower", names[0], "FR-SG-3",
+                                      f"shared pavement of {names} could not be split midway ({problem}); the narrower road keeps it"))
+                problem = fallback
+        except Exception as exc:  # noqa: BLE001 - one shared region never aborts the unit (FR-EX-1, D-150)
+            flags.extend(_failed(names, f"shared pavement of {names}", exc))
+            continue
         if problem:
             flags.append(Flag("FR-SG-3:shared_skipped", names[0], "FR-SG-3", f"shared pavement of {names} not split: {problem}"))
             continue

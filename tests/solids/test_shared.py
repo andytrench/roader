@@ -422,3 +422,70 @@ def test_d137_abutting_carriageways_split_only_where_they_overlap():
     bad = [f for f in model.flags if f.code in ("FR-SG-3:shared_skipped", "FR-SV-7:pavement_overlap")]
     assert not bad, bad
     _closed_ok(generate(model))
+
+
+# ---------------------------------------------------------------- no-crash contract (FR-EX-1, D-119, D-150)
+
+
+def _two_diverges() -> RoadModel:
+    """Two mainlines 200 m apart, each with an exit ramp: two independent junction areas."""
+    roads, links = [], []
+    for k, y in enumerate((0.0, 200.0)):
+        main = _road(f"main{k}", [("line", 400.0, 0.0)], -200.0, y, 0.0, 5.5, 5.5, kind="mainline")
+        exit_ = _road(f"exit{k}", [("line", 10.0, 0.0), ("arc", 150.0, -1.0 / 300.0)], 0.0, y - 2.75, 0.0, 2.5, 2.5)
+        roads += [main, exit_]
+        links.append(Link(stable_id("lk", main.id, exit_.id), main.id, "end", exit_.id, "start", "diverge", from_s=200.0, prov=RULE))
+    return _model(roads, links=links)
+
+
+def test_d150_a_raise_in_one_area_drops_that_area_and_holds_the_unit(monkeypatch):
+    import roader.complete.junctions as J
+    from roader.model.schema import ELEMENT_FAILED
+    from roader.validate.gates import check_degraded
+
+    healthy = _two_diverges()
+    assert len(healthy.junctions) == 2 and check_degraded(healthy) is None
+    bad = stable_id("rd", "scene", "exit0")
+    real = J._junction
+
+    def flaky(model, roads, nodes, intervals):
+        if bad in intervals:
+            raise RuntimeError("forced")
+        return real(model, roads, nodes, intervals)
+
+    monkeypatch.setattr(J, "_junction", flaky)
+    model = _two_diverges()
+    # The failed diverge's overlap falls back to shared pavement (D-070); the other diverge is untouched.
+    assert [sorted(j.road_ids) for j in model.junctions if j.kind != "shared"] == [sorted(stable_id("rd", "scene", n) for n in ("main1", "exit1"))]
+    failed = sorted({f.element_id for f in model.flags if f.code == ELEMENT_FAILED})
+    assert failed == sorted([bad, stable_id("rd", "scene", "main0")])
+    assert all("RuntimeError: forced" in f.message for f in model.flags if f.code == ELEMENT_FAILED)
+    gate = check_degraded(model)
+    assert gate is not None and not gate.passed
+    _closed_ok(generate(model))
+
+
+def test_d150_a_raise_in_a_shared_region_drops_only_that_region(monkeypatch):
+    import roader.complete.junctions as J
+    from roader.model.schema import ELEMENT_FAILED
+
+    def boom(*_a, **_k):
+        raise ValueError("forced")
+
+    monkeypatch.setattr(J, "_shared_group", boom)
+    model = _parallel()
+    assert model.junctions == []
+    assert sorted(f.element_id for f in model.flags if f.code == ELEMENT_FAILED) == sorted(r.id for r in model.roads)
+
+
+def test_d150_build_junctions_never_raises(monkeypatch):
+    import roader.complete.junctions as J
+    from roader.model.schema import ELEMENT_FAILED
+
+    def boom(*_a, **_k):
+        raise RuntimeError("forced")
+
+    monkeypatch.setattr(J, "_touches", boom)
+    model = _two_diverges()
+    assert model.junctions == []
+    assert sorted(f.element_id for f in model.flags if f.code == ELEMENT_FAILED) == sorted(r.id for r in model.roads)
