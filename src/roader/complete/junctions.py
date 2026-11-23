@@ -258,6 +258,11 @@ def _end_skew(rid: str, s: float) -> float:
     return 0.0
 
 
+def road_half(road: Road, s: float) -> float:
+    xs = road.cross_section
+    return 0.5 * (xs.width_left(s) + xs.width_right(s))
+
+
 def _skew_station(road: Road, width, s: float, t: float, sign: float, extra: float = 0.0) -> float:
     """Station where the skewed line through s meets the offset width(.) + extra (as the solids grid solves it)."""
     sv = s
@@ -538,6 +543,7 @@ def build_junctions(model: RoadModel) -> tuple[list[JunctionArea], list[Flag]]:
     groups: list[tuple[list[_Node], dict[str, tuple[float, float]]]] = []
     stuck: list[_Node] = []
     for node in nodes:
+        _reanchor(node, roads)
         fps = {rid: _local_footprint(roads[rid], s) for rid, s in node.anchors.items()}
         intervals: dict[str, tuple[float, float]] = {}
         ok = True
@@ -554,10 +560,11 @@ def build_junctions(model: RoadModel) -> tuple[list[JunctionArea], list[Flag]]:
     full = {rid: _rfp(r, 0.0, r.length) for rid, r in roads.items()}
     areas, group_of, settle_flags = _settle(model, roads, _merge(groups))
     flags.extend(settle_flags)
-    zone_map: dict[str, list[tuple[float, float]]] = {}
+    areas = _split_overlaps(areas, roads, group_of, flags)
+    zone_map: dict[str, list[tuple[str, tuple[float, float]]]] = {}
     for area in areas:
         for rid, iv in group_of[area.id][1].items():
-            zone_map.setdefault(rid, []).append(iv)
+            zone_map.setdefault(rid, []).append((area.id, iv))
     for area in areas:
         flags.extend(_step_flags(area, roads, group_of[area.id][0]))
     shared, shared_flags = _shared(model, roads, full, areas, zone_map)
@@ -572,6 +579,24 @@ def build_junctions(model: RoadModel) -> tuple[list[JunctionArea], list[Flag]]:
     out = sorted([*areas, *shared], key=lambda a: a.id)
     flags.extend(_overlaps_left(model, roads, out))
     return out, flags
+
+
+def _reanchor(node: _Node, roads: dict[str, Road]) -> None:
+    """A branch end that rides its parent (D-076, D-095) meets it where its own pavement starts:
+    the other roads are anchored at the projection of that point."""
+    for rid, s in sorted(node.anchors.items()):
+        for a, b, kind, _ta, _tb in _SPANS.get(rid, []):
+            if kind != "carried" or not a - 1e-6 <= s <= b + 1e-6:
+                continue
+            road = roads[rid]
+            end = b if a <= END_SNAP_M else a
+            x, y = road.alignment.offset_point(end, 0.0)
+            node.x, node.y = x, y
+            for other in node.anchors:
+                if other != rid:
+                    node.anchors[other] = _snap_end(roads[other], _project(roads[other], x, y)[0])
+            node.anchors[rid] = end
+            return
 
 
 def _merge(groups):
@@ -628,6 +653,7 @@ def _settle(model: RoadModel, roads: dict[str, Road], groups):
     Returns the areas, each area's (nodes, intervals) by area id, and flags.
     """
     dropped: list[Flag] = []
+    nomerge: set[frozenset[str]] = set()
     for _round in range(MAX_ROUNDS):
         built: list[tuple[int, JunctionArea, Polygon]] = []
         problems: list[Flag] = []
@@ -637,7 +663,7 @@ def _settle(model: RoadModel, roads: dict[str, Road], groups):
                 problems.append(Flag("FR-SG-3:skipped", min(intervals), "FR-SG-3", f"junction of {sorted(intervals)} not built: {problem}"))
                 continue
             built.append((k, area, Polygon(area.outline, area.holes)))
-        action = _overlapping_pair(built)
+        action = _overlapping_pair(built, nomerge)
         if action is None:
             return [a for _k, a, _p in built], {a.id: groups[k] for k, a, _p in built}, dropped + problems
         i, j = action[1], action[2]
@@ -645,11 +671,9 @@ def _settle(model: RoadModel, roads: dict[str, Road], groups):
         merged = _regrow(roads, _union_intervals(ia, ib))
         trial = None if merged is None else _junction(model, roads, na + nb, merged)[0]
         if trial is None:
-            drop = max(i, j)
-            dropped.append(Flag("FR-SG-3:overlap", min(groups[drop][1]), "FR-SG-3",
-                                f"junction of {sorted(groups[drop][1])} overlaps the junction of {sorted(groups[min(i, j)][1])} "
-                                "and the merged area cannot be built; not built"))
-            del groups[drop]
+            ids = {k: a.id for k, a, _p in built}
+            nomerge.add(frozenset((ids[i], ids[j])))
+            continue
         else:
             groups[min(i, j)] = (na + nb, merged)
             del groups[max(i, j)]
@@ -657,12 +681,88 @@ def _settle(model: RoadModel, roads: dict[str, Road], groups):
     raise RuntimeError("junction areas did not settle")  # pragma: no cover - MAX_ROUNDS merges always settle
 
 
-def _overlapping_pair(built) -> tuple[str, int, int] | None:
+def _overlapping_pair(built, nomerge=frozenset()) -> tuple[str, int, int] | None:
     for x in range(len(built)):
         for y in range(x + 1, len(built)):
+            if frozenset((built[x][1].id, built[y][1].id)) in nomerge:
+                continue  # their merge cannot be built: the overlap is split afterwards (D-090)
             if built[x][2].intersection(built[y][2]).area > 1e-6:
                 return ("merge", built[x][0], built[y][0])
     return None
+
+
+def _split_two(ai, aj, pi, pj, give_i, give_j, roads) -> tuple[list[JunctionArea], str]:
+    gi = [g for g in give_i if not g.is_empty]
+    gj = [g for g in give_j if not g.is_empty]
+    new_i = _largest(pi.difference(shapely.union_all(gi))) if gi else pi
+    new_j = _largest(pj.difference(shapely.union_all(gj))) if gj else pj
+    if new_i is None or new_j is None:
+        return [], "a piece is cut off"
+    rows = {_round_xy(p) for a in (ai, aj) for sm in a.seams for p in _seam_row_pts(roads[sm.road_id], sm.s)}
+    rings, index = [], []
+    for k, poly in enumerate((orient(new_i, 1.0), orient(new_j, 1.0))):
+        rings.append([tuple(map(float, q)) for q in poly.exterior.coords[:-1]])
+        index.append((k, -1))
+        for hole in poly.interiors:
+            rings.append([tuple(map(float, q)) for q in hole.coords[:-1]])
+            index.append((k, 0))
+    rings = _unpoke(_conform(_snap_rings(rings, rows)), index, rows)
+    fixed = []
+    for k, a in enumerate((ai, aj)):
+        outline = next(rg for rg, (kk, h) in zip(rings, index, strict=True) if kk == k and h == -1)
+        holes = [rg for rg, (kk, h) in zip(rings, index, strict=True) if kk == k and h == 0]
+        for sm in a.seams:
+            problem = _check_rows(roads[sm.road_id], [(sm.s, sm.side)], outline)
+            if problem:
+                return [], problem
+        if not Polygon(outline, holes).is_valid:
+            return [], f"{a.id} outline is not valid after the split"
+        fixed.append(dataclasses.replace(a, outline=outline, holes=holes,
+                                         prov=dataclasses.replace(a.prov, flags=[*a.prov.flags, "FR-SG-3:shared_split"])))
+    return fixed, ""
+
+
+def _split_overlaps(areas: list[JunctionArea], roads: dict[str, Road], group_of, flags: list[Flag]) -> list[JunctionArea]:
+    """Areas whose merge cannot be built (twin carriageways at a median) split their overlap: midway,
+    else wholly to whichever keeps every seam row whole (D-090). Pairs that cannot be split stay flagged."""
+    out = list(areas)
+    failed: set[frozenset[str]] = set()
+    for _round in range(MAX_ROUNDS):
+        polys = [Polygon(a.outline, a.holes) for a in out]
+        pair = next(((i, j) for i in range(len(out)) for j in range(i + 1, len(out))
+                     if frozenset((out[i].id, out[j].id)) not in failed and polys[i].intersection(polys[j]).area > 1e-6), None)
+        if pair is None:
+            return out
+        i, j = pair
+        ai, aj = out[i], out[j]
+        fp_i = {r: _rfp(roads[r], *group_of[ai.id][1][r]) for r in ai.road_ids}
+        fp_j = {r: _rfp(roads[r], *group_of[aj.id][1][r]) for r in aj.road_ids}
+        pieces = [g for g in shapely.get_parts(polys[i].intersection(polys[j])) if g.geom_type == "Polygon" and g.area > 0.0]
+        fixed, problem = [], "no overlap pieces"
+        for mode in ("midway", "to_i", "to_j"):
+            give_i, give_j = [], []
+            for piece in pieces:
+                if mode == "midway":
+                    ra = max(fp_i, key=lambda r, piece=piece: fp_i[r].intersection(piece).area)
+                    rb = max(fp_j, key=lambda r, piece=piece: fp_j[r].intersection(piece).area)
+                    qa, qb = _split_piece(roads[ra], roads[rb], piece)
+                else:
+                    qa, qb = (piece, Polygon()) if mode == "to_i" else (Polygon(), piece)
+                give_i.append(qb)
+                give_j.append(qa)
+            fixed, problem = _split_two(ai, aj, polys[i], polys[j], give_i, give_j, roads)
+            if not problem:
+                break
+        if problem:
+            failed.add(frozenset((ai.id, aj.id)))
+            flags.append(Flag("FR-SG-3:overlap", aj.id, "FR-SG-3",
+                              f"junction area {aj.id} overlaps {ai.id} and the overlap cannot be split ({problem})"))
+            continue
+        for k, a in zip((i, j), fixed, strict=True):
+            group_of[a.id] = group_of[out[k].id]
+            out[k] = a
+        flags.append(Flag("FR-SG-3:shared_split", ai.id, "FR-SG-3", f"junction areas {ai.id} and {aj.id} split their overlap"))
+    return out
 
 
 # ---------------------------------------------------------------- structures and levels
@@ -827,19 +927,26 @@ def _junction(model, roads, nodes, intervals) -> tuple[JunctionArea | None, str]
     holes = [list(h.coords[:-1]) for h in union.interiors]
     outline, *holes = _snap_rings([outline, *holes], rows)
     poly = Polygon(outline, holes)
-    if not poly.is_valid or not poly.exterior.is_ccw or poly.area < union.area - 1e-4:
-        return None, "outline is not a valid polygon"
+    if not poly.is_valid or not poly.exterior.is_ccw or poly.area < union.area - max(1e-4, 1e-5 * union.area):
+        return None, f"outline is not a valid polygon ({shapely.is_valid_reason(poly)}, area {poly.area:.1f} of {union.area:.1f})"
 
     seams = [dataclasses.replace(_patch(roads[rid], s, side), skew=_end_skew(rid, s)) for rid, s, side in seam_defs]
     sections = []
+    rows = [(rid, LineString(_seam_row_pts(roads[rid], ss))) for rid, ss, _ in seam_defs]
     for rid, (lo, hi) in sorted(intervals.items()):
         road = roads[rid]
-        n_sec = max(1, math.ceil((hi - lo) / SECTION_SPACING_M))
-        for j in range(n_sec + 1):
-            s = lo + (hi - lo) * j / n_sec
-            if any(r == rid and abs(s - ss) < SECTION_CLEAR_M for r, ss, _ in seam_defs):
-                continue
-            sections.append(_patch(road, s, 0))
+        # Sections only where the road has its own pavement (not riding a deck or its parent, D-095),
+        # and none of another road close to a seam row, so the seam keeps that road's grade (AC-H4).
+        for p0, p1 in _pieces(rid, lo, hi):
+            n_sec = max(1, math.ceil((p1 - p0) / SECTION_SPACING_M))
+            for j in range(n_sec + 1):
+                s = p0 + (p1 - p0) * j / n_sec
+                if any(r == rid and abs(s - ss) < SECTION_CLEAR_M for r, ss, _ in seam_defs):
+                    continue
+                x, y = road.alignment.offset_point(s, 0.0)
+                if any(r != rid and line.distance(Point(x, y)) < SECTION_CLEAR_M + road_half(road, s) for r, line in rows):
+                    continue
+                sections.append(_patch(road, s, 0))
 
     for sm in seams:
         if sm.skew != 0.0:
@@ -896,7 +1003,7 @@ def _stations_of(road: Road, geom: Polygon) -> tuple[float, float]:
     return min(st), max(st)
 
 
-def _shared(model: RoadModel, roads: dict[str, Road], full: dict[str, Polygon], areas: list[JunctionArea], zone_map: dict[str, list[tuple[float, float]]]):
+def _shared(model: RoadModel, roads: dict[str, Road], full: dict[str, Polygon], areas: list[JunctionArea], zone_map):
     """Shared areas for same-level pavement overlaps outside every junction area (D-070)."""
     flags: list[Flag] = []
     covered = shapely.union_all([Polygon(a.outline, a.holes) for a in areas]) if areas else Polygon()
@@ -998,16 +1105,21 @@ def _merged_intervals(ivs: list[tuple[float, float]]) -> list[tuple[float, float
 
 
 def _shared_group(model, roads, group: list[_Stretch], zone_map, covered, *, midway: bool) -> tuple[list[JunctionArea], str]:
+    """Regions of one group of shared stretches; intervals keep off decks and carried spans (D-073, D-095)."""
     names = sorted({r for st in group for r in (st.a, st.b)})
     per_road: dict[str, list[tuple[float, float]]] = {r: _merged_intervals([st.iv[r] for st in group if r in st.iv]) for r in names}
+    keys_iv: list[tuple[str, tuple[float, float]]] = []
     for r, ivs in per_road.items():
         for lo, hi in ivs:
-            if any(lo < zb and za < hi for za, zb in zone_map.get(r, [])):
+            if any(lo < z[1] and z[0] < hi for _jid, z in zone_map.get(r, [])):
                 return [], f"interval {lo:.1f}-{hi:.1f} on {r} meets a junction area"
-            if _pieces(r, lo, hi) != [(lo, hi)]:
-                return [], f"interval {lo:.1f}-{hi:.1f} on {r} runs onto a deck"
+            # A deck or a span the road rides on another road splits the interval; its ends there
+            # are a skewed deck-end seam or no seam at all.
+            for p0, p1 in _pieces(r, lo, hi):
+                if p1 - p0 > SEAM_MARGIN_M:
+                    keys_iv.append((r, (p0, p1)))
     # Pieces come from the very footprints the regions are cut from, so the split leaves no sliver.
-    fps = {(r, iv): _footprint(roads[r], *iv) for r in names for iv in per_road[r]}
+    fps = {(r, iv): _skewed_footprint(roads[r], *iv) for r, iv in keys_iv}
     keys = sorted(fps)
     given: dict[tuple[str, tuple[float, float]], list[Polygon]] = {k: [] for k in keys}  # overlap given to others
     for i, ka in enumerate(keys):
@@ -1035,6 +1147,8 @@ def _shared_group(model, roads, group: list[_Stretch], zone_map, covered, *, mid
         region = _largest(region)
         if region is None:
             return [], f"{r} {lo:.1f}-{hi:.1f} is cut into pieces"
+        if region.geom_type != "Polygon" or not region.is_valid:
+            return [], f"{r} {lo:.1f}-{hi:.1f} gives no valid region"
         if not covered.is_empty and region.intersection(covered).area > 1e-4:
             return [], f"{r} {lo:.1f}-{hi:.1f} runs into a junction area"
         regions.append((r, lo, hi, orient(region, 1.0)))
@@ -1046,7 +1160,8 @@ def _shared_group(model, roads, group: list[_Stretch], zone_map, covered, *, mid
     for r, lo, hi, _poly in regions:
         for s in (lo, hi):
             if 0.0 < s < roads[r].length:
-                rows.update(_round_xy(p) for p in _row(roads[r], s))
+                rows.update(_round_xy(p) for p in _seam_row_pts(roads[r], s))
+
     rings: list[list[tuple[float, float]]] = []
     index: list[tuple[int, int]] = []  # (region, hole index or -1) per ring
     for k, (_r, _lo, _hi, poly) in enumerate(regions):
@@ -1055,7 +1170,7 @@ def _shared_group(model, roads, group: list[_Stretch], zone_map, covered, *, mid
         for h, hole in enumerate(poly.interiors):
             rings.append([tuple(map(float, p)) for p in hole.coords[:-1]])
             index.append((k, h))
-    rings = _conform(_snap_rings(rings, rows))
+    rings = _unpoke(_conform(_snap_rings(rings, rows)), index, rows)
     out = []
     for k, (r, lo, hi, _poly) in enumerate(regions):
         outline = next(rg for rg, (kk, h) in zip(rings, index, strict=True) if kk == k and h == -1)
@@ -1150,21 +1265,32 @@ def _split_by_chords(narrow: Road, wide: Road, piece: Polygon) -> tuple[Polygon,
     return shapely.union_all(keep_n), shapely.union_all(keep_w)
 
 
-def _shared_area(road: Road, lo: float, hi: float, outline, holes, partners: list[str]) -> tuple[JunctionArea | None, str]:
-    seam_defs = [(s, side) for s, side in ((lo, 1), (hi, -1)) if 0.0 < s < road.length]
+def _check_rows(road: Road, seam_defs, outline) -> str:
     for s, _side in seam_defs:
-        row = [_round_xy(p) for p in _row(road, s)]
+        row = [_round_xy(p) for p in _seam_row_pts(road, s)]
         idx = [outline.index(p) if p in outline else None for p in row]
         if None in idx:
-            return None, f"seam {road.id}@{s:.2f} is not on the split outline"
+            return f"seam {road.id}@{s:.2f} is not on the split outline"
         n = len(outline)
         a, b, c = idx  # type: ignore[misc]
         if not ((b - a) % n == 1 and (c - b) % n == 1) and not ((a - b) % n == 1 and (b - c) % n == 1):
-            return None, f"seam row {road.id}@{s:.2f} is not a boundary edge of the split outline"
+            return f"seam row {road.id}@{s:.2f} is not a boundary edge of the split outline"
+    return ""
+
+
+def _region_seams(road: Road, lo: float, hi: float) -> list[tuple[float, int]]:
+    return [(s, side) for s, side in ((lo, 1), (hi, -1)) if 0.0 < s < road.length and not _carried_edge(road.id, s, -float(side))]
+
+
+def _shared_area(road: Road, lo: float, hi: float, outline, holes, partners: list[str]) -> tuple[JunctionArea | None, str]:
+    seam_defs = _region_seams(road, lo, hi)
+    problem = _check_rows(road, seam_defs, outline)
+    if problem:
+        return None, problem
     poly = Polygon(outline, holes)
     if not poly.is_valid or not poly.exterior.is_ccw:
         return None, f"split outline of {road.id} is not a valid polygon"
-    seams = [_patch(road, s, side) for s, side in seam_defs]
+    seams = [dataclasses.replace(_patch(road, s, side), skew=_end_skew(road.id, s)) for s, side in seam_defs]
     n_sec = max(1, math.ceil((hi - lo) / SECTION_SPACING_M))
     sections = []
     for j in range(n_sec + 1):
@@ -1310,6 +1436,32 @@ def _snap_rings(rings: list[list[tuple[float, float]]], protected: set[tuple[flo
                     break
         out.append(nr)
     return out
+
+
+def _unpoke(rings, index, protected) -> list[list[tuple[float, float]]]:
+    """Drop outline vertices that the snap left strictly inside another region's outline (split tips, FR-SV-7)."""
+    for _ in range(10):
+        polys = {}
+        for k in {k for k, _h in index}:
+            shell = [rg for rg, (kk, h) in zip(rings, index, strict=True) if kk == k and h == -1]
+            holes = [rg for rg, (kk, h) in zip(rings, index, strict=True) if kk == k and h != -1 and len(rg) >= 3]
+            if shell and len(shell[0]) >= 3:
+                polys[k] = Polygon(shell[0], holes)
+        changed = False
+        for n, (rg, (k, _h)) in enumerate(zip(rings, index, strict=True)):
+            keep = []
+            for p in rg:
+                pt = Point(p)
+                inside = p not in protected and any(
+                    kk != k and poly.contains(pt) and poly.boundary.distance(pt) > CONFORM_TOL_M for kk, poly in polys.items()
+                )
+                changed = changed or inside
+                if not inside:
+                    keep.append(p)
+            rings[n] = keep
+        if not changed:
+            break
+    return rings
 
 
 def _needle(a, b, c) -> bool:
