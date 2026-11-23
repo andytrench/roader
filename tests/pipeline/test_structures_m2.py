@@ -455,3 +455,12 @@ def test_fr_cr_3_ramp_without_a_run_of_its_own_still_shares_the_deck():
     extents = [StructureExtent(west.carried_road, west.s_start, west.s_end, "class17", None, None)]
     kept, shares, _flags = absorb_diverging(extents, model.links, roads)
     assert len(kept) == 1 and [s.road_id for s in shares] == [model.roads[-1].id]
+
+
+def test_fr_st_4_support_skew_follows_the_crossing_up_to_the_cap():
+    from roader.structures.infer import MAX_SUPPORT_SKEW_RAD, support_skew
+
+    assert support_skew([0.4, 0.6]) == (pytest.approx(0.5), [])
+    skew, flags = support_skew([-math.radians(78.7)])  # Dallas ramp nearly parallel to the road below
+    assert skew == pytest.approx(-MAX_SUPPORT_SKEW_RAD) and flags == ["FR-ST-4:skew_capped_from_-78.7deg"]
+    assert support_skew([]) == (0.0, [])

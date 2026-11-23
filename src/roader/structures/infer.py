@@ -48,6 +48,9 @@ FASCIA_MIN_POINTS = 50
 FASCIA_COVERAGE = 0.3
 PIER_END_CLEAR_M = 5.0  # no pier closer than this to an abutment
 MIN_PIER_GAP_M = 8.0
+# FR-ST-4: supports follow the crossing up to this skew; sharper crossings (stack ramps nearly
+# parallel to the roads below) take longer spans in practice, and their skew ramps cannot meet.
+MAX_SUPPORT_SKEW_RAD = math.radians(60.0)
 METHOD_CONFIDENCE = {"class17": 0.9, "sheet_break": 0.7, "class17_only": 0.5}
 # FR-ST-3 observed piers: returns under the deck, off every lower pavement, clear of the ground.
 PIER_MIN_RETURNS = 3
@@ -116,6 +119,14 @@ def observed_piers(
             continue
         kept.append(p)
     return kept
+
+
+def support_skew(crossing_skews: list[float]) -> tuple[float, list[str]]:
+    """FR-ST-4: supports take the mean skew of the crossings under the deck, capped at MAX_SUPPORT_SKEW_RAD."""
+    skew = float(np.mean(crossing_skews)) if crossing_skews else 0.0
+    if abs(skew) <= MAX_SUPPORT_SKEW_RAD:
+        return skew, []
+    return math.copysign(MAX_SUPPORT_SKEW_RAD, skew), [f"FR-ST-4:skew_capped_from_{math.degrees(skew):.1f}deg"]
 
 
 def _profile_z(profile, s: np.ndarray) -> np.ndarray:
@@ -445,7 +456,7 @@ def infer_structure(
     era = era_of(year)
     sid = stable_id("st", road.id, round(extent.s_start, 0))
     on = sorted([c for c in crossings if c.upper_road == road.id and extent.s_start - 1.0 <= c.upper_s <= extent.s_end + 1.0], key=lambda c: c.upper_s)
-    skew = float(np.mean([c.skew_rad for c in on])) if on else 0.0
+    skew, skew_flags = support_skew([c.skew_rad for c in on])
     lateral, _lp = rules.fill("clearance.lateral.support", road_class=fits[on[0].lower_road].road.road_class if on else "*")
     col_w, col_prov = rules.fill("column.width", era=era)
 
@@ -537,7 +548,7 @@ def infer_structure(
             flags.append(Flag("FR-OC-3:ground_by_neighbour", sid, "FR-OC-3", f"no ground returns beside the deck at s={s:.1f}; footing from the lower road"))
         label = f"a{1 if n == 0 else 2}" if kind == "abutment" else f"p{n}"
         layout = "FR-ST-3:even_spacing" if s in even else "FR-ST-3:layout_rule"
-        prov = Provenance(Source.RULE, cap_prov.confidence, rule_id=foot_prov.rule_id if kind == "abutment" else col_prov.rule_id, flags=[layout if kind == "pier" else "FR-ST-3:measured_end"])
+        prov = Provenance(Source.RULE, cap_prov.confidence, rule_id=foot_prov.rule_id if kind == "abutment" else col_prov.rule_id, flags=[layout if kind == "pier" else "FR-ST-3:measured_end", *skew_flags])
         if kind == "pier" and s in observed:
             # Located from returns; columns, cap and footing are still sized by rule (FR-ST-5).
             p, moved = observed[s]
@@ -575,6 +586,8 @@ def infer_structure(
         st_prov.flags.append(f"FR-VC-4:sheet_break {extent.geom[0]:.1f}-{extent.geom[1]:.1f}; class17 {extent.class17[0]:.1f}-{extent.class17[1]:.1f}")
     if review:
         flags.append(Flag("FR-ST-6:review", sid, "FR-ST-6", f"max span {max_span:.0f} m at or above the review threshold"))
+    if skew_flags:
+        flags.append(Flag("FR-ST-4:skew_capped", sid, "FR-ST-4", f"crossing skew {skew_flags[0].split('_from_')[1]} capped at {math.degrees(MAX_SUPPORT_SKEW_RAD):.0f} deg for supports and deck ends"))
     structure = Structure(
         id=sid,
         kind="bridge",
