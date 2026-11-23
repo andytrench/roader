@@ -51,6 +51,10 @@ SEAM_WINDOW_M = 60.0  # a child's seam transition curves lie within this of the 
 SEAM_MISS_Z_M = 0.005  # half the D-020 link tolerances: a seam missed by more gets its transition up front
 SEAM_MISS_GRADE = 0.0005
 RMS_RISE_M = 0.005
+OVERLAP_STEP_M = 2.0  # an unobserved child on its parent's pavement follows the parent's surface (_overlap_rows)
+OVERLAP_REACH_M = 200.0
+OVERLAP_OWN_M = 1.5
+OVERLAP_WEIGHT = 25.0  # per 2 m row; a full 1 m return bin weighs 1: the parent's surface is the child's there
 RESIDUAL_CAP_M = 1.0  # a residual counts at most this much in a road's RMS, so a diverging solve shows
 SEAM_INSET_M = 0.25  # cross-slope samples inset from the edges and the crown, as the AC-H4 test samples
 SEAM_LATERAL_M = 1.0
@@ -334,7 +338,35 @@ def _admit(c: np.ndarray, d: np.ndarray) -> list[int]:
     return kept
 
 
-def _solve(items: dict[str, JointRoad], verts: dict[str, fp._Vert], rows: list):
+def _overlap_rows(seam: Seam, roads: dict[str, Road], verts: dict[str, fp._Vert], items: dict[str, JointRoad]):
+    """Soft rows tying an unobserved child to its parent's surface where its crown still lies on the parent's pavement.
+
+    From the seam inward every ``OVERLAP_STEP_M`` until the child's crown leaves the
+    parent's pavement (inset ``SEAM_INSET_M``): at a station with no return bin of the
+    child within ``OVERLAP_OWN_M`` the child's crown height is the parent's surface
+    there. Where the child has its own returns they decide.
+    """
+    child, parent = roads[seam.child], roads[seam.parent]
+    vc, vp = verts[seam.child], verts[seam.parent]
+    own = _bins_of(items[seam.child])[0]
+    d = 1.0 if seam.child_s < 0.5 * child.length else -1.0
+    out = []
+    for t in np.arange(OVERLAP_STEP_M, min(OVERLAP_REACH_M, child.length), OVERLAP_STEP_M):
+        s = seam.child_s + d * t
+        x, y = child.alignment.offset_point(s, 0.0)
+        ps, pu = parent.alignment.project(x, y)
+        xs = parent.cross_section
+        if not (-xs.width_right(ps) + SEAM_INSET_M <= pu <= xs.width_left(ps) - SEAM_INSET_M) or not (0.0 < ps < parent.length):
+            break
+        if len(own) and float(np.min(np.abs(own - s))) <= OVERLAP_OWN_M:
+            continue
+        coef = {seam.child: _z_row(vc, s)}
+        coef[seam.parent] = coef.get(seam.parent, 0.0) - _z_row(vp, ps)
+        out.append((coef, _slope(parent, ps, pu) * pu))
+    return out
+
+
+def _solve(items: dict[str, JointRoad], verts: dict[str, fp._Vert], rows: list, soft: list = ()):
     """Equality-constrained robust least squares over the component.
 
     Constraint rows enter with a weight ``BIG`` after scaling, so they hold to far
@@ -352,6 +384,14 @@ def _solve(items: dict[str, JointRoad], verts: dict[str, fp._Vert], rows: list):
     for i, b in zip(ids, blocks, strict=True):
         a[r0 : r0 + len(b[1]), off[i] : off[i] + b[0].shape[1]] = b[0]
         r0 += len(b[1])
+    if soft:
+        extra = np.zeros((len(soft), n))
+        for r, (coef, _rhs) in enumerate(soft):
+            for rid, vec in coef.items():
+                extra[r, off[rid] : off[rid] + len(vec)] += vec
+        a = np.vstack([a, extra])
+        zb = np.concatenate([zb, [rhs for _c, rhs in soft]])
+        wb = np.concatenate([wb, np.full(len(soft), OVERLAP_WEIGHT)])
     # Columns are scaled so stations in the hundreds of meters do not swamp z0.
     scale = np.maximum(np.sqrt(np.sum(a**2, axis=0)), 1.0)
     a_s, c_s = a / scale, c / scale
@@ -474,7 +514,8 @@ def _rounds(sub, verts, cseams, ccross, roads, dz0, base, eased):
         _off, _n, cm, dm = _assemble(sorted(sub), verts, rows)
         keep = set(_admit(cm, dm))
         dropped = [rows[r][2] for r in range(len(rows)) if r not in keep]
-        params, resid = _solve(sub, verts, [rows[r] for r in sorted(keep)])
+        soft = [r for s in cseams for r in _overlap_rows(s, roads, verts, sub)]
+        params, resid = _solve(sub, verts, [rows[r] for r in sorted(keep)], soft)
         trial = {i: _with(verts[i], params[i]) for i in sub}
         grown = False
         for i in sorted(sub):
@@ -625,7 +666,7 @@ def joint_fit(items: list[JointRoad], links: list[Link], crossings: list[Crossin
         ccross = [c for c in crossings if c.upper_road in sub and c.id not in skip]
         eased = set()
         for s in cseams:
-            if _misses(s, roads, verts):
+            if _misses(s, roads, verts) or _overlap_rows(s, roads, verts, sub):
                 eased.add(s.link.id)
                 verts[s.child] = _seam_transition(verts[s.child], s.child_s, roads[s.child].length, _bins_of(sub[s.child])[0])
         _ensure_freedom(verts, cseams, ccross, roads)

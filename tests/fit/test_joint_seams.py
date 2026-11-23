@@ -26,16 +26,25 @@ from tests.fit.test_joint import _independent, _links, _surface_returns
 
 RULES = RuleBook.load()
 GAP_M = 40.0
-STEP_M = 0.5
+STEP_M = 0.3
 
 
 def _gap_scene():
-    """Mainline and an exit ramp that climbs 0.5 m above the parent's tangent within its first 40 m."""
+    """Mainline and an exit ramp leaving at 20 degrees, climbing 0.3 m above the parent's tangent between 16 and 40 m.
+
+    The steep departure takes its crown off the parent's pavement within 16 m, so
+    the climb is physically its own surface.
+    """
     m = scenes.mainline()
+    # Planar, so a ramp leaving at an angle can share its surface (D-051).
+    m.cross_section.slope_left = scenes.piecewise([(0.0, -0.02)])
+    m.cross_section.slope_right = scenes.piecewise([(0.0, -0.02)])
     ramp = scenes._ramp_from(m, scenes.EXIT_S, "exit", -1.0, 0.035)
+    x, y, h, _k = m.alignment.evaluate(scenes.EXIT_S)
+    ramp.alignment = scenes.alignment(x, y, h - math.radians(20.0), [("line", 80.0, 0.0, 0.0), ("arc", 200.0, -0.005, -0.005), ("line", ramp.length - 280.0, 0.0, 0.0)])
     z0, g0 = m.profile.z(scenes.EXIT_S), m.profile.grade(scenes.EXIT_S)
-    a = STEP_M / 20.0
-    ramp.profile = scenes.profile(z0, g0, [(20.0, g0 + a), (20.0, g0), (100.0, 0.035), (ramp.length - 140.0, 0.035)])
+    a = STEP_M / 12.0
+    ramp.profile = scenes.profile(z0, g0, [(16.0, g0), (12.0, g0 + a), (12.0, g0), (100.0, 0.035), (ramp.length - 140.0, 0.035)])
     return [m, ramp]
 
 
@@ -114,6 +123,31 @@ def test_ac_h4_seam_holds_where_the_parents_cross_slope_is_in_transition():
     joint_fit(items, [link], [], RULES)
     v, n = link_violations(link, {it.road.id: it.road for it in items})
     assert n > 0 and v == [], [q.message for q in v]
+
+
+def test_fr_af_3_unobserved_child_on_its_parents_pavement_follows_the_parent():
+    """Exit ramp with no returns over its first 60 m, where it still lies on the mainline; its returns beyond read 5 cm high."""
+    truth = scenes.diverge_merge_scene()[:2]
+    rng = np.random.default_rng(9)
+    items = []
+    for t in truth:
+        rd = copy.deepcopy(t)
+        s, u, z = _surface_returns(t, rng)
+        if t.kind == "ramp":
+            keep = s >= 60.0
+            s, u, z = s[keep], u[keep], z[keep] + 0.05
+        xs = rd.cross_section
+        zc = z - np.array([(xs.slope_left if b >= 0 else xs.slope_right)(float(a)) * b for a, b in zip(s, u, strict=True)])
+        vert, _rep, _bins = fp.fit_profile(s, zc, rd.length, rules=RULES, road_class=rd.road_class)
+        rd.profile = fp.to_profile(vert, rd.length)
+        items.append(JointRoad(rd, vert, s, u, z, [(0.0, 60.0)] if t.kind == "ramp" else []))
+    link = Link("lk_exit", truth[0].id, "start", truth[1].id, "start", "diverge", from_s=scenes.EXIT_S, to_s=0.0)
+    joint_fit(items, [link], [], RULES)
+    main, ramp = items[0].road, items[1].road
+    for a in np.arange(5.0, 45.0, 5.0):
+        x, y = ramp.alignment.offset_point(float(a), 0.0)
+        ps, pu = main.alignment.project(x, y)
+        assert abs(ramp.surface_z(float(a), 0.0) - main.surface_z(ps, pu)) < 0.01, a
 
 
 def _merge_street(truth):
