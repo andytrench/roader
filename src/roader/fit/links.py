@@ -44,6 +44,7 @@ from roader.model.serialize import stable_id
 
 TOPO_M = 2.0  # input-vector distance that makes a junction
 SEAM_PAVEMENT_PAD_M = 0.5
+LINK_LEVEL_M = 2.0  # a child end farther than this from its parent's surface is at another level, not a junction (D-143)
 JUNCTION_DZ_M = 1.0  # linked roads crossing in plan by less than this are the junction overlap, not a grade separation
 RANK = {"mainline": 0, "ramp": 1, "connector": 1, "crossing_street": 2}
 TERMINAL_RANK = 0.5
@@ -184,6 +185,15 @@ def _link(child: Road, end: str, parent: Road, at_end: bool) -> tuple[Link | Non
             child.id,
             "FR-AF-3",
             f"{end} of {child.name} joins {parent.name} in the vectors but lies {pu:+.2f} m off its pavement at s={ps:.1f}",
+        )
+    dz = child.profile.z(cs) - parent.surface_z(ps, pu)
+    if abs(dz) > LINK_LEVEL_M:
+        # Plan contact only: the child ends under (or over) the parent, at another level (D-143).
+        return None, Flag(
+            "FR-AF-3:other_level",
+            child.id,
+            "FR-AF-3",
+            f"{end} of {child.name} meets {parent.name} in plan at s={ps:.1f} but {dz:+.2f} m from its surface; not linked",
         )
     prov = Provenance(Source.MEASURED, round(min(_align_conf(child, cs), _align_conf(parent, ps)), 6), flags=["FR-AF-3", "FR-IN-5:topology_from_vectors"])
     ps = float(ps)

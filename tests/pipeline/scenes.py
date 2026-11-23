@@ -1106,7 +1106,8 @@ def cd_parallel(*, gap: float | None = None) -> Scene:
     return finish("cd_parallel", [eb, wb, cd], params={"gap": gap})
 
 
-def viaduct(*, skew: float | None = None, n_streets: int = 3, spacing: float | None = None, rise: float = 8.5) -> Scene:
+def viaduct(*, skew: float | None = None, n_streets: int = 3, spacing: float | None = None, rise: float = 8.5, dead_end: bool = False) -> Scene:
+    """Twin carriageways on one viaduct over ``n_streets`` streets; ``dead_end`` adds a street that passes under the eastbound deck and ends at grade under the westbound one, 1.5 m short of its centre line."""
     skew = 0.2 if skew is None else float(skew)
     spacing = 60.0 if spacing is None else float(spacing)
     run = (n_streets - 1) * spacing
@@ -1119,7 +1120,10 @@ def viaduct(*, skew: float | None = None, n_streets: int = 3, spacing: float | N
     for k in range(n_streets):
         x = -run / 2.0 + k * spacing
         roads.append(street(f"st{k + 1}", names[k], 200.0, math.pi / 2.0 + skew, _flat(200.0), centre=(x, 0.0)))
-    return finish("viaduct", roads, params={"skew": skew, "n_streets": n_streets, "spacing": spacing})
+    if dead_end:
+        end_y = MEDIAN_HALF - 1.5
+        roads.append(street("dead", "Dead End Street", 90.0, math.pi / 2.0, _flat(90.0), centre=(run / 2.0 + 45.0, end_y - 45.0)))
+    return finish("viaduct", roads, params={"skew": skew, "n_streets": n_streets, "spacing": spacing, "dead_end": dead_end})
 
 
 def twin_different_elevations(*, dz: float | None = None, skew: float | None = None, rise: float = 8.5) -> Scene:
