@@ -234,11 +234,38 @@ def test_d069_junction_beside_a_square_deck_is_built():
     _closed_ok(generate(dataclasses.replace(model, terrain=None, side_slopes=[])))
 
 
-def test_d069_no_seam_in_a_skewed_deck_ramp():
-    """A skewed deck end ramps its stations over tens of metres: a seam there is refused and flagged."""
+def test_d073_seam_in_a_skewed_deck_ramp_follows_the_station_line():
+    """Near a skewed deck end the seam is the grid's skewed row (here the deck end itself) and the solids still conform."""
     model = _with_bridge(0.4, 275.0)
-    assert model.junctions == []
-    assert any(f.code == "FR-SG-3:skipped" and "skewed stations" in f.message for f in model.flags)
+    assert [j.kind for j in model.junctions] == ["diverge"], model.flags
+    bare = dataclasses.replace(model, terrain=None, side_slopes=[])
+    meshes = generate(bare)
+    _closed_ok(meshes)
+    jn = model.junctions[0]
+    slab = next(m for m in meshes if m.id == f"{jn.id}:pavement")
+    fwy = model.roads[0]
+    seam = max((s for s in jn.seams if s.road_id == fwy.id), key=lambda s: s.s)
+    t = math.tan(0.4)
+    corner = fwy.alignment.offset_point(seam.s + t * 5.5, 5.5)
+    assert min(math.dist(v[:2], corner) for v in slab.vertices) < 1e-3  # the row is the deck's skewed end
+    deck = next(m for m in meshes if m.part == "deck")
+    keys = {tuple(np.round(v, 9)) for v in deck.vertices}
+    shared = [v for v in slab.vertices if tuple(np.round(v, 9)) in keys]
+    assert len(shared) >= 4  # the interval stops at the deck: slab and deck share its skewed end row
+
+
+def test_d073_seam_inside_a_skew_ramp():
+    """A strongly skewed deck 20 m past the junction: the seam falls on a ramped (skewed) station line."""
+    model = _with_bridge(0.9, 295.0)
+    assert [j.kind for j in model.junctions] == ["diverge"], model.flags
+    fwy = model.roads[0]
+    hi = max(s.s for s in model.junctions[0].seams if s.road_id == fwy.id)
+    assert 270.0 < hi < 287.0
+    meshes = generate(dataclasses.replace(model, terrain=None, side_slopes=[]))
+    _closed_ok(meshes)
+    slab = next(m for m in meshes if m.id == f"{model.junctions[0].id}:pavement")
+    on_straight_row = [v for v in slab.vertices if abs(fwy.alignment.project(v[0], v[1])[0] - hi) < 1e-6]
+    assert len(on_straight_row) < 4
 
 
 def test_d069_area_under_a_high_deck_is_built_but_not_at_its_level():

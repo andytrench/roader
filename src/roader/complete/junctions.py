@@ -73,10 +73,10 @@ SECTION_SPACING_M = 5.0  # lifted interior sections along each participant
 SECTION_CLEAR_M = 2.0  # no interior section this close to a seam
 OUTLINE_STEP_M = 2.0
 OUTLINE_CHORD_M = 0.01
-STRUCTURE_CLEAR_M = 1.0  # seams stay this far off decks and their skewed station ramps
-# The solids ramp a structure's skew to zero over RAMP_FACTOR * |tan skew| * umax (solids.stations);
-# umax is estimated from the widths, the deck overhang and this allowance for embankment toes.
-TOE_ALLOWANCE_M = 30.0
+# The solids ramp a deck end's skew to zero over RAMP_FACTOR * |tan skew| * umax (solids.stations).
+# Seams there follow the skewed station line; clearance is tested on every row up to the end skew,
+# over a ramp estimated with this generous toe allowance in umax (D-073).
+FAN_TOE_M = 60.0
 INTERSECTION_ANGLE = math.radians(45.0)
 STEP_FLAG_M = 0.05  # participants disagreeing by more at the node are flagged (FR-AF-3)
 DERIV_STEP_M = 0.5
@@ -95,6 +95,7 @@ SHARED_REACH_M = 100.0  # the other road's footprint considered beyond the overl
 EDGE_TOL_M = 0.05  # a chord end this close to a road's edge lies on that edge
 CONTAINED_FRACTION = 0.8  # chords wholly inside the narrower road: it keeps the overlap
 SPLIT_EXTEND_M = 2.0
+ROW_MATCH_M = 0.01  # overlay may move a seam row end by millimetres; the row itself is written
 MIN_CHORD_M = 0.05  # shorter chords near an overlap tip are left out of the split line (FR-SV-5)
 SHARED_RULE_ID = "junction.shared_split"
 
@@ -178,6 +179,148 @@ def _footprint(road: Road, a: float, b: float) -> Polygon:
 def _row_line(road: Road, s: float) -> LineString:
     r = _row(road, s)
     return LineString([r[0], r[2]])
+
+
+# Per road: (a, b, kind, tan skew at a, tan skew at b) of stretches with no pavement sweep:
+# its own decks ("deck") and spans it rides on another road's deck ("carried", D-076). Set by build_junctions.
+_SPANS: dict[str, list[tuple[float, float, str, float, float]]] = {}
+_FANS: dict[str, list[tuple[float, float, float, float]]] = {}  # (a, b, s_end, tan skew) skewed-station zones
+
+
+class _Clamp(float):
+    """An interval end stopped at a deck end: the seam lies on the deck's (possibly skewed) end row."""
+
+
+def _set_spans(model: RoadModel) -> None:
+    _SPANS.clear()
+    _FANS.clear()
+    for st in model.structures:
+        sups = sorted(st.supports, key=lambda sp: (sp.station, sp.id))
+
+        def tan_at(end: float, sups=sups) -> float:
+            return math.tan(min(sups, key=lambda sp: abs(sp.station - end)).skew_rad) if sups else 0.0
+
+        ta, tb = tan_at(st.s_start), tan_at(st.s_end)
+        _SPANS.setdefault(st.carried_road, []).append((st.s_start, st.s_end, "deck", ta, tb))
+        for sh in st.shared:
+            _SPANS.setdefault(sh.road_id, []).append((sh.s_start, sh.s_end, "carried", 0.0, 0.0))
+        road = next((r for r in model.roads if r.id == st.carried_road), None)
+        if road is None:
+            continue
+        xs = road.cross_section
+        half = max(k.value for pw in (xs.width_left, xs.width_right) for k in pw.knots) + st.deck.overhang_m
+        umax = 1.25 * (half + FAN_TOE_M) + 1.0
+        for end, t, sign in ((st.s_start, ta, -1.0), (st.s_end, tb, 1.0)):
+            if t != 0.0:
+                reach = RAMP_FACTOR * abs(t) * umax + RAMP_MIN_M
+                lo, hi = (end - reach, end) if sign < 0 else (end, end + reach)
+                _FANS.setdefault(st.carried_road, []).append((lo, hi, end, t))
+    for v in _SPANS.values():
+        v.sort()
+
+
+def _span_at(rid: str, s: float) -> tuple[float, float, str, float, float] | None:
+    for span in _SPANS.get(rid, []):
+        if span[0] + 1e-6 < s < span[1] - 1e-6:
+            return span
+    return None
+
+
+def _pieces(rid: str, a: float, b: float) -> list[tuple[float, float]]:
+    """Parts of [a, b] with a pavement sweep (no deck, not riding another deck)."""
+    out = [(a, b)]
+    for sa, sb, _k, _ta, _tb in _SPANS.get(rid, []):
+        nxt = []
+        for p0, p1 in out:
+            if sb <= p0 or sa >= p1:
+                nxt.append((p0, p1))
+                continue
+            if sa > p0:
+                nxt.append((p0, sa))
+            if sb < p1:
+                nxt.append((sb, p1))
+        out = nxt
+    return [(p0, p1) for p0, p1 in out if p1 - p0 > 1e-3]
+
+
+def _end_skew(rid: str, s: float) -> float:
+    """tan skew of the deck end at station s (0 if s is no deck end): the row there is skewed (D-073)."""
+    for a, b, kind, ta, tb in _SPANS.get(rid, []):
+        if kind == "deck":
+            if abs(s - a) <= 1e-6:
+                return ta
+            if abs(s - b) <= 1e-6:
+                return tb
+    return 0.0
+
+
+def _skew_station(road: Road, width, s: float, t: float, sign: float, extra: float = 0.0) -> float:
+    """Station where the skewed line through s meets the offset width(.) + extra (as the solids grid solves it)."""
+    sv = s
+    for _ in range(6):
+        sv = min(max(s + t * sign * (width(sv) + extra), 0.0), road.length)
+    return sv
+
+
+def _seam_row_pts(road: Road, s: float) -> list[tuple[float, float]]:
+    """Right edge, reference line, left edge of the row at s, skewed like a deck end row when s is one."""
+    t = _end_skew(road.id, s)
+    if t == 0.0:
+        return _row(road, s)
+    xs = road.cross_section
+
+    def at(width, sign: float) -> tuple[float, float]:
+        sv = _skew_station(road, width, s, t, sign)
+        return road.alignment.offset_point(sv, sign * width(sv))
+
+    return [at(xs.width_right, -1.0), road.alignment.offset_point(s, 0.0), at(xs.width_left, 1.0)]
+
+
+def _skewed_footprint(road: Road, a: float, b: float) -> Polygon:
+    """Pavement footprint over [a, b]; an end at a deck end follows the deck's skewed end row."""
+    ta, tb = _end_skew(road.id, a), _end_skew(road.id, b)
+    if ta == 0.0 and tb == 0.0:
+        return _footprint(road, a, b)
+    xs = road.cross_section
+
+    def edge(u_of, sign: float) -> list[tuple[float, float]]:
+        s0 = _skew_station(road, u_of, a, ta, sign)
+        s1 = _skew_station(road, u_of, b, tb, sign)
+        st = [s0] + [v for v in _edge_stations(road, a, b) if s0 < v < s1] + [s1]
+        return [road.alignment.offset_point(v, sign * u_of(v)) for v in st]
+
+    right = edge(xs.width_right, -1.0)
+    left = edge(xs.width_left, 1.0)
+    ring = right + [road.alignment.offset_point(b, 0.0)] + left[::-1] + [road.alignment.offset_point(a, 0.0)]
+    poly = Polygon(ring)
+    return poly if poly.is_valid else shapely.make_valid(poly)
+
+
+def _rfp(road: Road, a: float, b: float) -> Polygon:
+    """Footprint of the swept pavement over [a, b] (decks and carried spans left out)."""
+    parts = [_skewed_footprint(road, p0, p1) for p0, p1 in _pieces(road.id, a, b)]
+    if not parts:
+        return Polygon()
+    return parts[0] if len(parts) == 1 else shapely.union_all(parts)
+
+
+def _row_shape(road: Road, s: float):
+    """The cross-section line at s, widened to every row the solids may skew there (a deck's ramp, D-073)."""
+    line = _row_line(road, s)
+    for lo, hi, _end, t in _FANS.get(road.id, []):
+        if lo <= s <= hi:
+            xs = road.cross_section
+            wr, wl = xs.width_right(s), xs.width_left(s)
+            fan = [(s, -wr), (min(max(s - t * wr, 0.0), road.length), -wr), (s, 0.0), (min(max(s + t * wl, 0.0), road.length), wl), (s, wl)]
+            pts = [road.alignment.offset_point(a, u) for a, u in fan]
+            tris = [Polygon(pts[:3]), Polygon(pts[2:])]
+            return shapely.union_all([line, *[g for g in tris if g.is_valid and g.area > 1e-9]])
+    return line
+
+
+def _clear(road: Road, s: float, others: list[Polygon]) -> bool:
+    shape = _row_shape(road, s)
+    return all(shape.distance(p) >= GORE_GAP_M for p in others if not p.is_empty)
 
 
 def _source(road: Road) -> tuple[Source, float, str | None]:
@@ -266,7 +409,7 @@ def _touches(model: RoadModel) -> tuple[list[_Node], list[Flag]]:
 
 
 def _local_footprint(road: Road, anchor: float) -> Polygon:
-    return _footprint(road, max(0.0, anchor - LOCAL_REACH_M), min(road.length, anchor + LOCAL_REACH_M))
+    return _rfp(road, max(0.0, anchor - LOCAL_REACH_M), min(road.length, anchor + LOCAL_REACH_M))
 
 
 def _first_clear(road: Road, start: float, direction: float, others: list[Polygon]) -> float | None:
@@ -278,27 +421,77 @@ def _first_clear(road: Road, start: float, direction: float, others: list[Polygo
     while 0.0 <= s <= road.length:
         if abs(s - start) > MAX_REACH_M:
             return math.nan
-        line = _row_line(road, s)
-        if all(line.distance(p) >= GORE_GAP_M for p in others):
+        span = _span_at(road.id, s)
+        if span is not None:
+            if span[2] == "carried":
+                return None  # the road has no sweep beyond: like its end
+            return _Clamp(span[1] if direction < 0 else span[0])
+        if _clear(road, s, others):
             return s
         s += direction * SEARCH_STEP_M
     return None
 
 
+def _carried_edge(rid: str, s: float, direction: float) -> bool:
+    """s is the end of a carried span and the span lies in ``direction``."""
+    for a, b, kind, _ta, _tb in _SPANS.get(rid, []):
+        if kind == "carried" and ((direction < 0 and abs(s - b) <= 1e-6) or (direction > 0 and abs(s - a) <= 1e-6)):
+            return True
+    return False
+
+
+def _deck_edge(rid: str, s: float, direction: float) -> bool:
+    """s is a deck end and the deck lies in ``direction``."""
+    for a, b, kind, _ta, _tb in _SPANS.get(rid, []):
+        if kind == "deck" and ((direction < 0 and abs(s - b) <= 1e-6) or (direction > 0 and abs(s - a) <= 1e-6)):
+            return True
+    return False
+
+
+def _keep_off_decks(rid: str, lo: float, hi: float) -> tuple[float, float]:
+    """Margins never carry an interval end onto a deck: it stops at the deck end (D-073)."""
+    for a, b, kind, _ta, _tb in _SPANS.get(rid, []):
+        if kind != "deck":
+            continue
+        if a < lo < b:
+            lo = _Clamp(b)
+        if a < hi < b:
+            hi = _Clamp(a)
+    return lo, hi
+
+
 def _interval(road: Road, anchor: float, others: list[Polygon]) -> tuple[float, float] | None:
     """Station interval of one participant, or None if it never clears the others."""
     length = road.length
+    span = _span_at(road.id, anchor) or next((sp for sp in _SPANS.get(road.id, []) if sp[2] == "carried" and sp[0] <= anchor <= sp[1]), None)
+    if span is not None:
+        # A branch end riding its parent's deck, or a node on a deck: the area starts at the nearer end
+        # of the deck, where the road's own pavement does (D-073, D-076).
+        if span[0] <= END_SNAP_M:
+            anchor = span[1]
+        elif span[1] >= length - END_SNAP_M:
+            anchor = span[0]
+        else:
+            anchor = span[1] if anchor - span[0] >= span[1] - anchor else span[0]
+        if span[2] == "deck":
+            anchor = _Clamp(anchor)
     lo, hi = anchor, anchor
-    if anchor > 0.0:
+    on_deck_end = isinstance(anchor, _Clamp)
+    if anchor > 0.0 and not _carried_edge(road.id, anchor, -1.0) and not (on_deck_end and _deck_edge(road.id, anchor, -1.0)):
         c = _first_clear(road, anchor, -1.0, others)
         if (c is None and anchor >= length) or (c is not None and math.isnan(c)):
             return None
-        lo = 0.0 if c is None else max(0.0, c - SEAM_MARGIN_M)
-    if anchor < length:
+        lo = 0.0 if c is None else c if isinstance(c, _Clamp) else max(0.0, c - SEAM_MARGIN_M)
+    elif anchor > 0.0 and not on_deck_end:
+        lo = 0.0
+    if anchor < length and not _carried_edge(road.id, anchor, 1.0) and not (on_deck_end and _deck_edge(road.id, anchor, 1.0)):
         c = _first_clear(road, anchor, 1.0, others)
         if (c is None and anchor <= 0.0) or (c is not None and math.isnan(c)):
             return None
-        hi = length if c is None else min(length, c + SEAM_MARGIN_M)
+        hi = length if c is None else c if isinstance(c, _Clamp) else min(length, c + SEAM_MARGIN_M)
+    elif anchor < length and not on_deck_end:
+        hi = length
+    lo, hi = _keep_off_decks(road.id, lo, hi)
     if lo < END_SNAP_M:
         lo = 0.0
     if hi > length - END_SNAP_M:
@@ -311,16 +504,17 @@ def _interval(road: Road, anchor: float, others: list[Polygon]) -> tuple[float, 
 def _grow(road: Road, lo: float, hi: float, others: list[Polygon]) -> tuple[float, float] | None:
     """Move interval ends whose cross-section line is not clear of ``others`` outward until it is."""
     length = road.length
-    if lo > 0.0 and not all(_row_line(road, lo).distance(p) >= GORE_GAP_M for p in others):
+    if lo > 0.0 and not isinstance(lo, _Clamp) and not _carried_edge(road.id, lo, -1.0) and not _clear(road, lo, others):
         c = _first_clear(road, lo, -1.0, others)
         if c is not None and math.isnan(c):
             return None
-        lo = 0.0 if c is None else max(0.0, c - SEAM_MARGIN_M)
-    if hi < length and not all(_row_line(road, hi).distance(p) >= GORE_GAP_M for p in others):
+        lo = 0.0 if c is None else c if isinstance(c, _Clamp) else max(0.0, c - SEAM_MARGIN_M)
+    if hi < length and not isinstance(hi, _Clamp) and not _carried_edge(road.id, hi, 1.0) and not _clear(road, hi, others):
         c = _first_clear(road, hi, 1.0, others)
         if c is not None and math.isnan(c):
             return None
-        hi = length if c is None else min(length, c + SEAM_MARGIN_M)
+        hi = length if c is None else c if isinstance(c, _Clamp) else min(length, c + SEAM_MARGIN_M)
+    lo, hi = _keep_off_decks(road.id, lo, hi)
     if lo < END_SNAP_M:
         lo = 0.0
     if hi > length - END_SNAP_M:
@@ -335,6 +529,7 @@ def build_junctions(model: RoadModel) -> tuple[list[JunctionArea], list[Flag]]:
     """L6 junction and shared areas of the model (FR-SG-3, FR-SV-7). Deterministic; ids from content (D-011)."""
     roads = {r.id: r for r in model.roads}
     _SAMPLES.clear()
+    _set_spans(model)
     nodes, flags = _touches(model)
     groups: list[tuple[list[_Node], dict[str, tuple[float, float]]]] = []
     stuck: list[_Node] = []
@@ -352,7 +547,7 @@ def build_junctions(model: RoadModel) -> tuple[list[JunctionArea], list[Flag]]:
             stuck.append(node)
             continue
         groups.append(([node], intervals))
-    full = {rid: _footprint(r, 0.0, r.length) for rid, r in roads.items()}
+    full = {rid: _rfp(r, 0.0, r.length) for rid, r in roads.items()}
     areas, group_of, settle_flags = _settle(model, roads, _merge(groups))
     flags.extend(settle_flags)
     zone_map: dict[str, list[tuple[float, float]]] = {}
@@ -406,7 +601,7 @@ def _regrow(roads: dict[str, Road], intervals: dict[str, tuple[float, float]]) -
     """Grow every participant's interval until its ends clear all other participants (D-069)."""
     for _ in range(MAX_ROUNDS):
         fps = {
-            r: _footprint(roads[r], max(0.0, lo - SHARED_REACH_M), min(roads[r].length, hi + SHARED_REACH_M))
+            r: _rfp(roads[r], max(0.0, lo - SHARED_REACH_M), min(roads[r].length, hi + SHARED_REACH_M))
             for r, (lo, hi) in intervals.items()
         }
         changed = False
@@ -469,35 +664,50 @@ def _overlapping_pair(built) -> tuple[str, int, int] | None:
 # ---------------------------------------------------------------- structures and levels
 
 
-def _structure_reach(model: RoadModel, road: Road, st: Structure) -> tuple[float, float]:
-    """Stations of the carried road a seam must stay out of: the span plus its skewed station ramps."""
-    supports = sorted(st.supports, key=lambda sp: (sp.station, sp.id))
-    xs = road.cross_section
-    half = max(k.value for pw in (xs.width_left, xs.width_right) for k in pw.knots)
-    zone = max((b.offset_m + b.base_width_m for b in xs.barriers), default=0.0)
-    toe = TOE_ALLOWANCE_M if any(ss.road_id == road.id and ss.kind == "fill" for ss in model.side_slopes) else 0.0
-    umax = 1.25 * (max(half, zone) + st.deck.overhang_m + toe) + 1.0
-    out = []
-    for end in (st.s_start, st.s_end):
-        t = math.tan(min(supports, key=lambda sp: abs(sp.station - end)).skew_rad) if supports else 0.0
-        out.append(RAMP_FACTOR * abs(t) * umax + RAMP_MIN_M if t != 0.0 else 0.0)
-    return st.s_start - out[0] - STRUCTURE_CLEAR_M, st.s_end + out[1] + STRUCTURE_CLEAR_M
-
-
 def _support_outline(road: Road, st: Structure, sp: Support) -> Polygon:
     a, b = support_block(st, sp)
     t = math.tan(sp.skew_rad)
     xs = road.cross_section
-    ur, ul = -xs.width_right(sp.station) - st.deck.overhang_m, xs.width_left(sp.station) + st.deck.overhang_m
+    ur, ul = -xs.width_right(sp.station) - st.deck.overhang("right"), xs.width_left(sp.station) + st.deck.overhang("left")
     corners = [(a + t * ur, ur), (b + t * ur, ur), (b + t * ul, ul), (a + t * ul, ul)]
-    return Polygon([road.alignment.offset_point(min(max(s, 0.0), road.length), u) for s, u in corners]).buffer(0.05)
+    return Polygon([road.alignment.offset_point(min(max(s, 0.0), road.length), u) for s, u in corners])
+
+
+def _overhangs(road: Road, st: Structure) -> list[Polygon]:
+    """Plan strips of a deck beyond its road's pavement edges, with the skewed end rows (FR-ST-2)."""
+    sups = sorted(st.supports, key=lambda sp: (sp.station, sp.id))
+    if not sups:
+        return []
+    ta = math.tan(min(sups, key=lambda sp: abs(sp.station - st.s_start)).skew_rad)
+    tb = math.tan(min(sups, key=lambda sp: abs(sp.station - st.s_end)).skew_rad)
+    xs = road.cross_section
+    out = []
+    for side, sign, width in (("left", 1.0, xs.width_left), ("right", -1.0, xs.width_right)):
+        oh = st.deck.overhang(side)
+        if oh <= 0.0:
+            continue
+        n = max(2, math.ceil((st.s_end - st.s_start) / OUTLINE_STEP_M) + 1)
+        stations = [st.s_start + (st.s_end - st.s_start) * k / (n - 1) for k in range(n)]
+
+        def at(s: float, extra: float, sign=sign, width=width) -> tuple[float, float]:
+            # Same construction as the deck end rows (_seam_row_pts): station from the width at s.
+            f = (s - st.s_start) / (st.s_end - st.s_start)
+            t = ta * (1.0 - f) + tb * f
+            sv = _skew_station(road, width, s, t, sign, extra)
+            return road.alignment.offset_point(sv, sign * (width(sv) + extra))
+
+        inner = [at(s, 0.0) for s in stations]
+        outer = [at(s, oh) for s in reversed(stations)]
+        poly = Polygon(inner + outer)
+        if not poly.is_valid:
+            poly = shapely.make_valid(poly)
+        out.append(poly)
+    return out
 
 
 def _deck_outline(road: Road, st: Structure) -> Polygon:
-    t = max((abs(math.tan(sp.skew_rad)) for sp in st.supports), default=0.0)
-    xs = road.cross_section
-    reach = t * (max(k.value for pw in (xs.width_left, xs.width_right) for k in pw.knots) + st.deck.overhang_m)
-    return _footprint(road, max(0.0, st.s_start - reach), min(road.length, st.s_end + reach)).buffer(st.deck.overhang_m)
+    """Plan of a deck: its road's pavement between the skewed end rows plus the per-side overhangs (D-075)."""
+    return shapely.union_all([_skewed_footprint(road, st.s_start, st.s_end), *_overhangs(road, st)])
 
 
 def _structure_conflict(model: RoadModel, roads: dict[str, Road], intervals: dict[str, tuple[float, float]], area: JunctionArea) -> str:
@@ -508,15 +718,14 @@ def _structure_conflict(model: RoadModel, roads: dict[str, Road], intervals: dic
         if road is None:
             continue
         if st.carried_road in intervals:
-            a, b = _structure_reach(model, road, st)
             lo, hi = intervals[st.carried_road]
-            if lo < b and hi > a:
-                return f"interval on {st.carried_road} reaches structure {st.id} or its skewed stations ({a:.1f}-{b:.1f})"
+            if lo < st.s_end - 1e-6 and hi > st.s_start + 1e-6:
+                return f"interval on {st.carried_road} runs onto the deck of {st.id}"
+        if st.carried_road in intervals or any(sh.road_id in intervals for sh in st.shared):
+            continue  # the area meets this deck at its (skewed) end row
         for sp in st.supports:
             if _support_outline(road, st, sp).intersects(poly):
                 return f"support {sp.id} stands in the area"
-        if st.carried_road in intervals:
-            continue
         deck = _deck_outline(road, st)
         if not deck.intersects(poly):
             continue
@@ -555,24 +764,31 @@ def _level_problem(area: JunctionArea, roads: dict[str, Road], intervals: dict[s
 
 
 def _junction(model, roads, nodes, intervals) -> tuple[JunctionArea | None, str]:
-    fps = [_footprint(roads[r], lo, hi) for r, (lo, hi) in sorted(intervals.items())]
+    fps = [_rfp(roads[r], lo, hi) for r, (lo, hi) in sorted(intervals.items())]
+    if any(fp.is_empty for fp in fps):
+        return None, "a participant has no pavement sweep in its interval"
     union = shapely.union_all(fps)
+    overhangs = [g for st in model.structures if st.carried_road in intervals for g in _overhangs(roads[st.carried_road], st)]
+    if overhangs:
+        union = union.difference(shapely.union_all(overhangs))  # a deck's overhang beside its end row stays the deck's
+        parts = [g for g in shapely.get_parts(union) if g.area > 1e-6]
+        union = parts[0] if len(parts) == 1 else union
     if union.geom_type != "Polygon":
         return None, "participant pavements do not form one polygon"
     union = orient(union, 1.0)
 
     seam_defs: list[tuple[str, float, int]] = []
     for rid, (lo, hi) in sorted(intervals.items()):
-        if lo > 0.0:
-            seam_defs.append((rid, lo, 1))
-        if hi < roads[rid].length:
-            seam_defs.append((rid, hi, -1))
+        if lo > 0.0 and not _carried_edge(rid, lo, -1.0):
+            seam_defs.append((rid, float(lo), 1))
+        if hi < roads[rid].length and not _carried_edge(rid, hi, 1.0):
+            seam_defs.append((rid, float(hi), -1))
 
     ring = [tuple(map(float, p)) for p in union.exterior.coords[:-1]]
     marks: list[tuple[int, int, int]] = []  # (index of first end along the ring, index of second end, seam index)
     for k, (rid, s, _side) in enumerate(seam_defs):
-        a, _c, b = _row(roads[rid], s)
-        ia, ib = _nearest(ring, a), _nearest(ring, b)
+        a, _c, b = _seam_row_pts(roads[rid], s)
+        ia, ib = _nearest(ring, a, ROW_MATCH_M), _nearest(ring, b, ROW_MATCH_M)
         if ia is None or ib is None:
             return None, f"seam {rid}@{s:.2f} is not on the area boundary"
         n = len(ring)
@@ -584,14 +800,18 @@ def _junction(model, roads, nodes, intervals) -> tuple[JunctionArea | None, str]
     if not marks:
         return None, "no seams"
     n = len(ring)
-    if any((a1 - a0) % n > 2 for a0, a1, _ in marks):
-        return None, "seam rows are not simple boundary edges"
+    for a0, a1, k in marks:
+        # Extra boundary vertices on a row (another pavement touching it) are fine if they lie on it.
+        rid, s, _side = seam_defs[k]
+        line = LineString(_seam_row_pts(roads[rid], s))
+        if any(line.distance(Point(ring[(a0 + j) % n])) > ROW_MATCH_M for j in range(1, (a1 - a0) % n)):
+            return None, "seam rows are not simple boundary edges"
 
     outline: list[tuple[float, float]] = []
     rows: set[tuple[float, float]] = set()
     for idx, (a0, a1, k) in enumerate(marks):
         rid, s, _side = seam_defs[k]
-        row = _row(roads[rid], s)
+        row = _seam_row_pts(roads[rid], s)
         if _close(ring[a0], row[2]):
             row = row[::-1]
         outline.extend(row)
@@ -599,7 +819,7 @@ def _junction(model, roads, nodes, intervals) -> tuple[JunctionArea | None, str]
         b0 = marks[(idx + 1) % len(marks)][0]
         path = [ring[(a1 + j) % n] for j in range(1, (b0 - a1) % n)]
         start, end = row[-1], ring[b0]
-        outline.extend(_gore_closed(path, start, end, union))
+        outline.extend(_gore_closed(path, start, end, union, overhangs))
     holes = [list(h.coords[:-1]) for h in union.interiors]
     outline, *holes = _snap_rings([outline, *holes], rows)
     poly = Polygon(outline, holes)
@@ -770,11 +990,8 @@ def _shared_group(model, roads, group: list[_Stretch], zone_map, covered, *, mid
         for lo, hi in ivs:
             if any(lo < zb and za < hi for za, zb in zone_map.get(r, [])):
                 return [], f"interval {lo:.1f}-{hi:.1f} on {r} meets a junction area"
-            for st in model.structures:
-                if st.carried_road == r:
-                    a, b = _structure_reach(model, roads[r], st)
-                    if lo < b and hi > a:
-                        return [], f"interval on {r} reaches structure {st.id} or its skewed stations ({a:.1f}-{b:.1f})"
+            if _pieces(r, lo, hi) != [(lo, hi)]:
+                return [], f"interval {lo:.1f}-{hi:.1f} on {r} runs onto a deck"
     # Pieces come from the very footprints the regions are cut from, so the split leaves no sliver.
     fps = {(r, iv): _footprint(roads[r], *iv) for r in names for iv in per_road[r]}
     keys = sorted(fps)
@@ -994,7 +1211,7 @@ def _overlaps_left(model: RoadModel, roads: dict[str, Road], areas: list[Junctio
                 if zb < b:
                     nxt.append((zb, b))
             pieces = nxt
-        swept[rid] = [_footprint(road, a, b) for a, b in pieces if b - a > 0.05]
+        swept[rid] = [_footprint(road, pa, pb) for a, b in pieces for pa, pb in _pieces(rid, a, b) if pb - pa > 0.05]
     polys = [(f"road {rid}", rid, p) for rid in sorted(swept) for p in swept[rid]]
     polys += [(f"area {a.id}", a.id, Polygon(a.outline, a.holes)) for a in areas]
     out = []
@@ -1133,13 +1350,15 @@ def _close(a, b, tol: float = 1e-6) -> bool:
     return math.hypot(a[0] - b[0], a[1] - b[1]) <= tol
 
 
-def _gore_closed(path, start, end, union: Polygon) -> list[tuple[float, float]]:
+def _gore_closed(path, start, end, union: Polygon, keep_out=()) -> list[tuple[float, float]]:
     """The boundary between two seams, or nothing (a straight closure) if it bounds a gore pocket outside the union."""
     if not path or math.hypot(end[0] - start[0], end[1] - start[1]) > GORE_CLOSURE_MAX_M:
         return list(path)
     pocket = Polygon([start, *path, end])
     if not pocket.is_valid:
         pocket = shapely.make_valid(pocket)
+    if any(pocket.intersection(g).area > 1e-6 for g in keep_out):
+        return list(path)  # never close a gore over a deck's overhang
     if pocket.area > 1e-6 and pocket.difference(union).area >= GORE_OUTSIDE_FRACTION * pocket.area:
         return []
     return list(path)

@@ -40,6 +40,7 @@ from roader.solids.terrain import TerrainSampler
 
 CLIPPED_PARTS = {"pavement", "embankment", "barrier", "parapet"}
 ROW_TOL_M = 1e-6
+SKEW_SNAP_M = 0.05  # a skewed deck-end row in the outline matches the grid row within this (D-073)
 OUTLINE_SNAP_M = 0.01  # outline vertices this close to a seam row end are that end (D-011 rounding of the road)
 STEINER_M = 2.5  # interior vertex spacing of the area triangulation
 STEINER_CLEAR = 0.4  # Steiner points keep STEINER_CLEAR * STEINER_M from the boundary and each other
@@ -88,6 +89,7 @@ class JunctionPlan:
         self.ranges: dict[str, tuple[int, int]] = {}
         self._current: tuple[str, int] | None = None
         self._xy: dict[tuple[float, float], int] = {}  # outline vertices shared by touching areas (D-021)
+        self._floor: dict[int, float] = {}  # seam vertices at a deck end: the soffit there (D-073)
 
     def road(self, road: Road) -> Road:
         """The road to sweep: a copy with a sweep station at every seam."""
@@ -115,10 +117,16 @@ class JunctionPlan:
         if not ranges:
             return bodies
         pv = self.pv
+        # A cell lies between two station lines; skewed lines (deck ramps) carry their station at the centre line.
+        line_s = {pv.row[p]: pv.s[p] for p in range(n0, len(pv.x)) if pv.road[p] == rid and pv.u[p] == 0.0}
+
+        def station(p: int) -> float:
+            return line_s.get(pv.row[p], pv.s[p])
+
         pieces: list[tuple[Body, list[list[Cell]]]] = []
         renumber: set[tuple[str, str]] = set()
         for body in bodies:
-            mids = [sum(pv.s[p] for p in c.loop) / len(c.loop) for c in body.cells]
+            mids = [sum(station(p) for p in c.loop) / len(c.loop) for c in body.cells]
             hit = [math.isfinite(m) and _in_zone(m, ranges) for m in mids]
             if not any(hit):
                 pieces.append((body, [body.cells]))
@@ -248,9 +256,21 @@ class JunctionPlan:
         s_row = s_arr[near[np.argmin(np.abs(s_arr[near] - seam.s))]]
         row = [n0 + int(i) for i in near if s_arr[i] == s_row and seam.u0 - ROW_TOL_M <= pv.u[n0 + int(i)] <= seam.u1 + ROW_TOL_M]
         row.sort(key=lambda p: pv.u[p])
-        if len(row) < 2 or abs(pv.u[row[0]] - seam.u0) > 1e-5 or abs(pv.u[row[-1]] - seam.u1) > 1e-5:
-            raise ValueError(f"junction {jn.id}: sweep row at {seam.road_id}@{seam.s:.3f} does not span the seam (skewed station?)")
-        return row
+        if len(row) >= 2 and abs(pv.u[row[0]] - seam.u0) <= 1e-5 and abs(pv.u[row[-1]] - seam.u1) <= 1e-5:
+            return row
+        # A skewed station line (a deck end or its ramp, D-073): the grid row through the centre-line vertex.
+        centre = [n0 + int(i) for i in near if pv.u[n0 + int(i)] == 0.0 and pv.road[n0 + int(i)] == seam.road_id]
+        if centre:
+            k = pv.row[min(centre, key=lambda p: abs(pv.s[p] - seam.s))]
+            line = sorted((p for p in range(n0, n1) if pv.row[p] == k and pv.road[p] == seam.road_id), key=lambda p: pv.u[p])
+            right = [p for p in line if "wr" in pv.keys[p]]
+            left = [p for p in line if "wl" in pv.keys[p]]
+            if right and left:
+                lo, hi = pv.u[right[0]], pv.u[left[-1]]
+                row = [p for p in line if lo - ROW_TOL_M <= pv.u[p] <= hi + ROW_TOL_M]
+                if len(row) >= 2:
+                    return row
+        raise ValueError(f"junction {jn.id}: sweep row at {seam.road_id}@{seam.s:.3f} does not span the seam")
 
     def _outline(self, jn: JunctionArea) -> tuple[list[int], list[list[int]], dict[int, tuple[float, float]]]:
         """Outline and hole vertex ids, with the road grid's own rows at the seams and their (top, underside)."""
@@ -260,23 +280,31 @@ class JunctionPlan:
         n = len(ring_xy)
         refs: list[int | tuple[float, float]] = list(ring_xy)
         exact: dict[int, tuple[float, float]] = {}  # seam vertex -> (top, underside) of the road there
-        replaced: list[tuple[int, int, list[int]]] = []
+        replaced: list[tuple[int, int, list[int], object]] = []
         for seam in jn.seams:
             row = self._seam_row(jn, seam)
             road = roads[seam.road_id]
             for p in row:
                 exact[p] = (road.surface_z(pv.s[p], pv.u[p]), pavement_bottom(road, pv.s[p], pv.u[p]))
-            ends = [(pv.x[row[0]], pv.y[row[0]]), (pv.x[row[-1]], pv.y[row[-1]])]
+            for st in self.model.structures:
+                if st.carried_road == seam.road_id and min(abs(st.s_start - seam.s), abs(st.s_end - seam.s)) <= 1e-6:
+                    # Beside a deck end the fill reaches at least down to the soffit, onto the abutment top.
+                    for p in row:
+                        self._floor[p] = road.surface_z(pv.s[p], pv.u[p]) - st.deck.depth_m
+            # The outline carries the straight row; a skewed grid row replaces it (D-073).
+            ends = [road.alignment.offset_point(seam.s, seam.u0), road.alignment.offset_point(seam.s, seam.u1)]
             ia, ib = (_nearest(ring_xy, e) for e in ends)
+            if ia is None or ib is None:  # an outline that already follows the skewed row (a deck end)
+                ia, ib = (_nearest(ring_xy, (pv.x[p], pv.y[p]), SKEW_SNAP_M) for p in (row[0], row[-1]))
             if ia is None or ib is None:
                 raise ValueError(f"junction {jn.id}: seam {seam.road_id}@{seam.s:.3f} is not on the outline")
             if (ib - ia) % n <= (ia - ib) % n:
-                replaced.append((ia, ib, row))
+                replaced.append((ia, ib, row, seam))
             else:
-                replaced.append((ib, ia, row[::-1]))
+                replaced.append((ib, ia, row[::-1], seam))
         drop: set[int] = set()
         insert: dict[int, list[int]] = {}
-        for a, b, row in replaced:
+        for a, b, row, seam in replaced:
             k = a
             while True:
                 drop.add(k)
@@ -284,10 +312,21 @@ class JunctionPlan:
                     break
                 k = (k + 1) % n
             insert[a] = row
-            # Outline vertices within the snap distance of a row end are that end (FR-SV-5).
+            road = roads[seam.road_id]
             for end, step in ((row[0], -1), (row[-1], 1)):
                 k = (a if step < 0 else b) + step
-                while (k % n) not in drop and math.hypot(ring_xy[k % n][0] - pv.x[end], ring_xy[k % n][1] - pv.y[end]) <= OUTLINE_SNAP_M:
+                s_end = pv.s[end]
+                lo, hi = sorted((seam.s, s_end))
+                while (k % n) not in drop:
+                    x, y = ring_xy[k % n]
+                    # Outline vertices within the snap distance of a row end are that end (FR-SV-5);
+                    # those between the straight and the skewed row lie on the road's kept side (D-073).
+                    near_end = math.hypot(x - pv.x[end], y - pv.y[end]) <= OUTLINE_SNAP_M
+                    if not near_end and hi - lo > OUTLINE_SNAP_M:
+                        sv = road.alignment.project(x, y)[0]
+                        near_end = lo + 1e-6 < sv < hi - 1e-6
+                    if not near_end:
+                        break
                     drop.add(k % n)
                     k += step
         ring: list[int] = []
@@ -339,7 +378,7 @@ class JunctionPlan:
             return [slab]
 
         def fill_bottom(p: int) -> float:
-            return min(ground[p], under(p) - MIN_FILL_M) - embed
+            return min(ground[p], under(p) - MIN_FILL_M, self._floor.get(p, math.inf)) - embed
 
         def fill_top(p: int) -> float:
             # Real-time walls are cut by the terrain: where it rises above the underside the fill
@@ -393,13 +432,13 @@ class JunctionPlan:
         return out
 
 
-def _nearest(ring, p) -> int | None:
+def _nearest(ring, p, tol: float = OUTLINE_SNAP_M) -> int | None:
     best, bi = math.inf, None
     for i, q in enumerate(ring):
         d = math.hypot(q[0] - p[0], q[1] - p[1])
         if d < best:
             best, bi = d, i
-    return bi if best <= OUTLINE_SNAP_M else None
+    return bi if best <= tol else None
 
 
 # ---------------------------------------------------------------- triangulation
