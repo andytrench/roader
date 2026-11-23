@@ -17,8 +17,9 @@ junction area that replaces the overlapping sweeps:
    of every participant sit inside the area; ``JunctionArea.surface_z`` blends
    them (D-046), so elevation and slope match each road at its seam.
 
-Areas that overlap each other, or that a third road's pavement enters at the same
-level, are merged into one area and regrown (D-069). An area may sit next to a
+Areas that overlap each other are merged into one area and regrown (D-069); a third
+road whose pavement runs into an area at its level, alongside a participant, joins it
+and the area regrows (D-136). An area may sit next to a
 deck: a participant's interval stops at its own deck's end, where the seam is the
 deck's skewed end row, and leaves out any span the road rides on another deck
 (D-073, D-076); inside a deck's skew ramp a seam is tested clear on every row the
@@ -33,6 +34,8 @@ interval. The overlap is split midway between the two roads' edges (the midpoint
 of each overlap chord across the narrower road), or given wholly to the narrower
 road when it lies inside the other; each road keeps its own surface on its side,
 and both outlines carry the same split vertices so their faces conform (D-021).
+A shared interval ends where its row clears the other pavement by ``SHARED_GAP_M``:
+there is no gore to close, so abutting pavements split only where they overlap (D-137).
 
 Outline vertices closer than ``MIN_EDGE_M`` are merged (FR-SV-5).
 """
@@ -94,6 +97,7 @@ MIN_EDGE_M = 0.01  # outline vertices closer than this are one vertex (well clea
 CONFORM_TOL_M = 2e-6  # a vertex this close to another outline's edge is put on it (D-021)
 SHARED_MIN_M2 = 0.05  # overlaps smaller than this are rounding, not shared pavement
 SHARED_STEP_M = 1.0  # overlap chords along the narrower road
+SHARED_GAP_M = 0.25  # a shared region ends where its row clears the other pavement by this (no gore to close, D-137)
 SHARED_REACH_M = 100.0  # the other road's footprint considered beyond the overlap
 EDGE_TOL_M = 0.05  # a chord end this close to a road's edge lies on that edge
 CONTAINED_FRACTION = 0.8  # chords wholly inside the narrower road: it keeps the overlap
@@ -327,9 +331,9 @@ def _row_shape(road: Road, s: float):
     return line
 
 
-def _clear(road: Road, s: float, others: list[Polygon]) -> bool:
+def _clear(road: Road, s: float, others: list[Polygon], gap: float = GORE_GAP_M) -> bool:
     shape = _row_shape(road, s)
-    return all(shape.distance(p) >= GORE_GAP_M for p in others if not p.is_empty)
+    return all(shape.distance(p) >= gap for p in others if not p.is_empty)
 
 
 def _source(road: Road) -> tuple[Source, float, str | None]:
@@ -421,7 +425,7 @@ def _local_footprint(road: Road, anchor: float) -> Polygon:
     return _rfp(road, max(0.0, anchor - LOCAL_REACH_M), min(road.length, anchor + LOCAL_REACH_M))
 
 
-def _first_clear(road: Road, start: float, direction: float, others: list[Polygon]) -> float | None:
+def _first_clear(road: Road, start: float, direction: float, others: list[Polygon], gap: float = GORE_GAP_M) -> float | None:
     """First station from start (moving in direction) whose cross-section line clears every other footprint.
 
     None when the road ends first; NaN when the roads still overlap MAX_REACH_M from the node.
@@ -435,7 +439,7 @@ def _first_clear(road: Road, start: float, direction: float, others: list[Polygo
             if span[2] == "carried":
                 return None  # the road has no sweep beyond: like its end
             return _Clamp(span[1] if direction < 0 else span[0])
-        if _clear(road, s, others):
+        if _clear(road, s, others, gap):
             return s
         s += direction * SEARCH_STEP_M
     return None
@@ -510,16 +514,16 @@ def _interval(road: Road, anchor: float, others: list[Polygon]) -> tuple[float, 
     return lo, hi
 
 
-def _grow(road: Road, lo: float, hi: float, others: list[Polygon]) -> tuple[float, float] | None:
+def _grow(road: Road, lo: float, hi: float, others: list[Polygon], gap: float = GORE_GAP_M) -> tuple[float, float] | None:
     """Move interval ends whose cross-section line is not clear of ``others`` outward until it is."""
     length = road.length
-    if lo > 0.0 and not isinstance(lo, _Clamp) and not _carried_edge(road.id, lo, -1.0) and not _clear(road, lo, others):
-        c = _first_clear(road, lo, -1.0, others)
+    if lo > 0.0 and not isinstance(lo, _Clamp) and not _carried_edge(road.id, lo, -1.0) and not _clear(road, lo, others, gap):
+        c = _first_clear(road, lo, -1.0, others, gap)
         if c is not None and math.isnan(c):
             return None
         lo = 0.0 if c is None else c if isinstance(c, _Clamp) else max(0.0, c - SEAM_MARGIN_M)
-    if hi < length and not isinstance(hi, _Clamp) and not _carried_edge(road.id, hi, 1.0) and not _clear(road, hi, others):
-        c = _first_clear(road, hi, 1.0, others)
+    if hi < length and not isinstance(hi, _Clamp) and not _carried_edge(road.id, hi, 1.0) and not _clear(road, hi, others, gap):
+        c = _first_clear(road, hi, 1.0, others, gap)
         if c is not None and math.isnan(c):
             return None
         hi = length if c is None else c if isinstance(c, _Clamp) else min(length, c + SEAM_MARGIN_M)
@@ -654,6 +658,8 @@ def _settle(model: RoadModel, roads: dict[str, Road], groups):
     """
     dropped: list[Flag] = []
     nomerge: set[frozenset[str]] = set()
+    nojoin: set[tuple[str, str]] = set()
+    fulls: dict[str, Polygon] = {}
     for _round in range(MAX_ROUNDS):
         built: list[tuple[int, JunctionArea, Polygon]] = []
         problems: list[Flag] = []
@@ -665,6 +671,10 @@ def _settle(model: RoadModel, roads: dict[str, Road], groups):
             built.append((k, area, Polygon(area.outline, area.holes)))
         action = _overlapping_pair(built, nomerge)
         if action is None:
+            joined = _join_entering(model, roads, groups, built, nojoin, fulls)
+            if joined:
+                groups = _merge(groups)
+                continue
             return [a for _k, a, _p in built], {a.id: groups[k] for k, a, _p in built}, dropped + problems
         i, j = action[1], action[2]
         (na, ia), (nb, ib) = groups[i], groups[j]
@@ -679,6 +689,57 @@ def _settle(model: RoadModel, roads: dict[str, Road], groups):
             del groups[max(i, j)]
         groups = _merge(groups)
     raise RuntimeError("junction areas did not settle")  # pragma: no cover - MAX_ROUNDS merges always settle
+
+
+def _entering(roads: dict[str, Road], area: JunctionArea, poly: Polygon, intervals, fulls: dict[str, Polygon],
+              skip: set[str]) -> tuple[str, tuple[float, float]] | None:
+    """A road outside the area whose pavement runs into it at its level, alongside a participant (D-136).
+
+    Returns the road and the stations of its pavement inside the area, or None.
+    """
+    for rid in sorted(roads):
+        if rid in intervals or rid in skip:
+            continue
+        road = roads[rid]
+        if rid not in fulls:
+            fulls[rid] = _rfp(road, 0.0, road.length)
+        fp = fulls[rid]
+        if fp.is_empty or not fp.intersects(poly):
+            continue
+        for piece in shapely.get_parts(fp.intersection(poly)):
+            if piece.geom_type != "Polygon" or piece.area < SHARED_MIN_M2:
+                continue
+            q = piece.representative_point()
+            s, u = _project(road, q.x, q.y)
+            if abs(road.surface_z(s, u) - area.lifted_z(q.x, q.y)) > LEVEL_DZ_M:
+                continue
+            h = road.alignment.evaluate(s)[2]
+            alongside = False
+            for other in intervals:
+                po = roads[other]
+                so, uo = _project(po, q.x, q.y)
+                xs = po.cross_section
+                if -xs.width_right(so) - TOUCH_LATERAL_M <= uo <= xs.width_left(so) + TOUCH_LATERAL_M:
+                    alongside = alongside or abs(math.sin(h - po.alignment.evaluate(so)[2])) < math.sin(INTERSECTION_ANGLE)
+            if alongside:
+                return rid, _stations_of(road, piece)
+    return None
+
+
+def _join_entering(model, roads, groups, built, nojoin: set[tuple[str, str]], fulls) -> bool:
+    """Grow the first area that a same-level road runs into by that road, if the grown area builds (D-136)."""
+    for k, area, poly in built:
+        nodes, intervals = groups[k]
+        hit = _entering(roads, area, poly, intervals, fulls, {r for a, r in nojoin if a == area.id})
+        if hit is None:
+            continue
+        rid, iv = hit
+        merged = _regrow(roads, {**intervals, rid: iv})
+        if merged is not None and _junction(model, roads, nodes, merged)[0] is not None:
+            groups[k] = (nodes, merged)
+            return True
+        nojoin.add((area.id, rid))
+    return False
 
 
 def _overlapping_pair(built, nomerge=frozenset()) -> tuple[str, int, int] | None:
@@ -1064,7 +1125,7 @@ def _stretch(roads, full, a: str, b: str, piece: Polygon, flags: list[Flag]) -> 
         lo_o, hi_o = span[o]
         other = full[o] if roads[o].length <= 2 * SHARED_REACH_M else _footprint(
             roads[o], max(0.0, lo_o - SHARED_REACH_M), min(roads[o].length, hi_o + SHARED_REACH_M))
-        grown = _grow(roads[r], *span[r], [other])
+        grown = _grow(roads[r], *span[r], [other], SHARED_GAP_M)
         if grown is None:
             flags.append(Flag("FR-SG-3:shared_skipped", r, "FR-SG-3",
                               f"{a} and {b} overlap at ({p.x:.1f}, {p.y:.1f}) and do not separate within {MAX_REACH_M:.0f} m"))

@@ -166,3 +166,39 @@ def test_fr_vc_2_track_crosses_a_gap_on_a_crest_curve_d129():
     beyond = tr.s > 175.0
     assert np.all(tr.kind[beyond] == "observed")
     assert np.nanmax(np.abs(tr.z[beyond] - np.interp(tr.s[beyond], s, z))) < 0.05
+
+
+def _crossing_fit(fid: str, xy: np.ndarray, z: float):
+    from types import SimpleNamespace
+
+    from roader.conflate.graph import RoadSeed
+    from tests.pipeline import scenes as S
+
+    xy = np.asarray(xy, dtype=float)
+    line = Polyline(xy)
+    h = float(np.arctan2(*(xy[-1] - xy[0])[::-1]))
+    road = S._road(fid, "ramp", "motorway_link", S._straight(float(xy[0, 0]), float(xy[0, 1]), h, line.length), S._flat(line.length, z),
+                   S._section(3.0, 3.0, 1), oneway=True, lanes=1)
+    seed = RoadSeed(fid, fid, "motorway_link", "ramp", True, line, [], nodes=xy)
+    empty = np.empty(0)
+    return SimpleNamespace(road=road, line=line, seed=seed, points=SimpleNamespace(s=empty, u=empty, z=empty))
+
+
+def test_fr_cr_1_lines_weaving_on_one_level_share_pavement_and_do_not_cross_d135():
+    """Two branches sharing their first metres weave across each other within the noise: no crossing (D-135).
+
+    The same weave with one road 7 m higher, or a square meeting at one level, is still a crossing.
+    """
+    from roader.conflate.crossings import find_crossings
+
+    a = [[0.0, 0.0], [200.0, 0.0]]
+    weave = [[0.0, 0.4], [100.0, -0.4], [200.0, 0.4]]
+    crossings, _m, flags = find_crossings([_crossing_fit("a", a, 100.0), _crossing_fit("b", weave, 100.0)])
+    assert crossings == []
+    assert sorted(f.code for f in flags) == ["FR-CR-1:shared_pavement"] * 2
+
+    crossings, _m, _f = find_crossings([_crossing_fit("a", a, 100.0), _crossing_fit("b", weave, 107.0)])
+    assert len(crossings) == 2 and all(abs(c.dz_m - 7.0) < 1e-6 for c in crossings)
+
+    crossings, _m, _f = find_crossings([_crossing_fit("a", a, 100.0), _crossing_fit("c", [[100.0, -50.0], [100.0, 50.0]], 100.0)])
+    assert len(crossings) == 1

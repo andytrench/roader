@@ -7,7 +7,8 @@ sides (FR-OC-1). A direct data estimate of the height difference is returned
 beside the model (upper returns near the crossing point, lower returns 15 m
 either side along the lower road, interpolated), for AC-A4 and the report.
 Vector layer / bridge / tunnel tags are logged, and a disagreement with the
-measured order is flagged with both values.
+measured order is flagged with both values. Lines meeting on one level while
+running side by side share pavement and are not a crossing (D-135).
 """
 
 from __future__ import annotations
@@ -32,6 +33,18 @@ SURFACE_TOL_M = 0.3
 SHARED_NODE_M = 0.05  # vertices of two inputs this close are one node
 NODE_REACH_M = 1.0  # an input intersection this close to a shared node is that node
 MATCH_M = 30.0  # a fitted intersection this close to an input crossing locates it
+SHARED_DZ_M = 1.0  # two surfaces this close in height at an intersection are one level
+SHARED_ANGLE = math.radians(20.0)  # lines this close to parallel there run side by side (D-135)
+
+
+def shares_pavement(dz: float, h_a: float, h_b: float) -> bool:
+    """An intersection of two lines on one level and running side by side is shared pavement, not a crossing (D-135).
+
+    Two roads whose pavements overlap over a stretch (a fork whose branches share
+    their first metres, a C-D road abutting its mainline) have centrelines that
+    weave across each other within the noise; they never pass over or under.
+    """
+    return dz < SHARED_DZ_M and abs(math.remainder(h_a - h_b, math.pi)) < SHARED_ANGLE
 
 
 @dataclass
@@ -130,6 +143,17 @@ def find_crossings(fits: list[RoadFit]) -> tuple[list[Crossing], list[CrossingMe
                 dz = abs(za - zb)
                 hu = float(upper.line.heading(su)[0])
                 hl = float(lower.line.heading(sl)[0])
+                if shares_pavement(dz, hu, hl):
+                    flags.append(
+                        Flag(
+                            "FR-CR-1:shared_pavement",
+                            f"{a.road.id}|{b.road.id}",
+                            "FR-CR-1",
+                            f"{a.road.name} and {b.road.name} meet at ({p.x:.1f}, {p.y:.1f}) on one level ({dz:.2f} m apart), "
+                            f"{math.degrees(abs(math.remainder(hu - hl, math.pi))):.1f} degrees apart: shared pavement, not a crossing",
+                        )
+                    )
+                    continue
                 skew = math.remainder(hu - hl - math.pi / 2.0, math.pi)
                 tu, tl = upper.seed.tags_at(su), lower.seed.tags_at(sl)
                 lu, ll = _tag_level(tu), _tag_level(tl)

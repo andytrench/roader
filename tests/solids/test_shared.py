@@ -374,3 +374,51 @@ def test_d130_seam_patch_takes_the_road_slopes_at_the_seam_not_past_a_nearby_kno
     assert seam.slope_left_rate == pytest.approx(before, rel=1e-6)
     behind = _patch(road, s + 0.10, -1)  # looking back across the knot from beyond it
     assert behind.slope_left_rate == pytest.approx((0.02 - 0.005) / 19.95, rel=1e-6)
+
+
+# ---------------------------------------------------------------- a road entering an area alongside a participant (D-136)
+
+
+def _merge_beside_a_road_end() -> RoadModel:
+    """Ramp R comes in beside road L, runs over L's last 40 m and merges into M 60 m past M's start, where L ends (a trumpet stem)."""
+    m = _road("m", [("line", 300.0, 0.0)], 0.0, 0.0, 0.0, 5.5, 5.5, kind="mainline")
+    lead = _road("l", [("line", 200.0, 0.0)], -200.0, 0.0, 0.0, 3.0, 3.0)
+    a, rad = 0.15, 300.0
+    x0 = -40.0 - 40.0 * math.cos(a) - rad * math.sin(a)
+    y0 = -5.0 - 40.0 * math.sin(a) - rad * (1.0 - math.cos(a))
+    r = _road("r", [("line", 40.0, 0.0), ("arc", a * rad, -1.0 / rad), ("line", 100.0, 0.0)], x0, y0, a, 3.0, 3.0)
+    links = [Link(stable_id("lk", r.id, m.id), r.id, "end", m.id, "start", "merge", to_s=60.0, prov=RULE)]
+    return _model([m, lead, r], links=links)
+
+
+def test_d136_a_road_entering_a_merge_area_alongside_joins_it():
+    model = _merge_beside_a_road_end()
+    roads = {r.id: r for r in model.roads}
+    junctions = [j for j in model.junctions if j.kind != "shared"]
+    assert len(junctions) == 1 and sorted(junctions[0].road_ids) == sorted(roads), [(j.kind, j.road_ids) for j in model.junctions]
+    bad = [f for f in model.flags if f.code in ("FR-SG-3:overlap", "FR-SG-3:shared_skipped", "FR-SV-7:pavement_overlap")]
+    assert not bad, bad
+    assert junction_violations(junctions[0], roads)[0] == []
+    _closed_ok(generate(model))
+
+
+# ---------------------------------------------------------------- abutting pavements: shared regions end where they part (D-137)
+
+
+def test_d137_abutting_carriageways_split_only_where_they_overlap():
+    """Twin carriageways 0.5 m apart; B bends onto A over its last 6 m. An exit from A at s = 250 has its own area.
+
+    B's row clears A by 0.25 m about 4 m before the overlap, so the shared regions stay clear of the exit's
+    area; a 1 m gore gap never clears beside B and would run them into it.
+    """
+    a = _road("a", [("line", 400.0, 0.0)], 0.0, 0.0, 0.0, 5.5, 5.5, kind="mainline")
+    b = _road("b", [("line", 380.0, 0.0), ("arc", 20.0, -1.0 / 200.0)], 0.0, 11.5, 0.0, 5.5, 5.5, kind="mainline")
+    ra = _road("ra", [("line", 10.0, 0.0), ("arc", 150.0, -1.0 / 300.0)], 250.0, -2.75, 0.0, 2.5, 2.5)
+    links = [Link(stable_id("lk", a.id, ra.id), a.id, "end", ra.id, "start", "diverge", from_s=250.0, prov=RULE)]
+    model = _model([a, b, ra], links=links)
+    shared = sorted((j for j in model.junctions if j.kind == "shared"), key=lambda j: j.road_ids[0] != a.id)
+    assert [j.road_ids[0] for j in shared] == [a.id, b.id], [(j.kind, j.road_ids) for j in model.junctions]
+    assert 380.0 < min(s.s for s in shared[0].seams) < 392.0
+    bad = [f for f in model.flags if f.code in ("FR-SG-3:shared_skipped", "FR-SV-7:pavement_overlap")]
+    assert not bad, bad
+    _closed_ok(generate(model))
