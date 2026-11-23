@@ -33,6 +33,7 @@ def test_site_reference_maps_ways_to_model_ids(tmp_path):
             {
                 "upper": {"osm_way": "over"},
                 "lower": {"osm_way": "eb"},
+                "lonlat": [lon[0], lat[0]],
                 "dz_m": 7.0,
                 "structure": "s",
             },
@@ -65,6 +66,8 @@ def test_site_reference_maps_ways_to_model_ids(tmp_path):
     eb = next(r for r in model.roads if r.vector_refs[0].feature_id == "eb")
     assert ref.crossings == [{"upper_road": over.id, "lower_road": eb.id}]
     assert list(ref.crossing_dz.values()) == [7.0]
+    (px, py), = ref.crossing_points.values()  # D-096
+    assert (px, py) == pytest.approx((x0, y0), abs=1e-3)
     s0, s1 = ref.structure_stations[st.id]
     assert s0 == pytest.approx(st.s_start, abs=1e-3) and s1 == pytest.approx(
         st.s_end, abs=1e-3

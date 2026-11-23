@@ -19,6 +19,7 @@ import numpy as np
 import pytest
 import yaml
 
+from roader.build import load_site_reference
 from roader.export.run import export_model
 from roader.io import (
     FrameTransformer,
@@ -123,6 +124,7 @@ def acceptance(site, tmp_path_factory):
     measured = {
         "edges": measure_edges(model, pts, holdout=hold),
         "crossing_dz": dz,
+        "crossing_points": load_site_reference(CROSSINGS, model, cfg.frame()).crossing_points,  # D-096
         "structure_stations": _draft_ends(model),
     }
     out = tmp_path_factory.mktemp("m1")

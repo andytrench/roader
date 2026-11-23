@@ -36,6 +36,7 @@ class SiteReference:
 
     crossings: list[dict[str, str]] = field(default_factory=list)
     crossing_dz: dict[str, float] = field(default_factory=dict)
+    crossing_points: dict[str, tuple[float, float]] = field(default_factory=dict)  # D-096
     structure_stations: dict[str, tuple[float, float]] = field(default_factory=dict)
     status: str = ""
 
@@ -61,6 +62,7 @@ def load_site_reference(
     """
     doc = yaml.safe_load(Path(path).read_text())
     ref = SiteReference(status=str(doc.get("status", "")))
+    to_unit = FrameTransformer(frame)
     for entry in doc.get("crossings", []):
         upper = _road_for_way(model, entry["upper"]["osm_way"])
         lower = _road_for_way(model, entry["lower"]["osm_way"])
@@ -77,7 +79,9 @@ def load_site_reference(
         )
         if crossing is not None and "dz_m" in entry:
             ref.crossing_dz[crossing.id] = float(entry["dz_m"])
-    to_unit = FrameTransformer(frame)
+            if "lonlat" in entry:
+                x, y = to_unit.lonlat_to_unit([entry["lonlat"][0]], [entry["lonlat"][1]])
+                ref.crossing_points[crossing.id] = (float(x[0]), float(y[0]))
     for structure in (doc.get("structure_ends") or {}).get("structures", []):
         for end in structure.get("ends", []):
             road = _road_for_way(model, end["along"])
@@ -146,6 +150,7 @@ def build_unit(
         ref = load_site_reference(crossings_path, model, frame)
         crossings_ref = ref.crossings
         measured["crossing_dz"] = ref.crossing_dz
+        measured["crossing_points"] = ref.crossing_points
         measured["structure_stations"] = ref.structure_stations
     report, paths = export_model(
         model,

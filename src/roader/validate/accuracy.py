@@ -203,25 +203,32 @@ def horizontal_accuracy(model: RoadModel, edges: Iterable[Mapping], *, rms_max: 
 # ---------------------------------------------------------------- AC-A4, AC-A5
 
 
-def model_crossing_dz(model: RoadModel) -> dict[str, float]:
-    """Upper minus lower model surface at each crossing point."""
+def model_crossing_dz(model: RoadModel, *, at: Mapping[str, tuple[float, float]] | None = None) -> dict[str, float]:
+    """Upper minus lower model surface at each crossing point, or at ``at[crossing id]`` when given (D-096)."""
+    at = at or {}
     out = {}
     for c in model.crossings:
+        x, y = at.get(c.id, (c.x, c.y))
         heights = []
         for road_id in (c.upper_road, c.lower_road):
             road = model.road(road_id)
-            s, u = road.alignment.project(c.x, c.y)
+            s, u = road.alignment.project(x, y)
             heights.append(road.surface_z(s, u))
         out[c.id] = heights[0] - heights[1]
     return out
 
 
-def crossing_dz_accuracy(model: RoadModel, measured: Mapping[str, float], *, tol: float = 0.15) -> GateResult:
-    """AC-A4: model surface-to-surface height difference within ``tol`` of the measured one."""
+def crossing_dz_accuracy(
+    model: RoadModel, measured: Mapping[str, float], *, at: Mapping[str, tuple[float, float]] | None = None, tol: float = 0.15
+) -> GateResult:
+    """AC-A4: model surface-to-surface height difference within ``tol`` of the measured one.
+
+    ``at``: plan point (unit frame) where each reference dz was measured; the model is evaluated there (D-096).
+    """
     gate = "AC-A4"
     if not measured:
         return _skipped(gate, "no measured crossing height differences")
-    model_dz = model_crossing_dz(model)
+    model_dz = model_crossing_dz(model, at=at)
     result = GateResult(gate, passed=True, hard=False)
     errors = []
     for cid, dz in sorted(measured.items()):

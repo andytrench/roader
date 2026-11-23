@@ -107,6 +107,16 @@ def test_ac_a4_crossing_dz():
     assert not bad.passed and len(bad.violations) == 2
 
 
+def test_ac_a4_dz_is_taken_at_the_reference_point():
+    """D-096: the model is evaluated where the reference was measured, not at its own crossing point."""
+    model = overpass_model()
+    at = {c.id: (c.x + 10.0, c.y + 10.0) for c in model.crossings}
+    measured = model_crossing_dz(model, at=at)
+    assert measured != model_crossing_dz(model)
+    assert crossing_dz_accuracy(model, measured, at=at, tol=0.01).passed
+    assert not crossing_dz_accuracy(model, measured, tol=0.01).passed
+
+
 def test_ac_a5_structure_stations():
     model = overpass_model()
     st = model.structures[0]

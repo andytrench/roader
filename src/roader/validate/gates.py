@@ -426,8 +426,9 @@ def run_gates(
     """All section 9 gates that apply to one unit.
 
     ``points``: (N, 3) pavement and deck returns for AC-A1 (held out internally).
-    ``measured``: optional ``edges`` (AC-A3), ``crossing_dz`` (AC-A4) and
-    ``structure_stations`` (AC-A5) as produced by the pipeline.
+    ``measured``: optional ``edges`` (AC-A3), ``crossing_dz`` with its
+    ``crossing_points`` (AC-A4, D-096) and ``structure_stations`` (AC-A5) as
+    produced by the pipeline.
     ``export_runs``: two export directories from identical runs (AC-H5).
     ``profile``: export profile of ``meshes`` ("analytic" or "realtime", FR-SV-7).
     ``lods``: the LOD chain, level -> meshes (FR-AS-1, hard when given). AC-P3 and
@@ -449,7 +450,7 @@ def run_gates(
     if measured.get("edges"):
         report.results.append(horizontal_accuracy(model, measured["edges"]))
     if measured.get("crossing_dz"):
-        report.results.append(crossing_dz_accuracy(model, measured["crossing_dz"]))
+        report.results.append(crossing_dz_accuracy(model, measured["crossing_dz"], at=measured.get("crossing_points")))
     if measured.get("structure_stations"):
         report.results.append(structure_station_accuracy(model, measured["structure_stations"]))
     if lods is not None:
