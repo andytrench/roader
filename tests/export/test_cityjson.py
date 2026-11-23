@@ -95,3 +95,13 @@ def test_fr_dm_2_traffic_area_semantics_on_pavement(model, meshes):
     values = geom["semantics"]["values"]
     assert len(values) == len(geom["boundaries"])
     assert 0 < values.count(0) < len(values)
+
+
+def test_fr_sv_5_face_collapsing_on_the_export_grid_is_left_out_not_raised():
+    from roader.export.cityjson import _faces
+    from tests.validate.meshes import mesh
+
+    v = np.array([[-0.00049, -0.00049, -0.00049], [0.00049, 0.00049, 0.00049], [1.0, 0.0, 0.0], [0.0, 1.0, 0.0]])
+    f = np.array([[0, 2, 1], [0, 1, 3], [0, 3, 2], [1, 2, 3]])
+    # Vertices 0 and 1 share one grid vertex; AC-H1 holds the unit on it (D-145).
+    assert _faces(mesh("grid", v, f), [0, 0, 1, 2]) == [[[0, 2, 1]], [[0, 1, 2]]]

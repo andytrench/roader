@@ -28,6 +28,7 @@ AREA_TOL = 1e-8  # m^2, FR-SV-5 zero-area face
 DUP_TOL = 1e-6  # m, FR-SV-5 duplicate vertex
 EDGE_TOL = 1e-3  # m, FR-SV-5 edge under 1 mm
 TJ_TOL = 1e-6  # m, FR-SV-5 vertex on another edge's interior
+EXPORT_GRID_M = 1e-3  # m, CityJSON vertex quantum (export.cityjson.SCALE)
 
 
 def check_solid(
@@ -164,6 +165,14 @@ def _check_degeneracy(v, f, topo: _Topology, add, area_tol, dup_tol, edge_tol, t
     short = (length < edge_tol) & (edges[:, 0] != edges[:, 1])
     if short.any():
         add("FR-SV-5", f"{int(short.sum())} edges under 1 mm, e.g. {edges[short][:3].tolist()}")
+
+    # CityJSON stores vertices on a 1 mm grid with an integer-metre translate (D-145).
+    grid = np.rint(v / EXPORT_GRID_M).astype(np.int64)
+    g = grid[f]
+    collapsed = np.all(g[:, 0] == g[:, 1], axis=1) | np.all(g[:, 1] == g[:, 2], axis=1) | np.all(g[:, 0] == g[:, 2], axis=1)
+    collapsed &= ~small
+    if collapsed.any():
+        add("FR-SV-5", f"{int(collapsed.sum())} faces collapsing on the 1 mm export grid, e.g. faces {np.nonzero(collapsed)[0][:3].tolist()}")
 
     # T-junction: a used vertex inside the open interior of an edge it is not on.
     mid = 0.5 * (p + q)

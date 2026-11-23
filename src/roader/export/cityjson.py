@@ -90,7 +90,7 @@ def _faces(mesh: Mesh, vmap: list[int]) -> list[list[list[int]]]:
     for a, b, c in mesh.faces:
         tri = [vmap[int(a)], vmap[int(b)], vmap[int(c)]]
         if len(set(tri)) < 3:
-            raise ValueError(f"mesh {mesh.id} has a face collapsing below 1 mm (FR-SV-5)")
+            continue  # collapses on the 1 mm grid; AC-H1 flags it and holds the unit (FR-SV-5, D-145)
         faces.append([tri])
     return faces
 

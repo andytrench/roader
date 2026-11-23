@@ -74,6 +74,16 @@ def test_fr_sv_5_short_edge():
     assert any("1 mm" in x.message for x in found)
 
 
+def test_fr_sv_5_face_collapsing_on_the_export_grid():
+    # A and B are 1.7 mm apart but round to the same 1 mm CityJSON vertex (D-145).
+    v = np.array([[-0.00049, -0.00049, -0.00049], [0.00049, 0.00049, 0.00049], [1.0, 0.0, 0.0], [0.0, 1.0, 0.0]])
+    f = np.array([[0, 2, 1], [0, 1, 3], [0, 3, 2], [1, 2, 3]])
+    found = check_solid(mesh("grid", v, f))
+    text = " ".join(x.message for x in found if x.req == "FR-SV-5")
+    assert "export grid" in text
+    assert "1 mm" not in text.replace("1 mm export grid", "")
+
+
 def test_fr_sv_2_bow_tie_vertex_is_non_manifold():
     v1, f1 = tetra(True)
     v2, f2 = tetra(False)
