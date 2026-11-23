@@ -19,7 +19,15 @@ from roader.solids import generate
 from roader.structures.infer import observed_piers
 from roader.structures.shared import attach_shared, twin_joints
 from roader.validate.gates import check_solids, check_voids
-from tests.pipeline.twin_scene import CENTRE_GAP, HALF, OVERHANG, RAMP_HALF, RAMP_TURN, RAMP_U0, twin_model
+from tests.pipeline.twin_scene import (
+    CENTRE_GAP,
+    HALF,
+    OVERHANG,
+    RAMP_HALF,
+    RAMP_TURN,
+    RAMP_U0,
+    twin_model,
+)
 
 
 def _plan(mesh) -> shapely.Geometry:
