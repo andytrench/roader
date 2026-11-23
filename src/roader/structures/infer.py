@@ -157,23 +157,36 @@ class StructureResult:
     spans: list[float]
 
 
-def _footprint_on(upper: RoadFit, lower: RoadFit, c: Crossing, clearance: float) -> tuple[float, float]:
-    """Stations on the carried road covered by the lower road's pavement plus lateral clearance."""
+def _footprint_on(
+    upper: RoadFit, lower: RoadFit, c: Crossing, clearance: float, *, t: float = 0.0, across: tuple[float, float] = (0.0, 0.0)
+) -> tuple[float, float]:
+    """Stations on the carried road covered by the lower road's pavement plus lateral clearance.
+
+    With ``across`` (offsets on the carried road), the stations are support-line
+    stations ``s - t u`` (D-025) of every point where a lower pavement edge meets
+    an offset line between them: a support at a station outside the interval stands
+    off the pavement along its whole length, not only on the carried centerline.
+    """
     road = lower.road
     xs = road.cross_section
     s_lo = np.arange(max(0.0, c.lower_s - 80.0), min(road.length, c.lower_s + 80.0), 1.0)
     stations = []
-    upper_line = shapely.LineString(upper.line.xy)
+    lines = [shapely.LineString(upper.line.xy)]
+    if across[1] > across[0]:
+        s_up = np.arange(0.0, upper.road.length, 1.0)
+        for v in np.linspace(across[0], across[1], max(3, math.ceil(across[1] - across[0]) + 1)):
+            lines.append(shapely.LineString(upper.line.offset_point(s_up, np.full(s_up.size, v))))
     for sign, piece in ((1.0, xs.width_left), (-1.0, xs.width_right)):
         u = np.array([sign * (piece(float(s)) + clearance) for s in s_lo])
         edge = lower.line.offset_point(s_lo, u)
         if len(edge) < 2:
             continue
-        inter = shapely.LineString(edge).intersection(upper_line)
-        for g in getattr(inter, "geoms", [inter]):
-            if isinstance(g, shapely.Point):
-                s, _u, _ok = upper.line.project(np.array([[g.x, g.y]]))
-                stations.append(float(s[0]))
+        for line in lines:
+            inter = shapely.LineString(edge).intersection(line)
+            for g in getattr(inter, "geoms", [inter]):
+                if isinstance(g, shapely.Point):
+                    s, v, _ok = upper.line.project(np.array([[g.x, g.y]]))
+                    stations.append(float(s[0] - t * v[0]))
     if len(stations) < 2:
         half = (xs.width_left(c.lower_s) + xs.width_right(c.lower_s) + 2 * clearance) / 2.0 / max(math.cos(c.skew_rad), 0.2)
         return c.upper_s - half, c.upper_s + half
@@ -412,7 +425,10 @@ def infer_structure(
     t = math.tan(skew)
     seen = _pier_returns(upper, ev, extent, overhang, [(fits[c.lower_road], fits[c.lower_road].road.profile.z(c.lower_s)) for c in on], t)
     need = col_w / max(math.cos(skew), 0.2) + 0.5
-    pavements = _merged([_footprint_on(upper, fits[c.lower_road], c, 0.0) for c in on])
+    xs = road.cross_section
+    mid = 0.5 * (extent.s_start + extent.s_end)
+    across = (-xs.width_right(mid) - overhang, xs.width_left(mid) + overhang)
+    pavements = _merged([_footprint_on(upper, fits[c.lower_road], c, 0.0, t=t, across=across) for c in on])
     observed: dict[float, tuple[ObservedPier, float]] = {}
     for p in seen:
         at = clear_of_lanes(p.station, pavements, need)
@@ -420,7 +436,7 @@ def infer_structure(
             flags.append(Flag("FR-ST-3:observed_over_lane", sid, "FR-ST-3", f"{p.n_returns} pier-like returns at s={p.station:.1f} stand on a lower pavement with no clear place within {PIER_SNAP_M} m; not used"))
             continue
         observed[at] = (p, at - p.station)
-    zones = _merged([_footprint_on(upper, fits[c.lower_road], c, lateral) for c in on])
+    zones = _merged([_footprint_on(upper, fits[c.lower_road], c, lateral, t=t, across=across) for c in on])
     piers = sorted(observed)
     inner = (extent.s_start + PIER_END_CLEAR_M, extent.s_end - PIER_END_CLEAR_M)
     for (a0, a1), (b0, b1) in itertools.pairwise(zones):

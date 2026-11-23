@@ -350,6 +350,38 @@ def test_fr_st_3_observed_pier_moves_into_the_median_not_onto_a_lane():
     assert clear_of_lanes(531.5, [(508.0, 531.0), (532.0, 554.0)], 1.5) is None  # median narrower than the column
 
 
+def _fit_of(road):
+    from roader.conflate.polyline import Polyline
+
+    xy = np.array([road.alignment.offset_point(float(s), 0.0) for s in np.arange(0.0, road.length + 0.25, 0.5)])
+    return SimpleNamespace(road=road, line=Polyline(xy))
+
+
+def test_fr_st_3_lower_pavement_measured_along_the_whole_support_line():
+    """A lower road almost parallel to the support line (Woburn I-95 under the skewed I-93 decks):
+    a pier line just off its edge at the carried centerline runs onto it at the deck edges."""
+    from roader.model.geometry import Profile, VerticalElement
+    from roader.model.provenance import Provenance
+    from roader.structures.infer import _footprint_on
+    from tests.pipeline.twin_scene import _road
+
+    flat = Profile([VerticalElement(0.0, 200.0, 110.0, 0.0, 0.0, Provenance(Source.MEASURED, 1.0))])
+    upper = _road("deck", 0.0, 0.0, 0.0, 200.0, flat, 13.0, "mainline", "motorway")
+    t = math.tan(0.55)
+    heading = math.atan2(1.0, t) + 0.05  # 0.05 rad off the support line
+    x0, y0 = 100.0 - 80.0 * math.cos(heading), -80.0 * math.sin(heading)
+    lower = _road("under", x0, y0, heading, 160.0, flat, 5.0, "mainline", "motorway")
+    c = SimpleNamespace(lower_s=80.0, upper_s=100.0, skew_rad=0.55)
+    across = (-13.5, 13.5)
+    a0, b0 = _footprint_on(_fit_of(upper), _fit_of(lower), c, 0.0)
+    a, b = _footprint_on(_fit_of(upper), _fit_of(lower), c, 0.0, t=t, across=across)
+    assert a < a0 - 0.3 and b > b0 + 0.3
+    for q in (a - 0.05, b + 0.05):  # a support line just outside the interval clears the pavement everywhere
+        for u in np.linspace(*across, 28):
+            s_l, u_l = lower.alignment.project(*upper.alignment.offset_point(q + t * u, float(u)))
+            assert abs(u_l) > 5.0 - 1e-6
+
+
 def test_fr_cr_3_ramp_without_a_run_of_its_own_still_shares_the_deck():
     """A loop leaving 9 m before the deck end has too short a deck-class run for a structure;
     its first metres still ride the parent's deck (Woburn NE loop off I-93 northbound)."""
