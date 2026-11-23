@@ -96,6 +96,28 @@ def junctions(seeds: list[RoadSeed]) -> list[Junction]:
     return out
 
 
+def child_anchors(seed: RoadSeed, js: list[Junction], fitted: dict[str, RoadFit]) -> tuple:
+    """Per end, None or the (x, y, heading, curvature) pin on its fitted parent (FR-AF-3, D-051)."""
+    anchors = [None, None]
+    for j in js:
+        if j.child != seed.id or j.parent not in fitted:
+            continue
+        node = seed.line.xy[0] if j.end == "start" else seed.line.xy[-1]
+        parent = fitted[j.parent].road
+        ps, _pu = parent.alignment.project(float(node[0]), float(node[1]))
+        x, y, hp, kp = parent.alignment.evaluate(ps)
+        hc = _input_heading(seed, j.end)
+        # A shallow junction starts tangent to the parent and on its curvature, so the
+        # two surfaces share their slope across the whole seam (AC-H4); a steep one (a
+        # ramp terminal) keeps its own heading.
+        heading = curvature = None
+        for cand, k in ((hp, kp), (hp + math.pi, -kp)) if not parent.oneway else ((hp, kp),):
+            if abs(math.remainder(hc - cand, 2.0 * math.pi)) <= PIN_HEADING_MAX:
+                heading, curvature = math.remainder(cand, 2.0 * math.pi), k
+        anchors[0 if j.end == "start" else 1] = (x, y, heading, curvature)
+    return tuple(anchors)
+
+
 def fit_network(seeds: list[RoadSeed], ev, rules, *, strip_factor: float = 1.0) -> tuple[list[RoadFit], list[Junction]]:
     """Every seed fitted, parents before children; returns fits in seed order and the junctions."""
     js = junctions(seeds)
@@ -107,23 +129,7 @@ def fit_network(seeds: list[RoadSeed], ev, rules, *, strip_factor: float = 1.0) 
     fitted: dict[str, RoadFit] = {}
     for sid in sorted(by_id, key=lambda i: (depth[i], i)):
         seed = by_id[sid]
-        anchors = [None, None]
-        for j in js:
-            if j.child != sid or j.parent not in fitted:
-                continue
-            node = seed.line.xy[0] if j.end == "start" else seed.line.xy[-1]
-            parent = fitted[j.parent].road
-            ps, _pu = parent.alignment.project(float(node[0]), float(node[1]))
-            x, y, hp, kp = parent.alignment.evaluate(ps)
-            hc = _input_heading(seed, j.end)
-            # A shallow junction starts tangent to the parent and on its curvature, so the
-            # two surfaces share their slope across the whole seam (AC-H4); a steep one (a
-            # ramp terminal) keeps its own heading.
-            heading = curvature = None
-            for cand, k in ((hp, kp), (hp + math.pi, -kp)) if not parent.oneway else ((hp, kp),):
-                if abs(math.remainder(hc - cand, 2.0 * math.pi)) <= PIN_HEADING_MAX:
-                    heading, curvature = math.remainder(cand, 2.0 * math.pi), k
-            anchors[0 if j.end == "start" else 1] = (x, y, heading, curvature)
+        anchors = child_anchors(seed, js, fitted)
         neighbours = [Neighbour(other.line, least_half_width(other, rules)) for other in seeds if other.id != sid]
         fitted[sid] = fit_road(seed, ev, rules, strip_factor=strip_factor, anchors=tuple(anchors), neighbours=neighbours)
     fits = [fitted[s.id] for s in seeds]

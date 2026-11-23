@@ -59,9 +59,15 @@ from roader.conflate.track import track_line
 from roader.evidence import Evidence, build_evidence
 from roader.evidence.strips import STRIP_TOL_M
 from roader.fit.joint import joint_fit_roads
-from roader.fit.links import drop_junction_crossings, find_links, fit_network
+from roader.fit.links import (
+    child_anchors,
+    drop_junction_crossings,
+    find_links,
+    fit_network,
+    least_half_width,
+)
 from roader.fit.median import classify_medians, split_divided
-from roader.fit.road import RoadFit
+from roader.fit.road import RoadFit, fit_road
 from roader.fit.section import barriers_from_evidence
 from roader.io.points import PointSet
 from roader.io.vectors import VectorEdge
@@ -129,6 +135,8 @@ def run_pipeline(
     seeds, dflags = split_divided(seeds, ev)
     flags.extend(dflags)
     fits, junctions = fit_network(seeds, ev, rules, strip_factor=strip_factor)
+    fits, oflags = _streets_off_decks(fits, junctions, ev, rules, strip_factor)
+    flags.extend(oflags)
     by_id = {f.road.id: f for f in fits}
     held_blocks = _held_blocks(points, holdout)
     for f in fits:
@@ -246,6 +254,76 @@ def run_pipeline(
     # from its native file render byte-identical exports (AC-H5).
     model = loads(dumps(model))
     return PipelineResult(model, ev, fits, measures, extents, candidates, completions)
+
+
+DECK_SHARE_DZ_M = 2.0  # a street crossing a limited-access road closer than this in height shares its surface
+DECK_CLASS = 17  # ASPRS bridge deck
+DECK_SHARE_FRACTION = 0.5  # share of deck-class returns that makes the shared surface a deck
+DECK_NEAR_M = 15.0
+DECK_LEVEL_M = 1.5  # cells this close to the deck road's surface are its surface
+
+
+def _streets_off_decks(fits: list[RoadFit], js, ev: Evidence, rules: RuleBook, strip_factor: float) -> tuple[list[RoadFit], list[Flag]]:
+    """A street tracked onto the deck of a limited-access road it crosses is refit below it (FR-VC-2, FR-CR-1, D-144).
+
+    Limited-access roads have no at-grade crossings, so a street meeting one in plan at
+    almost its height, without a junction between them, has taken that road's deck as
+    its own surface (a street under a viaduct whose only long visible surface is the
+    deck). When the shared surface is a deck (mostly class 17), the street is refit with
+    that deck's sheets withheld inside the deck road's footprint; it is then completed
+    under the deck from what it does see (FR-OC-1). The deck road keeps its fit.
+    """
+    crossings, _measures, _flags = find_crossings(fits)
+    by_id = {f.road.id: f for f in fits}
+    linked = {frozenset((j.child, j.parent)) for j in js}
+    hits: dict[str, list[tuple[str, float]]] = {}
+    for c in crossings:
+        if abs(c.dz_m) >= DECK_SHARE_DZ_M or frozenset((c.upper_road, c.lower_road)) in linked:
+            continue
+        pair = [(by_id[c.upper_road], c.upper_s), (by_id[c.lower_road], c.lower_s)]
+        core = [(f, s) for f, s in pair if f.road.kind != "crossing_street"]
+        street = [f for f, _s in pair if f.road.kind == "crossing_street"]
+        if len(core) == 1 and len(street) == 1:
+            hits.setdefault(street[0].road.id, []).append((core[0][0].road.id, core[0][1]))
+    if not hits:
+        return fits, []
+    lay = ev.layers
+    centers = lay.center_xy()
+    point_cells = lay.point_layer
+    flags: list[Flag] = []
+    fitted = dict(by_id)
+    for sid in sorted(hits):
+        mask = np.zeros(len(lay.z), dtype=bool)
+        decks = []
+        for core_id, s_c in sorted(hits[sid]):
+            cf = by_id[core_id]
+            xs = cf.road.cross_section
+            half = max(max(k.value for k in xs.width_left.knots), max(k.value for k in xs.width_right.knots)) + 2.0
+            cs, cu, ok = cf.line.project(centers, max_dist=half)
+            # The deck road's own surface: cells inside its footprint at its height (any sheet).
+            ok &= np.isfinite(cs)
+            zc = np.full(len(lay.z), np.inf)
+            zc[ok] = np.array([cf.road.surface_z(float(a), float(b)) for a, b in zip(cs[ok], cu[ok], strict=True)])
+            cells = ok & (np.abs(lay.z - zc) <= DECK_LEVEL_M)
+            x, y = cf.road.alignment.offset_point(s_c, 0.0)
+            pts = cells[point_cells] & (np.hypot(ev.xyz[:, 0] - x, ev.xyz[:, 1] - y) <= DECK_NEAR_M)
+            if pts.sum() < 10 or float(np.mean(ev.classification[pts] == DECK_CLASS)) < DECK_SHARE_FRACTION:
+                continue
+            mask |= cells
+            decks.append(cf.road.name)
+        if not mask.any():
+            continue
+        old = fitted[sid]
+        masked = dataclasses.replace(ev, layer_label=np.where(mask, 3, ev.layer_label), layer_prob=np.where(mask, 0.0, ev.layer_prob))
+        neighbours = [Neighbour(o.seed.line, least_half_width(o.seed, rules)) for o in fits if o.road.id != sid]
+        try:
+            new = fit_road(old.seed, masked, rules, strip_factor=strip_factor, anchors=child_anchors(old.seed, js, fitted), neighbours=neighbours)
+        except Exception as exc:  # noqa: BLE001 - keep the first fit, flagged (FR-EX-1, D-119)
+            flags.append(element_failed(sid, "FR-VC-2", f"refit below the deck of {', '.join(decks)} failed; first fit kept", exc))
+            continue
+        fitted[sid] = new
+        flags.append(Flag("FR-VC-2:off_deck", sid, "FR-VC-2", f"{old.road.name} met {', '.join(decks)} at deck level with no junction; refit with that deck's surface withheld"))
+    return [fitted[f.road.id] for f in fits], flags
 
 
 def element_failed(element_id: str, req: str, what: str, exc: BaseException) -> Flag:
