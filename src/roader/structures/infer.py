@@ -134,17 +134,24 @@ def support_skews(stations: list[float], crossed: list[tuple[float, tuple[float,
 
     ``stations``: abutment, piers..., abutment; ``crossed``: (skew, clear-zone stations)
     of each crossed road. A pier takes the skew of the nearest crossed road; an abutment
-    that of a crossed road its end span passes over, else (a viaduct end) it is square.
+    that of a crossed road its end span passes over, else its neighbouring pier's (D-025:
+    deck ends follow the nearest support), else it is square.
     """
-    out: list[tuple[float, list[str]]] = []
+    out: list[tuple[float, list[str]] | None] = []
     last = len(stations) - 1
     for n, s in enumerate(stations):
         near = sorted((max(z0 - s, s - z1, 0.0), skew, (z0, z1)) for skew, (z0, z1) in crossed)
         if n in (0, last) and last > 0:
             lo, hi = sorted((s, stations[1 if n == 0 else last - 1]))
             near = [d for d in near if d[2][0] < hi and d[2][1] > lo]
+            if not near:
+                out.append(None)
+                continue
         out.append(support_skew([near[0][1]]) if near else (0.0, []))
-    return out
+    for n, nb in ((0, 1), (last, last - 1)):
+        if out[n] is None:
+            out[n] = out[nb] if 0 < nb < last and out[nb] is not None else (0.0, [])
+    return [v if v is not None else (0.0, []) for v in out]
 
 
 def _profile_z(profile, s: np.ndarray) -> np.ndarray:

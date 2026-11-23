@@ -470,9 +470,11 @@ def test_fr_st_4_each_support_takes_the_skew_of_what_it_crosses():
     from roader.structures.infer import support_skews
 
     # A viaduct 0-300 m over two roads; only its far end span passes over one.
-    crossed = [(0.3, (60.0, 90.0)), (-0.5, (271.0, 295.0))]
+    crossed = [(0.3, (60.0, 90.0)), (-0.5, (271.0, 295.0)), (0.1, (400.0, 420.0))]
     skews = [sk for sk, _f in support_skews([0.0, 40.0, 75.0, 150.0, 290.0, 300.0], crossed)]
-    assert skews == [0.0, 0.3, 0.3, 0.3, -0.5, -0.5]  # square over nothing; piers follow the nearest crossing
+    # Piers follow the nearest crossing; an end over nothing takes its neighbour's skew (D-025), the far end its road's.
+    assert skews == [0.3, 0.3, 0.3, 0.3, -0.5, -0.5]
+    assert [sk for sk, _f in support_skews([0.0, 30.0], [(0.4, (100.0, 120.0))])] == [0.0, 0.0]  # a span over nothing
     assert support_skews([0.0, 20.0], []) == [(0.0, []), (0.0, [])]
     (sk, flags), _ = support_skews([0.0, 20.0], [(math.radians(-75.0), (-5.0, 25.0))])
     assert sk == pytest.approx(-math.radians(60.0)) and flags == ["FR-ST-4:skew_capped_from_-75.0deg"]
