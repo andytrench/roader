@@ -1,0 +1,425 @@
+# AC-H2 hand-labeled crossing list for henderson_i215_arroyo_grande (I-215 / Arroyo Grande Boulevard SPUI, Henderson NV, plus the Valle Verde Drive bridges at the east edge).
+#
+# status: draft, needs human review. Drafted 2026-11-23 from the pinned fixture
+# (lidar_sha256 f1333030..., vector_sha256 c8504d35...), not from a site visit or plans.
+# Crossings are every plan intersection inside the AOI, without a shared node, between
+# in-scope OSM edges (roader.io.in_scope) where at least one edge is limited-access
+# (D-037): 28 crossings. Footways, cycleways and service roads are in scope under
+# roader.io.in_scope and are listed.
+#
+# Class 17 (bridge deck) is present in this collection: 45,521 returns in the AOI.
+#
+# Method (unit frame, heights NAVD88 assumed, meters; classes 1, 2, 11 and 17). Each way
+# is traced along its OSM centerline, extended through the least-deflected continuing
+# way (under 40 deg) up to 300 m each side. Every 2 m the returns within 1.5 m are split
+# into height clusters (1 m gaps) and one surface is tracked from each end toward the
+# crossing with a 7 % grade limit, so a deck above or below is not taken for the road.
+# At a crossing each way's height is interpolated from its tracked stations outside the
+# other way's footprint (half width by OSM class plus 4 m); the higher way is the upper.
+# upper_z_m is the upper way's own returns at the crossing when they agree with that
+# profile, else the interpolation. lower_z_m is the interpolation; `evidence` gives its
+# span. dz is upper minus lower (FR-CR-1), to 0.1 m. skew_deg is from perpendicular,
+# between the traced centerlines. Pairs with no grade separation in the lidar (dz under
+# 2 m) or with no profile on one side are listed under `unresolved`, not as crossings.
+# A `review` note marks rows where the lidar order disagrees with the OSM layer / bridge
+# tags.
+#
+# Structures group crossings whose upper ways are connected bridge ways at one OSM
+# layer (FR-CR-3 chains); deck ends are the run of class 17 returns within 1.0 m of the
+# carried centerline through the crossing, with no gap over 3 m, clipped 2 m inside the
+# AOI (`truncated_at_aoi_edge` when the deck runs on past it). Ends along a ramp can run
+# on along the mainline deck the ramp's centerline continues onto.
+#
+# Review checklist: confirm the vertical order; decide whether footway crossings
+# (sidewalk bridges beside the Arroyo Grande and Valle Verde decks) belong in the AC-H2
+# list; confirm the structure grouping (each OSM bridge chain is one structure, so the
+# twin Arroyo Grande decks are grouped by connectivity) and the deck ends.
+
+site_id: henderson_i215_arroyo_grande
+status: draft, needs human review
+crossings:
+  - id: southarroyograndebou14295619_over_brucewoodburybeltway663997035
+    upper: {osm_way: 14295619, name: "South Arroyo Grande Boulevard", highway: tertiary}
+    lower: {osm_way: 663997035, name: "Bruce Woodbury Beltway", highway: motorway}
+    lonlat: [-115.056082, 36.028168]
+    upper_z_m: 612.5
+    lower_z_m: 605.0
+    dz_m: 7.5
+    skew_deg: 10
+    structure: st01_northarroyograndebouleva
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 24 m"
+  - id: southarroyograndebou14295619_over_ramp665487229
+    upper: {osm_way: 14295619, name: "South Arroyo Grande Boulevard", highway: tertiary}
+    lower: {osm_way: 665487229, name: "ramp", highway: motorway_link}
+    lonlat: [-115.056083, 36.028144]
+    upper_z_m: 612.5
+    lower_z_m: 604.9
+    dz_m: 7.6
+    skew_deg: 12
+    structure: st01_northarroyograndebouleva
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 22 m"
+  - id: northarroyograndebou14322453_over_ramp14291208
+    upper: {osm_way: 14322453, name: "North Arroyo Grande Boulevard", highway: tertiary}
+    lower: {osm_way: 14291208, name: "ramp", highway: motorway_link}
+    lonlat: [-115.056071, 36.028422]
+    upper_z_m: 612.0
+    lower_z_m: 604.8
+    dz_m: 7.2
+    skew_deg: 10
+    structure: st01_northarroyograndebouleva
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 22 m"
+  - id: northarroyograndebou14322453_over_brucewoodburybeltway663986490
+    upper: {osm_way: 14322453, name: "North Arroyo Grande Boulevard", highway: tertiary}
+    lower: {osm_way: 663986490, name: "Bruce Woodbury Beltway", highway: motorway}
+    lonlat: [-115.056073, 36.028383]
+    upper_z_m: 612.1
+    lower_z_m: 604.9
+    dz_m: 7.2
+    skew_deg: 11
+    structure: st01_northarroyograndebouleva
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 22 m"
+  - id: southvalleverdedrive14323053_over_brucewoodburybeltway663997035
+    upper: {osm_way: 14323053, name: "South Valle Verde Drive", highway: secondary}
+    lower: {osm_way: 663997035, name: "Bruce Woodbury Beltway", highway: motorway}
+    lonlat: [-115.062784, 36.027333]
+    upper_z_m: 622.5
+    lower_z_m: 614.5
+    dz_m: 8.0
+    skew_deg: 1
+    structure: st02_southvalleverdedrive
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 40 m"
+  - id: ramp49131415_over_brucewoodburybeltway663986490
+    upper: {osm_way: 49131415, name: "ramp", highway: motorway_link}
+    lower: {osm_way: 663986490, name: "Bruce Woodbury Beltway", highway: motorway}
+    lonlat: [-115.062635, 36.027544]
+    upper_z_m: 622.1
+    lower_z_m: 614.1
+    dz_m: 8.0
+    skew_deg: 31
+    structure: st02_southvalleverdedrive
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 42 m"
+  - id: northvalleverdedrive49131418_over_brucewoodburybeltway663986490
+    upper: {osm_way: 49131418, name: "North Valle Verde Drive", highway: secondary}
+    lower: {osm_way: 663986490, name: "Bruce Woodbury Beltway", highway: motorway}
+    lonlat: [-115.062819, 36.02752]
+    upper_z_m: 622.1
+    lower_z_m: 614.5
+    dz_m: 7.6
+    skew_deg: 1
+    structure: st02_southvalleverdedrive
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 40 m"
+  - id: ramp49131420_over_brucewoodburybeltway663997035
+    upper: {osm_way: 49131420, name: "ramp", highway: motorway_link}
+    lower: {osm_way: 663997035, name: "Bruce Woodbury Beltway", highway: motorway}
+    lonlat: [-115.062836, 36.027326]
+    upper_z_m: 622.4
+    lower_z_m: 614.6
+    dz_m: 7.8
+    skew_deg: 24
+    structure: st02_southvalleverdedrive
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 42 m"
+  - id: footway202236311202236311_over_brucewoodburybeltway663986490
+    upper: {osm_way: 202236311, name: "footway202236311", highway: footway}
+    lower: {osm_way: 663986490, name: "Bruce Woodbury Beltway", highway: motorway}
+    lonlat: [-115.062962, 36.027502]
+    upper_z_m: 624.2
+    lower_z_m: 614.7
+    dz_m: 9.5
+    skew_deg: 8
+    structure: st02_southvalleverdedrive
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 50 m"
+  - id: footway202236311202236311_over_brucewoodburybeltway663997035
+    upper: {osm_way: 202236311, name: "footway202236311", highway: footway}
+    lower: {osm_way: 663997035, name: "Bruce Woodbury Beltway", highway: motorway}
+    lonlat: [-115.062932, 36.027314]
+    upper_z_m: 622.3
+    lower_z_m: 614.8
+    dz_m: 7.5
+    skew_deg: 4
+    structure: st02_southvalleverdedrive
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 48 m"
+  - id: footway202236313202236313_over_brucewoodburybeltway663986490
+    upper: {osm_way: 202236313, name: "footway202236313", highway: footway}
+    lower: {osm_way: 663986490, name: "Bruce Woodbury Beltway", highway: motorway}
+    lonlat: [-115.062532, 36.027557]
+    upper_z_m: 621.9
+    lower_z_m: 613.9
+    dz_m: 8.0
+    skew_deg: 4
+    structure: st02_southvalleverdedrive
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 46 m"
+  - id: footway202236313202236313_over_brucewoodburybeltway663997035
+    upper: {osm_way: 202236313, name: "footway202236313", highway: footway}
+    lower: {osm_way: 663997035, name: "Bruce Woodbury Beltway", highway: motorway}
+    lonlat: [-115.062513, 36.027367]
+    upper_z_m: 622.3
+    lower_z_m: 613.9
+    dz_m: 8.4
+    skew_deg: 11
+    structure: st02_southvalleverdedrive
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 46 m"
+  - id: southvalleverdedrive635154921_over_brucewoodburybeltway663997035
+    upper: {osm_way: 635154921, name: "South Valle Verde Drive", highway: secondary}
+    lower: {osm_way: 663997035, name: "Bruce Woodbury Beltway", highway: motorway}
+    lonlat: [-115.062655, 36.027349]
+    upper_z_m: 622.5
+    lower_z_m: 614.2
+    dz_m: 8.3
+    skew_deg: 2
+    structure: st02_southvalleverdedrive
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 38 m"
+  - id: northvalleverdedrive635154924_over_brucewoodburybeltway663986490
+    upper: {osm_way: 635154924, name: "North Valle Verde Drive", highway: secondary}
+    lower: {osm_way: 663986490, name: "Bruce Woodbury Beltway", highway: motorway}
+    lonlat: [-115.062693, 36.027536]
+    upper_z_m: 622.2
+    lower_z_m: 614.2
+    dz_m: 8.0
+    skew_deg: 1
+    structure: st02_southvalleverdedrive
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 40 m"
+  - id: ramp635154925_over_brucewoodburybeltway663997035
+    upper: {osm_way: 635154925, name: "ramp", highway: motorway_link}
+    lower: {osm_way: 663997035, name: "Bruce Woodbury Beltway", highway: motorway}
+    lonlat: [-115.062706, 36.027343]
+    upper_z_m: 622.6
+    lower_z_m: 614.3
+    dz_m: 8.3
+    skew_deg: 20
+    structure: st02_southvalleverdedrive
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 40 m"
+  - id: ramp635154926_over_brucewoodburybeltway663997035
+    upper: {osm_way: 635154926, name: "ramp", highway: motorway_link}
+    lower: {osm_way: 663997035, name: "Bruce Woodbury Beltway", highway: motorway}
+    lonlat: [-115.062605, 36.027355]
+    upper_z_m: 622.5
+    lower_z_m: 614.1
+    dz_m: 8.4
+    skew_deg: 24
+    structure: st02_southvalleverdedrive
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 40 m"
+  - id: ramp635154927_over_brucewoodburybeltway663986490
+    upper: {osm_way: 635154927, name: "ramp", highway: motorway_link}
+    lower: {osm_way: 663986490, name: "Bruce Woodbury Beltway", highway: motorway}
+    lonlat: [-115.062742, 36.02753]
+    upper_z_m: 622.2
+    lower_z_m: 614.3
+    dz_m: 7.9
+    skew_deg: 22
+    structure: st02_southvalleverdedrive
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 40 m"
+  - id: ramp635154929_over_brucewoodburybeltway663986490
+    upper: {osm_way: 635154929, name: "ramp", highway: motorway_link}
+    lower: {osm_way: 663986490, name: "Bruce Woodbury Beltway", highway: motorway}
+    lonlat: [-115.062768, 36.027527]
+    upper_z_m: 622.2
+    lower_z_m: 614.4
+    dz_m: 7.8
+    skew_deg: 23
+    structure: st02_southvalleverdedrive
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 42 m"
+  - id: ramp635154930_over_brucewoodburybeltway663986490
+    upper: {osm_way: 635154930, name: "ramp", highway: motorway_link}
+    lower: {osm_way: 663986490, name: "Bruce Woodbury Beltway", highway: motorway}
+    lonlat: [-115.062864, 36.027515]
+    upper_z_m: 622.0
+    lower_z_m: 614.5
+    dz_m: 7.5
+    skew_deg: 25
+    structure: st02_southvalleverdedrive
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 42 m"
+  - id: ramp635154931_over_brucewoodburybeltway663997035
+    upper: {osm_way: 635154931, name: "ramp", highway: motorway_link}
+    lower: {osm_way: 663997035, name: "Bruce Woodbury Beltway", highway: motorway}
+    lonlat: [-115.062727, 36.02734]
+    upper_z_m: 622.6
+    lower_z_m: 614.4
+    dz_m: 8.2
+    skew_deg: 21
+    structure: st02_southvalleverdedrive
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 40 m"
+  - id: footway204505432204505432_over_ramp14291208
+    upper: {osm_way: 204505432, name: "footway204505432", highway: footway}
+    lower: {osm_way: 14291208, name: "ramp", highway: motorway_link}
+    lonlat: [-115.056198, 36.028408]
+    upper_z_m: 610.6
+    lower_z_m: 604.9
+    dz_m: 5.7
+    skew_deg: 10
+    structure: st03_footway204505432
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper interpolated (occluded); lower interpolated over 32 m"
+  - id: footway204505432204505432_over_brucewoodburybeltway663986490
+    upper: {osm_way: 204505432, name: "footway204505432", highway: footway}
+    lower: {osm_way: 663986490, name: "Bruce Woodbury Beltway", highway: motorway}
+    lonlat: [-115.0562, 36.028367]
+    upper_z_m: 614.5
+    lower_z_m: 605.0
+    dz_m: 9.5
+    skew_deg: 11
+    structure: st03_footway204505432
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper interpolated (occluded); lower interpolated over 32 m"
+  - id: footway204505432204505432_over_brucewoodburybeltway663997035
+    upper: {osm_way: 204505432, name: "footway204505432", highway: footway}
+    lower: {osm_way: 663997035, name: "Bruce Woodbury Beltway", highway: motorway}
+    lonlat: [-115.05621, 36.028153]
+    upper_z_m: 612.5
+    lower_z_m: 605.1
+    dz_m: 7.4
+    skew_deg: 11
+    structure: st03_footway204505432
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 32 m"
+  - id: footway204505432204505432_over_ramp665487229
+    upper: {osm_way: 204505432, name: "footway204505432", highway: footway}
+    lower: {osm_way: 665487229, name: "ramp", highway: motorway_link}
+    lonlat: [-115.056211, 36.028125]
+    upper_z_m: 612.6
+    lower_z_m: 605.0
+    dz_m: 7.6
+    skew_deg: 12
+    structure: st03_footway204505432
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 32 m"
+  - id: footway204505439204505439_over_ramp14291208
+    upper: {osm_way: 204505439, name: "footway204505439", highway: footway}
+    lower: {osm_way: 14291208, name: "ramp", highway: motorway_link}
+    lonlat: [-115.055948, 36.028436]
+    upper_z_m: 611.9
+    lower_z_m: 604.7
+    dz_m: 7.2
+    skew_deg: 10
+    structure: st04_footway204505439
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 30 m"
+  - id: footway204505439204505439_over_brucewoodburybeltway663986490
+    upper: {osm_way: 204505439, name: "footway204505439", highway: footway}
+    lower: {osm_way: 663986490, name: "Bruce Woodbury Beltway", highway: motorway}
+    lonlat: [-115.055949, 36.028399]
+    upper_z_m: 611.9
+    lower_z_m: 604.7
+    dz_m: 7.2
+    skew_deg: 11
+    structure: st04_footway204505439
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 30 m"
+  - id: footway204505439204505439_over_brucewoodburybeltway663997035
+    upper: {osm_way: 204505439, name: "footway204505439", highway: footway}
+    lower: {osm_way: 663997035, name: "Bruce Woodbury Beltway", highway: motorway}
+    lonlat: [-115.055959, 36.028183]
+    upper_z_m: 612.3
+    lower_z_m: 604.8
+    dz_m: 7.5
+    skew_deg: 11
+    structure: st04_footway204505439
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 30 m"
+  - id: footway204505439204505439_over_ramp665487229
+    upper: {osm_way: 204505439, name: "footway204505439", highway: footway}
+    lower: {osm_way: 665487229, name: "ramp", highway: motorway_link}
+    lonlat: [-115.05596, 36.028162]
+    upper_z_m: 612.3
+    lower_z_m: 604.8
+    dz_m: 7.5
+    skew_deg: 12
+    structure: st04_footway204505439
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 30 m"
+
+structure_ends:
+  status: draft, needs human review
+  structures:
+    - id: st01_northarroyograndebouleva
+      carries: [14295619, 14322453]
+      over: [14291208, 663986490, 663997035, 665487229]
+      ends: []
+      ends_unavailable: "no class 17 run on the carried centerline at the crossing"
+    - id: st02_southvalleverdedrive
+      carries: [14323053, 49131415, 49131418, 49131420, 182019860, 182019862, 202236276, 202236278, 202236280, 202236284, 202236311, 202236313, 635154921, 635154924, 635154925, 635154926, 635154927, 635154928, 635154929, 635154930, 635154931, 635154932]
+      over: [663986490, 663997035]
+      ends:
+        - along: 14323053
+          start_lonlat: [-115.062851, 36.027662]
+          end_lonlat: [-115.062756, 36.027172]
+          length_m: 55.0
+          osm_bridge_length_m: 69.3
+        - along: 49131415
+          start_lonlat: [-115.062541, 36.027699]
+          end_lonlat: [-115.062737, 36.027173]
+          length_m: 61.5
+          osm_bridge_length_m: 78.4
+        - along: 49131418
+          start_lonlat: [-115.06285, 36.027661]
+          end_lonlat: [-115.062757, 36.027175]
+          length_m: 54.5
+          osm_bridge_length_m: 69.3
+        - along: 49131420
+          start_lonlat: [-115.06293, 36.027148]
+          end_lonlat: [-115.062741, 36.027672]
+          length_m: 61.0
+          osm_bridge_length_m: 97.4
+        - along: 202236311
+          start_lonlat: [-115.062952, 36.027648]
+          end_lonlat: [-115.062887, 36.027154]
+          length_m: 56.5
+          osm_bridge_length_m: 63.3
+        - along: 202236313
+          start_lonlat: [-115.062502, 36.027207]
+          end_lonlat: [-115.062575, 36.027693]
+          length_m: 56.0
+          osm_bridge_length_m: 63.8
+        - along: 635154925
+          start_lonlat: [-115.062541, 36.027699]
+          end_lonlat: [-115.062737, 36.027173]
+          length_m: 61.5
+          osm_bridge_length_m: 78.4
+        - along: 635154926
+          start_lonlat: [-115.062825, 36.027664]
+          end_lonlat: [-115.062456, 36.027213]
+          length_m: 60.5
+          osm_bridge_length_m: 77.3
+        - along: 635154927
+          start_lonlat: [-115.062824, 36.027663]
+          end_lonlat: [-115.062455, 36.027212]
+          length_m: 60.5
+          osm_bridge_length_m: 77.3
+        - along: 635154929
+          start_lonlat: [-115.062928, 36.02715]
+          end_lonlat: [-115.062741, 36.027674]
+          length_m: 61.0
+          osm_bridge_length_m: 97.4
+    - id: st03_footway204505432
+      carries: [204505432]
+      over: [14291208, 663986490, 663997035, 665487229]
+      ends: []
+      ends_unavailable: "no class 17 run on the carried centerline at the crossing"
+    - id: st04_footway204505439
+      carries: [204505439]
+      over: [14291208, 663986490, 663997035, 665487229]
+      ends:
+        - along: 204505439
+          start_lonlat: [-115.055971, 36.02793]
+          end_lonlat: [-115.055939, 36.028623]
+          length_m: 77.0
+          osm_bridge_length_m: 91.1

@@ -1,0 +1,20 @@
+# Catalogue unit: Loop 101 / Loop 202 directional T, Chandler, AZ (tests/sites.yaml).
+# Hashes are the pins written by scripts/fetch_fixtures.py (FR-PL-3, D-008).
+
+[unit]
+site_id = "chandler_loop101_loop202"
+aoi_lonlat = [-111.9040, 33.2875, -111.8830, 33.2995]
+imagery_enabled = false
+
+[lidar]
+path = "data/fixtures/chandler_loop101_loop202/lidar.laz"
+name = "AZ_MaricopaPinal_1_2020"
+year = 2020
+quality_level = "QL1"
+sha256 = "ca573143b2e40ac9b730543572935992136bd29d825754e62cd9276e8026306a"
+
+[vectors.osm]
+enabled = true
+path = "data/fixtures/chandler_loop101_loop202/osm.json"
+license = "ODbL-1.0"
+sha256 = "ba6057a58086ba2bfc1f0c1cc508d3c5a793c6ea3f6365687b228cfd84005a1a"

@@ -1,0 +1,1742 @@
+# AC-H2 hand-labeled crossing list for neworleans_i10_claiborne_viaduct (I-10 Claiborne Avenue viaduct, New Orleans LA, with its Canal Street, Orleans Avenue and Esplanade-side ramps).
+#
+# status: draft, needs human review. Drafted 2026-11-23 from the pinned fixture
+# (lidar_sha256 6a95cda0..., vector_sha256 c411fed3...), not from a site visit or plans.
+# Crossings are every plan intersection inside the AOI, without a shared node, between
+# in-scope OSM edges (roader.io.in_scope) where at least one edge is limited-access
+# (D-037): 139 crossings. Footways, cycleways and service roads are in scope under
+# roader.io.in_scope and are listed.
+#
+# Class 17 (bridge deck) is present in this collection: 683,122 returns in the AOI.
+#
+# Method (unit frame, heights NAVD88 assumed, meters; classes 1, 2, 11 and 17). Each way
+# is traced along its OSM centerline, extended through the least-deflected continuing
+# way (under 40 deg) up to 300 m each side. Every 2 m the returns within 1.5 m are split
+# into height clusters (1 m gaps) and one surface is tracked from each end toward the
+# crossing with a 7 % grade limit, so a deck above or below is not taken for the road.
+# At a crossing each way's height is interpolated from its tracked stations outside the
+# other way's footprint (half width by OSM class plus 4 m); the higher way is the upper.
+# upper_z_m is the upper way's own returns at the crossing when they agree with that
+# profile, else the interpolation. lower_z_m is the interpolation; `evidence` gives its
+# span. dz is upper minus lower (FR-CR-1), to 0.1 m. skew_deg is from perpendicular,
+# between the traced centerlines. Pairs with no grade separation in the lidar (dz under
+# 2 m) or with no profile on one side are listed under `unresolved`, not as crossings.
+# A `review` note marks rows where the lidar order disagrees with the OSM layer / bridge
+# tags.
+#
+# Structures group crossings whose upper ways are connected bridge ways at one OSM
+# layer (FR-CR-3 chains); deck ends are the run of class 17 returns within 1.0 m of the
+# carried centerline through the crossing, with no gap over 3 m, clipped 2 m inside the
+# AOI (`truncated_at_aoi_edge` when the deck runs on past it). Ends along a ramp can run
+# on along the mainline deck the ramp's centerline continues onto.
+#
+# Review checklist: confirm the vertical order; decide whether footway crossings
+# (sidewalks beside the cross streets) belong in the AC-H2 list; decide how the viaduct
+# is split into structures (here one per connected OSM bridge chain, so each carriageway
+# deck with its ramps is one structure); confirm the deck ends at the AOI edges are
+# marked as truncated, not as joints; resolve the unresolved entries (crossings near the
+# AOI edge with a one-sided trace).
+
+site_id: neworleans_i10_claiborne_viaduct
+status: draft, needs human review
+crossings:
+  - id: ramp12687424_over_lafittestreet80433326
+    upper: {osm_way: 12687424, name: "ramp", highway: motorway_link}
+    lower: {osm_way: 80433326, name: "Lafitte Street", highway: residential}
+    lonlat: [-90.07384, 29.963311]
+    upper_z_m: 9.2
+    lower_z_m: -0.3
+    dz_m: 9.5
+    skew_deg: 18
+    structure: st01_i10
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 38 m"
+  - id: ramp12687424_over_northclaiborneavenue1031576819
+    upper: {osm_way: 12687424, name: "ramp", highway: motorway_link}
+    lower: {osm_way: 1031576819, name: "North Claiborne Avenue", highway: secondary}
+    lonlat: [-90.073672, 29.96341]
+    upper_z_m: 9.0
+    lower_z_m: -0.4
+    dz_m: 9.4
+    skew_deg: 63
+    structure: st01_i10
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 48 m"
+  - id: ramp12687424_over_northrobertsonstreet1049959452
+    upper: {osm_way: 12687424, name: "ramp", highway: motorway_link}
+    lower: {osm_way: 1049959452, name: "North Robertson Street", highway: residential}
+    lonlat: [-90.072642, 29.96318]
+    upper_z_m: 6.1
+    lower_z_m: -0.7
+    dz_m: 6.8
+    skew_deg: 1
+    structure: st01_i10
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 20 m"
+  - id: ramp12687424_over_footway14884800001488480000
+    upper: {osm_way: 12687424, name: "ramp", highway: motorway_link}
+    lower: {osm_way: 1488480000, name: "footway1488480000", highway: footway}
+    lonlat: [-90.073575, 29.963444]
+    upper_z_m: 8.9
+    lower_z_m: -0.6
+    dz_m: 9.5
+    skew_deg: 60
+    structure: st01_i10
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 34 m"
+  - id: ramp12690278_over_saintphilipstreet837782794
+    upper: {osm_way: 12690278, name: "ramp", highway: motorway_link}
+    lower: {osm_way: 837782794, name: "Saint Philip Street", highway: residential}
+    lonlat: [-90.070883, 29.966178]
+    upper_z_m: 6.6
+    lower_z_m: -0.6
+    dz_m: 7.2
+    skew_deg: 1
+    structure: st01_i10
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 20 m"
+  - id: ramp12690278_over_northclaiborneavenue929869790
+    upper: {osm_way: 12690278, name: "ramp", highway: motorway_link}
+    lower: {osm_way: 929869790, name: "North Claiborne Avenue", highway: secondary}
+    lonlat: [-90.071577, 29.965751]
+    upper_z_m: 8.3
+    lower_z_m: -0.5
+    dz_m: 8.8
+    skew_deg: 64
+    structure: st01_i10
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 46 m"
+  - id: ramp12690278_over_dumainestreet1050367830
+    upper: {osm_way: 12690278, name: "ramp", highway: motorway_link}
+    lower: {osm_way: 1050367830, name: "Dumaine Street", highway: residential}
+    lonlat: [-90.071917, 29.965524]
+    upper_z_m: 8.6
+    lower_z_m: -0.4
+    dz_m: 9.0
+    skew_deg: 8
+    structure: st01_i10
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 40 m"
+  - id: ramp12690278_over_footway14884799701488479970
+    upper: {osm_way: 12690278, name: "ramp", highway: motorway_link}
+    lower: {osm_way: 1488479970, name: "footway1488479970", highway: footway}
+    lonlat: [-90.071958, 29.965489]
+    upper_z_m: 8.6
+    lower_z_m: -0.4
+    dz_m: 9.0
+    skew_deg: 8
+    structure: st01_i10
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 36 m"
+  - id: ramp12690278_over_footway14884799721488479972
+    upper: {osm_way: 12690278, name: "ramp", highway: motorway_link}
+    lower: {osm_way: 1488479972, name: "footway1488479972", highway: footway}
+    lonlat: [-90.07186, 29.965572]
+    upper_z_m: 8.5
+    lower_z_m: -0.4
+    dz_m: 8.9
+    skew_deg: 11
+    structure: st01_i10
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 38 m"
+  - id: ramp12690278_over_footway14884799881488479988
+    upper: {osm_way: 12690278, name: "ramp", highway: motorway_link}
+    lower: {osm_way: 1488479988, name: "footway1488479988", highway: footway}
+    lonlat: [-90.071441, 29.96581]
+    upper_z_m: 8.2
+    lower_z_m: 0.2
+    dz_m: 8.0
+    skew_deg: 67
+    structure: st01_i10
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 142 m"
+  - id: ramp31678110_over_southclaiborneavenue52186194
+    upper: {osm_way: 31678110, name: "ramp", highway: motorway_link}
+    lower: {osm_way: 52186194, name: "South Claiborne Avenue", highway: secondary}
+    lonlat: [-90.078297, 29.958245]
+    upper_z_m: 8.4
+    lower_z_m: -0.4
+    dz_m: 8.8
+    skew_deg: 72
+    structure: st01_i10
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 74 m"
+  - id: ramp31678110_over_clevelandavenue317197583
+    upper: {osm_way: 31678110, name: "ramp", highway: motorway_link}
+    lower: {osm_way: 317197583, name: "Cleveland Avenue", highway: residential}
+    lonlat: [-90.078399, 29.958004]
+    upper_z_m: 7.7
+    lower_z_m: -0.4
+    dz_m: 8.1
+    skew_deg: 20
+    structure: st01_i10
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 20 m"
+  - id: ramp31678110_over_canalstreet805387474
+    upper: {osm_way: 31678110, name: "ramp", highway: motorway_link}
+    lower: {osm_way: 805387474, name: "Canal Street", highway: primary}
+    lonlat: [-90.077785, 29.958944]
+    upper_z_m: 9.5
+    lower_z_m: -0.1
+    dz_m: 9.6
+    skew_deg: 3
+    structure: st01_i10
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 36 m"
+  - id: ramp31678110_over_canalstreet1031576818
+    upper: {osm_way: 31678110, name: "ramp", highway: motorway_link}
+    lower: {osm_way: 1031576818, name: "Canal Street", highway: primary}
+    lonlat: [-90.077645, 29.959119]
+    upper_z_m: 11.1
+    lower_z_m: -0.1
+    dz_m: 11.2
+    skew_deg: 3
+    structure: st01_i10
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 34 m"
+  - id: ramp31678110_over_canalstreetneutralgr1481210626
+    upper: {osm_way: 31678110, name: "ramp", highway: motorway_link}
+    lower: {osm_way: 1481210626, name: "Canal Street Neutral Ground", highway: footway}
+    lonlat: [-90.077716, 29.95903]
+    upper_z_m: 9.6
+    lower_z_m: 0.0
+    dz_m: 9.6
+    skew_deg: 3
+    structure: st01_i10
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 34 m"
+  - id: ramp31678110_over_footway14878582251487858225
+    upper: {osm_way: 31678110, name: "ramp", highway: motorway_link}
+    lower: {osm_way: 1487858225, name: "footway1487858225", highway: footway}
+    lonlat: [-90.077847, 29.958866]
+    upper_z_m: 9.4
+    lower_z_m: -0.3
+    dz_m: 9.7
+    skew_deg: 2
+    structure: st01_i10
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 34 m"
+  - id: ramp31678110_over_footway14878582301487858230
+    upper: {osm_way: 31678110, name: "ramp", highway: motorway_link}
+    lower: {osm_way: 1487858230, name: "footway1487858230", highway: footway}
+    lonlat: [-90.077587, 29.959191]
+    upper_z_m: 9.8
+    lower_z_m: -0.2
+    dz_m: 10.0
+    skew_deg: 4
+    structure: st01_i10
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 32 m"
+  - id: ramp31678110_over_footway14878658631487865863
+    upper: {osm_way: 31678110, name: "ramp", highway: motorway_link}
+    lower: {osm_way: 1487865863, name: "footway1487865863", highway: footway}
+    lonlat: [-90.078378, 29.958057]
+    upper_z_m: 7.9
+    lower_z_m: -0.3
+    dz_m: 8.2
+    skew_deg: 70
+    structure: st01_i10
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 54 m"
+  - id: ramp31705753_over_ramp31705754
+    upper: {osm_way: 31705753, name: "ramp", highway: motorway_link}
+    lower: {osm_way: 31705754, name: "ramp", highway: motorway_link}
+    lonlat: [-90.06965, 29.967695]
+    upper_z_m: 7.4
+    lower_z_m: -0.0
+    dz_m: 7.4
+    skew_deg: 64
+    structure: st01_i10
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 40 m"
+  - id: ramp31705753_over_esplanadeavenue232076007
+    upper: {osm_way: 31705753, name: "ramp", highway: motorway_link}
+    lower: {osm_way: 232076007, name: "Esplanade Avenue", highway: tertiary}
+    lonlat: [-90.068567, 29.969272]
+    upper_z_m: 9.1
+    lower_z_m: 0.2
+    dz_m: 8.9
+    skew_deg: 4
+    structure: st01_i10
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 36 m"
+  - id: ramp31705753_over_northclaiborneavenue685402355
+    upper: {osm_way: 31705753, name: "ramp", highway: motorway_link}
+    lower: {osm_way: 685402355, name: "North Claiborne Avenue", highway: secondary}
+    lonlat: [-90.068999, 29.968624]
+    upper_z_m: 9.0
+    lower_z_m: 0.2
+    dz_m: 8.8
+    skew_deg: 72
+    structure: st01_i10
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 56 m"
+  - id: ramp31705753_over_governornichollsstre1065784879
+    upper: {osm_way: 31705753, name: "ramp", highway: motorway_link}
+    lower: {osm_way: 1065784879, name: "Governor Nicholls Street", highway: residential}
+    lonlat: [-90.069317, 29.96803]
+    upper_z_m: 8.8
+    lower_z_m: 4.7
+    dz_m: 4.1
+    skew_deg: 1
+    structure: st01_i10
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 44 m"
+  - id: ramp31705753_over_esplanadeavenue1098995989
+    upper: {osm_way: 31705753, name: "ramp", highway: motorway_link}
+    lower: {osm_way: 1098995989, name: "Esplanade Avenue", highway: tertiary}
+    lonlat: [-90.068464, 29.969402]
+    upper_z_m: 9.1
+    lower_z_m: 3.9
+    dz_m: 5.2
+    skew_deg: 4
+    structure: st01_i10
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 48 m"
+  - id: ramp31705753_over_ramp1161017671
+    upper: {osm_way: 31705753, name: "ramp", highway: motorway_link}
+    lower: {osm_way: 1161017671, name: "ramp", highway: secondary_link}
+    lonlat: [-90.068532, 29.969316]
+    upper_z_m: 9.1
+    lower_z_m: 4.7
+    dz_m: 4.4
+    skew_deg: 29
+    structure: st01_i10
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 22 m"
+  - id: ramp31705753_over_esplanadeavepath1389951771
+    upper: {osm_way: 31705753, name: "ramp", highway: motorway_link}
+    lower: {osm_way: 1389951771, name: "Esplanade Ave. Path", highway: footway}
+    lonlat: [-90.06853, 29.969318]
+    upper_z_m: 9.1
+    lower_z_m: 0.3
+    dz_m: 8.8
+    skew_deg: 4
+    structure: st01_i10
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 36 m"
+  - id: ramp31705753_over_footway14884915331488491533
+    upper: {osm_way: 31705753, name: "ramp", highway: motorway_link}
+    lower: {osm_way: 1488491533, name: "footway1488491533", highway: footway}
+    lonlat: [-90.069052, 29.968485]
+    upper_z_m: 8.9
+    lower_z_m: 0.1
+    dz_m: 8.8
+    skew_deg: 71
+    structure: st01_i10
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 50 m"
+  - id: ramp31705753_over_footway14884915481488491548
+    upper: {osm_way: 31705753, name: "ramp", highway: motorway_link}
+    lower: {osm_way: 1488491548, name: "footway1488491548", highway: footway}
+    lonlat: [-90.068616, 29.96921]
+    upper_z_m: 9.1
+    lower_z_m: 1.0
+    dz_m: 8.1
+    skew_deg: 6
+    structure: st01_i10
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 38 m"
+  - id: ramp31705753_over_footway14884915541488491554
+    upper: {osm_way: 31705753, name: "ramp", highway: motorway_link}
+    lower: {osm_way: 1488491554, name: "footway1488491554", highway: footway}
+    lonlat: [-90.068439, 29.969434]
+    upper_z_m: 9.1
+    lower_z_m: 0.2
+    dz_m: 8.9
+    skew_deg: 5
+    structure: st01_i10
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 34 m"
+  - id: i10595971432_over_clevelandavenue181653622
+    upper: {osm_way: 595971432, name: "I 10", highway: motorway}
+    lower: {osm_way: 181653622, name: "Cleveland Avenue", highway: tertiary}
+    lonlat: [-90.07858, 29.958124]
+    upper_z_m: 8.3
+    lower_z_m: -0.4
+    dz_m: 8.7
+    skew_deg: 1
+    structure: st01_i10
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 34 m"
+  - id: i10595971432_over_palmyrastreet329133457
+    upper: {osm_way: 595971432, name: "I 10", highway: motorway}
+    lower: {osm_way: 329133457, name: "Palmyra Street", highway: residential}
+    lonlat: [-90.079312, 29.957298]
+    upper_z_m: 8.6
+    lower_z_m: -0.5
+    dz_m: 9.1
+    skew_deg: 3
+    structure: st01_i10
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 34 m"
+  - id: i10595971432_over_canalstreet805387474
+    upper: {osm_way: 595971432, name: "I 10", highway: motorway}
+    lower: {osm_way: 805387474, name: "Canal Street", highway: primary}
+    lonlat: [-90.077828, 29.958973]
+    upper_z_m: 9.6
+    lower_z_m: -0.1
+    dz_m: 9.7
+    skew_deg: 0
+    structure: st01_i10
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 36 m"
+  - id: i10595971432_over_canalstreet1031576818
+    upper: {osm_way: 595971432, name: "I 10", highway: motorway}
+    lower: {osm_way: 1031576818, name: "Canal Street", highway: primary}
+    lonlat: [-90.077679, 29.959141]
+    upper_z_m: 9.7
+    lower_z_m: -0.1
+    dz_m: 9.8
+    skew_deg: 0
+    structure: st01_i10
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 32 m"
+  - id: i10595971432_over_canalstreetneutralgr1481210626
+    upper: {osm_way: 595971432, name: "I 10", highway: motorway}
+    lower: {osm_way: 1481210626, name: "Canal Street Neutral Ground", highway: footway}
+    lonlat: [-90.077754, 29.959056]
+    upper_z_m: 9.7
+    lower_z_m: 0.0
+    dz_m: 9.7
+    skew_deg: 0
+    structure: st01_i10
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 30 m"
+  - id: i10595971432_over_footway14878582251487858225
+    upper: {osm_way: 595971432, name: "I 10", highway: motorway}
+    lower: {osm_way: 1487858225, name: "footway1487858225", highway: footway}
+    lonlat: [-90.077895, 29.958897]
+    upper_z_m: 9.5
+    lower_z_m: -0.3
+    dz_m: 9.8
+    skew_deg: 0
+    structure: st01_i10
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 30 m"
+  - id: i10595971432_over_footway14878582301487858230
+    upper: {osm_way: 595971432, name: "I 10", highway: motorway}
+    lower: {osm_way: 1487858230, name: "footway1487858230", highway: footway}
+    lonlat: [-90.077617, 29.959211]
+    upper_z_m: 9.8
+    lower_z_m: -0.1
+    dz_m: 9.9
+    skew_deg: 1
+    structure: st01_i10
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 28 m"
+  - id: i10595971432_over_footway14878658981487865898
+    upper: {osm_way: 595971432, name: "I 10", highway: motorway}
+    lower: {osm_way: 1487865898, name: "footway1487865898", highway: footway}
+    lonlat: [-90.078634, 29.958063]
+    upper_z_m: 8.3
+    lower_z_m: -0.4
+    dz_m: 8.7
+    skew_deg: 1
+    structure: st01_i10
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 38 m"
+  - id: i10595971432_over_footway14878658991487865899
+    upper: {osm_way: 595971432, name: "I 10", highway: motorway}
+    lower: {osm_way: 1487865899, name: "footway1487865899", highway: footway}
+    lonlat: [-90.078539, 29.95817]
+    upper_z_m: 8.3
+    lower_z_m: 4.5
+    dz_m: 3.8
+    skew_deg: 3
+    structure: st01_i10
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 36 m"
+  - id: i10929869791_over_esplanadeavenue232076007
+    upper: {osm_way: 929869791, name: "I 10", highway: motorway}
+    lower: {osm_way: 232076007, name: "Esplanade Avenue", highway: tertiary}
+    lonlat: [-90.068611, 29.969303]
+    upper_z_m: 9.2
+    lower_z_m: 4.7
+    dz_m: 4.5
+    skew_deg: 0
+    structure: st01_i10
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 24 m"
+  - id: i10929869791_over_saintphilipstreet837782794
+    upper: {osm_way: 929869791, name: "I 10", highway: motorway}
+    lower: {osm_way: 837782794, name: "Saint Philip Street", highway: residential}
+    lonlat: [-90.071207, 29.966402]
+    upper_z_m: 8.4
+    lower_z_m: -0.2
+    dz_m: 8.6
+    skew_deg: 1
+    structure: st01_i10
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 32 m"
+  - id: i10929869791_over_dumainestreet1050367830
+    upper: {osm_way: 929869791, name: "I 10", highway: motorway}
+    lower: {osm_way: 1050367830, name: "Dumaine Street", highway: residential}
+    lonlat: [-90.071963, 29.965554]
+    upper_z_m: 8.7
+    lower_z_m: -0.4
+    dz_m: 9.1
+    skew_deg: 0
+    structure: st01_i10
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 36 m"
+  - id: i10929869791_over_governornichollsstre1065784879
+    upper: {osm_way: 929869791, name: "I 10", highway: motorway}
+    lower: {osm_way: 1065784879, name: "Governor Nicholls Street", highway: residential}
+    lonlat: [-90.069556, 29.968252]
+    upper_z_m: 9.0
+    lower_z_m: 6.3
+    dz_m: 2.7
+    skew_deg: 14
+    structure: st01_i10
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 144 m"
+  - id: i10929869791_over_esplanadeavenue1098995989
+    upper: {osm_way: 929869791, name: "I 10", highway: motorway}
+    lower: {osm_way: 1098995989, name: "Esplanade Avenue", highway: tertiary}
+    lonlat: [-90.068498, 29.969426]
+    upper_z_m: 9.2
+    lower_z_m: 0.8
+    dz_m: 8.4
+    skew_deg: 0
+    structure: st01_i10
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 64 m"
+  - id: i10929869791_over_esplanadeavepath1389951771
+    upper: {osm_way: 929869791, name: "I 10", highway: motorway}
+    lower: {osm_way: 1389951771, name: "Esplanade Ave. Path", highway: footway}
+    lonlat: [-90.068571, 29.969347]
+    upper_z_m: 9.2
+    lower_z_m: 0.4
+    dz_m: 8.8
+    skew_deg: 0
+    structure: st01_i10
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 32 m"
+  - id: i10929869791_over_ursulinesavenue1466238235
+    upper: {osm_way: 929869791, name: "I 10", highway: motorway}
+    lower: {osm_way: 1466238235, name: "Ursulines Avenue", highway: residential}
+    lonlat: [-90.0705, 29.967193]
+    upper_z_m: 8.3
+    lower_z_m: -0.2
+    dz_m: 8.5
+    skew_deg: 7
+    structure: st01_i10
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 34 m"
+  - id: i10929869791_over_ursulinesavenue1466238236
+    upper: {osm_way: 929869791, name: "I 10", highway: motorway}
+    lower: {osm_way: 1466238236, name: "Ursulines Avenue", highway: residential}
+    lonlat: [-90.070479, 29.967218]
+    upper_z_m: 8.3
+    lower_z_m: 2.3
+    dz_m: 6.0
+    skew_deg: 6
+    structure: st01_i10
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 56 m"
+  - id: i10929869791_over_footway14884781061488478106
+    upper: {osm_way: 929869791, name: "I 10", highway: motorway}
+    lower: {osm_way: 1488478106, name: "footway1488478106", highway: footway}
+    lonlat: [-90.071253, 29.966349]
+    upper_z_m: 8.4
+    lower_z_m: -0.2
+    dz_m: 8.6
+    skew_deg: 0
+    structure: st01_i10
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 32 m"
+  - id: i10929869791_over_footway14884781081488478108
+    upper: {osm_way: 929869791, name: "I 10", highway: motorway}
+    lower: {osm_way: 1488478108, name: "footway1488478108", highway: footway}
+    lonlat: [-90.071166, 29.966447]
+    upper_z_m: 8.4
+    lower_z_m: -0.2
+    dz_m: 8.6
+    skew_deg: 3
+    structure: st01_i10
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 32 m"
+  - id: i10929869791_over_footway14884799701488479970
+    upper: {osm_way: 929869791, name: "I 10", highway: motorway}
+    lower: {osm_way: 1488479970, name: "footway1488479970", highway: footway}
+    lonlat: [-90.071997, 29.965516]
+    upper_z_m: 8.7
+    lower_z_m: -0.4
+    dz_m: 9.1
+    skew_deg: 0
+    structure: st01_i10
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 34 m"
+  - id: i10929869791_over_footway14884799721488479972
+    upper: {osm_way: 929869791, name: "I 10", highway: motorway}
+    lower: {osm_way: 1488479972, name: "footway1488479972", highway: footway}
+    lonlat: [-90.071918, 29.965604]
+    upper_z_m: 8.7
+    lower_z_m: -0.4
+    dz_m: 9.1
+    skew_deg: 5
+    structure: st01_i10
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 34 m"
+  - id: i10929869791_over_footway14884915361488491536
+    upper: {osm_way: 929869791, name: "I 10", highway: motorway}
+    lower: {osm_way: 1488491536, name: "footway1488491536", highway: footway}
+    lonlat: [-90.069598, 29.968205]
+    upper_z_m: 9.0
+    lower_z_m: 0.3
+    dz_m: 8.7
+    skew_deg: 12
+    structure: st01_i10
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 32 m"
+  - id: i10929869791_over_footway14884915371488491537
+    upper: {osm_way: 929869791, name: "I 10", highway: motorway}
+    lower: {osm_way: 1488491537, name: "footway1488491537", highway: footway}
+    lonlat: [-90.069503, 29.968311]
+    upper_z_m: 9.1
+    lower_z_m: 0.3
+    dz_m: 8.8
+    skew_deg: 13
+    structure: st01_i10
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 32 m"
+  - id: i10929869791_over_footway14884915481488491548
+    upper: {osm_way: 929869791, name: "I 10", highway: motorway}
+    lower: {osm_way: 1488491548, name: "footway1488491548", highway: footway}
+    lonlat: [-90.068663, 29.969247]
+    upper_z_m: 9.2
+    lower_z_m: 0.8
+    dz_m: 8.4
+    skew_deg: 3
+    structure: st01_i10
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 30 m"
+  - id: i10929869791_over_footway14884915541488491554
+    upper: {osm_way: 929869791, name: "I 10", highway: motorway}
+    lower: {osm_way: 1488491554, name: "footway1488491554", highway: footway}
+    lonlat: [-90.06847, 29.969457]
+    upper_z_m: 9.2
+    lower_z_m: 6.1
+    dz_m: 3.1
+    skew_deg: 1
+    structure: st01_i10
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 32 m"
+  - id: i101076293558_over_ibervillestreet29050098
+    upper: {osm_way: 1076293558, name: "I 10", highway: motorway}
+    lower: {osm_way: 29050098, name: "Iberville Street", highway: residential}
+    lonlat: [-90.076932, 29.959983]
+    upper_z_m: 9.5
+    lower_z_m: -0.2
+    dz_m: 9.7
+    skew_deg: 0
+    structure: st01_i10
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 34 m"
+  - id: i101076293558_over_saintlouisstreet595646625
+    upper: {osm_way: 1076293558, name: "I 10", highway: motorway}
+    lower: {osm_way: 595646625, name: "Saint Louis Street", highway: residential}
+    lonlat: [-90.074894, 29.962267]
+    upper_z_m: 9.5
+    lower_z_m: 0.2
+    dz_m: 9.3
+    skew_deg: 0
+    structure: st01_i10
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 30 m"
+  - id: i101076293558_over_contistreet1049957769
+    upper: {osm_way: 1076293558, name: "I 10", highway: motorway}
+    lower: {osm_way: 1049957769, name: "Conti Street", highway: residential}
+    lonlat: [-90.075516, 29.96157]
+    upper_z_m: 9.5
+    lower_z_m: -0.1
+    dz_m: 9.6
+    skew_deg: 0
+    structure: st01_i10
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 30 m"
+  - id: i101076293558_over_lafittegreenway1235621726
+    upper: {osm_way: 1076293558, name: "I 10", highway: motorway}
+    lower: {osm_way: 1235621726, name: "Lafitte Greenway", highway: cycleway}
+    lonlat: [-90.074205, 29.963039]
+    upper_z_m: 9.5
+    lower_z_m: 0.5
+    dz_m: 9.0
+    skew_deg: 0
+    structure: st01_i10
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 30 m"
+  - id: i101076293558_over_footway12356218461235621846
+    upper: {osm_way: 1076293558, name: "I 10", highway: motorway}
+    lower: {osm_way: 1235621846, name: "footway1235621846", highway: footway}
+    lonlat: [-90.074947, 29.962208]
+    upper_z_m: 9.5
+    lower_z_m: 0.2
+    dz_m: 9.3
+    skew_deg: 2
+    structure: st01_i10
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 30 m"
+  - id: i101076293558_over_footway12356218491235621849
+    upper: {osm_way: 1076293558, name: "I 10", highway: motorway}
+    lower: {osm_way: 1235621849, name: "footway1235621849", highway: footway}
+    lonlat: [-90.074858, 29.962308]
+    upper_z_m: 9.5
+    lower_z_m: 0.2
+    dz_m: 9.3
+    skew_deg: 1
+    structure: st01_i10
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 30 m"
+  - id: i101076293558_over_bienvillestreet1469127600
+    upper: {osm_way: 1076293558, name: "I 10", highway: motorway}
+    lower: {osm_way: 1469127600, name: "Bienville Street", highway: tertiary}
+    lonlat: [-90.076245, 29.960753]
+    upper_z_m: 9.5
+    lower_z_m: -0.2
+    dz_m: 9.7
+    skew_deg: 0
+    structure: st01_i10
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 30 m"
+  - id: i101076293558_over_footway14878599851487859985
+    upper: {osm_way: 1076293558, name: "I 10", highway: motorway}
+    lower: {osm_way: 1487859985, name: "footway1487859985", highway: footway}
+    lonlat: [-90.076327, 29.96066]
+    upper_z_m: 9.5
+    lower_z_m: -0.3
+    dz_m: 9.8
+    skew_deg: 4
+    structure: st01_i10
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 32 m"
+  - id: i101076293558_over_footway14878599861487859986
+    upper: {osm_way: 1076293558, name: "I 10", highway: motorway}
+    lower: {osm_way: 1487859986, name: "footway1487859986", highway: footway}
+    lonlat: [-90.076196, 29.960808]
+    upper_z_m: 9.5
+    lower_z_m: -0.2
+    dz_m: 9.7
+    skew_deg: 2
+    structure: st01_i10
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 28 m"
+  - id: i101076297000_over_lafittestreet80433326
+    upper: {osm_way: 1076297000, name: "I 10", highway: motorway}
+    lower: {osm_way: 80433326, name: "Lafitte Street", highway: residential}
+    lonlat: [-90.07392, 29.963358]
+    upper_z_m: 9.4
+    lower_z_m: -0.2
+    dz_m: 9.6
+    skew_deg: 4
+    structure: st01_i10
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 30 m"
+  - id: i101076297000_over_saintannstreet149716682
+    upper: {osm_way: 1076297000, name: "I 10", highway: motorway}
+    lower: {osm_way: 149716682, name: "Saint Ann Street", highway: residential}
+    lonlat: [-90.07268, 29.964749]
+    upper_z_m: 8.9
+    lower_z_m: -0.4
+    dz_m: 9.3
+    skew_deg: 0
+    structure: st01_i10
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 34 m"
+  - id: i101076297000_over_orleansavenue685402350
+    upper: {osm_way: 1076297000, name: "I 10", highway: motorway}
+    lower: {osm_way: 685402350, name: "Orleans Avenue", highway: tertiary}
+    lonlat: [-90.073163, 29.964207]
+    upper_z_m: 9.1
+    lower_z_m: -0.4
+    dz_m: 9.5
+    skew_deg: 0
+    structure: st01_i10
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 32 m"
+  - id: i101076297000_over_orleansavenue685402354
+    upper: {osm_way: 1076297000, name: "I 10", highway: motorway}
+    lower: {osm_way: 685402354, name: "Orleans Avenue", highway: tertiary}
+    lonlat: [-90.073071, 29.964311]
+    upper_z_m: 9.1
+    lower_z_m: -0.4
+    dz_m: 9.5
+    skew_deg: 1
+    structure: st01_i10
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 32 m"
+  - id: i101076297000_over_saintpeterstreet685402357
+    upper: {osm_way: 1076297000, name: "I 10", highway: motorway}
+    lower: {osm_way: 685402357, name: "Saint Peter Street", highway: residential}
+    lonlat: [-90.073479, 29.963853]
+    upper_z_m: 9.2
+    lower_z_m: 4.4
+    dz_m: 4.8
+    skew_deg: 2
+    structure: st01_i10
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 24 m"
+  - id: i101076297000_over_footway14884768031488476803
+    upper: {osm_way: 1076297000, name: "I 10", highway: motorway}
+    lower: {osm_way: 1488476803, name: "footway1488476803", highway: footway}
+    lonlat: [-90.073016, 29.964372]
+    upper_z_m: 9.1
+    lower_z_m: -0.4
+    dz_m: 9.5
+    skew_deg: 2
+    structure: st01_i10
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 34 m"
+  - id: i101076297000_over_footway14884768061488476806
+    upper: {osm_way: 1076297000, name: "I 10", highway: motorway}
+    lower: {osm_way: 1488476806, name: "footway1488476806", highway: footway}
+    lonlat: [-90.073213, 29.964151]
+    upper_z_m: 9.2
+    lower_z_m: -0.4
+    dz_m: 9.6
+    skew_deg: 3
+    structure: st01_i10
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 32 m"
+  - id: i101076297000_over_footway14884799811488479981
+    upper: {osm_way: 1076297000, name: "I 10", highway: motorway}
+    lower: {osm_way: 1488479981, name: "footway1488479981", highway: footway}
+    lonlat: [-90.072621, 29.964815]
+    upper_z_m: 8.9
+    lower_z_m: -0.4
+    dz_m: 9.3
+    skew_deg: 2
+    structure: st01_i10
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 34 m"
+  - id: i101076297000_over_footway14884799821488479982
+    upper: {osm_way: 1076297000, name: "I 10", highway: motorway}
+    lower: {osm_way: 1488479982, name: "footway1488479982", highway: footway}
+    lonlat: [-90.072712, 29.964713]
+    upper_z_m: 9.0
+    lower_z_m: 4.6
+    dz_m: 4.4
+    skew_deg: 7
+    structure: st01_i10
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 22 m"
+  - id: i101076297000_over_footway14884799891488479989
+    upper: {osm_way: 1076297000, name: "I 10", highway: motorway}
+    lower: {osm_way: 1488479989, name: "footway1488479989", highway: footway}
+    lonlat: [-90.073545, 29.963779]
+    upper_z_m: 9.3
+    lower_z_m: 4.8
+    dz_m: 4.5
+    skew_deg: 0
+    structure: st01_i10
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 22 m"
+  - id: i101076297000_over_footway14884799901488479990
+    upper: {osm_way: 1076297000, name: "I 10", highway: motorway}
+    lower: {osm_way: 1488479990, name: "footway1488479990", highway: footway}
+    lonlat: [-90.073438, 29.963898]
+    upper_z_m: 9.2
+    lower_z_m: -0.4
+    dz_m: 9.6
+    skew_deg: 2
+    structure: st01_i10
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 30 m"
+  - id: i101076321093_over_kerlerecstreet12697894
+    upper: {osm_way: 1076321093, name: "I 10", highway: motorway}
+    lower: {osm_way: 12697894, name: "Kerlerec Street", highway: residential}
+    lonlat: [-90.067805, 29.970208]
+    upper_z_m: 9.2
+    lower_z_m: 1.0
+    dz_m: 8.2
+    skew_deg: 1
+    structure: st01_i10
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 86 m"
+  - id: i101076321093_over_columbusstreet28352478
+    upper: {osm_way: 1076321093, name: "I 10", highway: motorway}
+    lower: {osm_way: 28352478, name: "Columbus Street", highway: residential}
+    lonlat: [-90.067106, 29.97102]
+    upper_z_m: 8.8
+    lower_z_m: -0.1
+    dz_m: 8.9
+    skew_deg: 0
+    structure: st01_i10
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 36 m"
+  - id: i101076321093_over_footway14884915611488491561
+    upper: {osm_way: 1076321093, name: "I 10", highway: motorway}
+    lower: {osm_way: 1488491561, name: "footway1488491561", highway: footway}
+    lonlat: [-90.067841, 29.970166]
+    upper_z_m: 9.2
+    lower_z_m: 0.1
+    dz_m: 9.1
+    skew_deg: 1
+    structure: st01_i10
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 34 m"
+  - id: i101076321093_over_footway14884915621488491562
+    upper: {osm_way: 1076321093, name: "I 10", highway: motorway}
+    lower: {osm_way: 1488491562, name: "footway1488491562", highway: footway}
+    lonlat: [-90.067766, 29.970255]
+    upper_z_m: 9.1
+    lower_z_m: 0.4
+    dz_m: 8.7
+    skew_deg: 0
+    structure: st01_i10
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 30 m"
+  - id: i101076321093_over_footway14884927801488492780
+    upper: {osm_way: 1076321093, name: "I 10", highway: motorway}
+    lower: {osm_way: 1488492780, name: "footway1488492780", highway: footway}
+    lonlat: [-90.067053, 29.971078]
+    upper_z_m: 8.7
+    lower_z_m: 4.4
+    dz_m: 4.3
+    skew_deg: 4
+    structure: st01_i10
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 22 m"
+  - id: i101076321093_over_footway14884927851488492785
+    upper: {osm_way: 1076321093, name: "I 10", highway: motorway}
+    lower: {osm_way: 1488492785, name: "footway1488492785", highway: footway}
+    lonlat: [-90.067141, 29.970983]
+    upper_z_m: 8.8
+    lower_z_m: 4.2
+    dz_m: 4.6
+    skew_deg: 5
+    structure: st01_i10
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 22 m"
+  - id: ramp12687612_over_dumainestreet1050367830
+    upper: {osm_way: 12687612, name: "ramp", highway: motorway_link}
+    lower: {osm_way: 1050367830, name: "Dumaine Street", highway: residential}
+    lonlat: [-90.072503, 29.96592]
+    upper_z_m: 7.6
+    lower_z_m: -0.4
+    dz_m: 8.0
+    skew_deg: 49
+    structure: st02_i10
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 28 m"
+  - id: ramp12687612_over_northclaiborneavenue1098995995
+    upper: {osm_way: 12687612, name: "ramp", highway: motorway_link}
+    lower: {osm_way: 1098995995, name: "North Claiborne Avenue", highway: secondary}
+    lonlat: [-90.071857, 29.966044]
+    upper_z_m: 8.4
+    lower_z_m: -0.3
+    dz_m: 8.7
+    skew_deg: 63
+    structure: st02_i10
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 38 m"
+  - id: ramp12687612_over_footway14884780961488478096
+    upper: {osm_way: 12687612, name: "ramp", highway: motorway_link}
+    lower: {osm_way: 1488478096, name: "footway1488478096", highway: footway}
+    lonlat: [-90.071898, 29.966028]
+    upper_z_m: 8.4
+    lower_z_m: -0.4
+    dz_m: 8.8
+    skew_deg: 63
+    structure: st02_i10
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 36 m"
+  - id: ramp12687616_over_northclaiborneavenue1098995995
+    upper: {osm_way: 12687616, name: "ramp", highway: motorway_link}
+    lower: {osm_way: 1098995995, name: "North Claiborne Avenue", highway: secondary}
+    lonlat: [-90.072502, 29.965313]
+    upper_z_m: 8.7
+    lower_z_m: -0.4
+    dz_m: 9.1
+    skew_deg: 63
+    structure: st02_i10
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 40 m"
+  - id: ramp12687616_over_footway14884780951488478095
+    upper: {osm_way: 12687616, name: "ramp", highway: motorway_link}
+    lower: {osm_way: 1488478095, name: "footway1488478095", highway: footway}
+    lonlat: [-90.072494, 29.965364]
+    upper_z_m: 8.5
+    lower_z_m: -0.5
+    dz_m: 9.0
+    skew_deg: 58
+    structure: st02_i10
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 34 m"
+  - id: ramp12687616_over_footway14884799811488479981
+    upper: {osm_way: 12687616, name: "ramp", highway: motorway_link}
+    lower: {osm_way: 1488479981, name: "footway1488479981", highway: footway}
+    lonlat: [-90.072726, 29.964892]
+    upper_z_m: 8.9
+    lower_z_m: -0.3
+    dz_m: 9.2
+    skew_deg: 8
+    structure: st02_i10
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 28 m"
+  - id: ramp12689523_over_southclaiborneavenue181653730
+    upper: {osm_way: 12689523, name: "ramp", highway: motorway_link}
+    lower: {osm_way: 181653730, name: "South Claiborne Avenue", highway: secondary}
+    lonlat: [-90.079262, 29.957762]
+    upper_z_m: 8.1
+    lower_z_m: -0.5
+    dz_m: 8.6
+    skew_deg: 72
+    structure: st02_i10
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 48 m"
+  - id: ramp12689523_over_footway14878658961487865896
+    upper: {osm_way: 12689523, name: "ramp", highway: motorway_link}
+    lower: {osm_way: 1487865896, name: "footway1487865896", highway: footway}
+    lonlat: [-90.079428, 29.957705]
+    upper_z_m: 7.6
+    lower_z_m: -0.4
+    dz_m: 8.0
+    skew_deg: 50
+    structure: st02_i10
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 28 m"
+  - id: ramp31705755_over_kerlerecstreet12697894
+    upper: {osm_way: 31705755, name: "ramp", highway: motorway_link}
+    lower: {osm_way: 12697894, name: "Kerlerec Street", highway: residential}
+    lonlat: [-90.067941, 29.970299]
+    upper_z_m: 9.1
+    lower_z_m: -0.0
+    dz_m: 9.1
+    skew_deg: 4
+    structure: st02_i10
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 34 m"
+  - id: ramp31705755_over_columbusstreet28352478
+    upper: {osm_way: 31705755, name: "ramp", highway: motorway_link}
+    lower: {osm_way: 28352478, name: "Columbus Street", highway: residential}
+    lonlat: [-90.067291, 29.971148]
+    upper_z_m: 8.5
+    lower_z_m: -0.2
+    dz_m: 8.7
+    skew_deg: 8
+    structure: st02_i10
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 42 m"
+  - id: ramp31705755_over_footway14884915611488491561
+    upper: {osm_way: 31705755, name: "ramp", highway: motorway_link}
+    lower: {osm_way: 1488491561, name: "footway1488491561", highway: footway}
+    lonlat: [-90.067974, 29.970255]
+    upper_z_m: 9.1
+    lower_z_m: 0.1
+    dz_m: 9.0
+    skew_deg: 5
+    structure: st02_i10
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 32 m"
+  - id: ramp31705755_over_footway14884915621488491562
+    upper: {osm_way: 31705755, name: "ramp", highway: motorway_link}
+    lower: {osm_way: 1488491562, name: "footway1488491562", highway: footway}
+    lonlat: [-90.067905, 29.970346]
+    upper_z_m: 9.1
+    lower_z_m: 0.0
+    dz_m: 9.1
+    skew_deg: 4
+    structure: st02_i10
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 32 m"
+  - id: i10161590923_over_kerlerecstreet12697894
+    upper: {osm_way: 161590923, name: "I 10", highway: motorway}
+    lower: {osm_way: 12697894, name: "Kerlerec Street", highway: residential}
+    lonlat: [-90.067929, 29.970291]
+    upper_z_m: 9.1
+    lower_z_m: 0.0
+    dz_m: 9.1
+    skew_deg: 2
+    structure: st02_i10
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 34 m"
+  - id: i10161590923_over_columbusstreet28352478
+    upper: {osm_way: 161590923, name: "I 10", highway: motorway}
+    lower: {osm_way: 28352478, name: "Columbus Street", highway: residential}
+    lonlat: [-90.067201, 29.971086]
+    upper_z_m: 8.7
+    lower_z_m: -0.1
+    dz_m: 8.8
+    skew_deg: 1
+    structure: st02_i10
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 34 m"
+  - id: i10161590923_over_footway14884915611488491561
+    upper: {osm_way: 161590923, name: "I 10", highway: motorway}
+    lower: {osm_way: 1488491561, name: "footway1488491561", highway: footway}
+    lonlat: [-90.067967, 29.970251]
+    upper_z_m: 9.1
+    lower_z_m: 0.0
+    dz_m: 9.1
+    skew_deg: 2
+    structure: st02_i10
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 34 m"
+  - id: i10161590923_over_footway14884915621488491562
+    upper: {osm_way: 161590923, name: "I 10", highway: motorway}
+    lower: {osm_way: 1488491562, name: "footway1488491562", highway: footway}
+    lonlat: [-90.067888, 29.970335]
+    upper_z_m: 9.1
+    lower_z_m: 0.0
+    dz_m: 9.1
+    skew_deg: 3
+    structure: st02_i10
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 32 m"
+  - id: i10161590923_over_footway14884927801488492780
+    upper: {osm_way: 161590923, name: "I 10", highway: motorway}
+    lower: {osm_way: 1488492780, name: "footway1488492780", highway: footway}
+    lonlat: [-90.067144, 29.97115]
+    upper_z_m: 8.7
+    lower_z_m: 5.6
+    dz_m: 3.1
+    skew_deg: 5
+    structure: st02_i10
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 32 m"
+  - id: i10161590923_over_footway14884927851488492785
+    upper: {osm_way: 161590923, name: "I 10", highway: motorway}
+    lower: {osm_way: 1488492785, name: "footway1488492785", highway: footway}
+    lonlat: [-90.067228, 29.971055]
+    upper_z_m: 8.7
+    lower_z_m: 5.4
+    dz_m: 3.3
+    skew_deg: 6
+    structure: st02_i10
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 32 m"
+  - id: i10595971433_over_ibervillestreet29050098
+    upper: {osm_way: 595971433, name: "I 10", highway: motorway}
+    lower: {osm_way: 29050098, name: "Iberville Street", highway: residential}
+    lonlat: [-90.077029, 29.960049]
+    upper_z_m: 9.9
+    lower_z_m: -0.2
+    dz_m: 10.1
+    skew_deg: 0
+    structure: st02_i10
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 34 m"
+  - id: i10595971433_over_lafittestreet80433326
+    upper: {osm_way: 595971433, name: "I 10", highway: motorway}
+    lower: {osm_way: 80433326, name: "Lafitte Street", highway: residential}
+    lonlat: [-90.074013, 29.963413]
+    upper_z_m: 9.4
+    lower_z_m: -0.2
+    dz_m: 9.6
+    skew_deg: 4
+    structure: st02_i10
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 36 m"
+  - id: i10595971433_over_saintannstreet149716682
+    upper: {osm_way: 595971433, name: "I 10", highway: motorway}
+    lower: {osm_way: 149716682, name: "Saint Ann Street", highway: residential}
+    lonlat: [-90.072783, 29.964819]
+    upper_z_m: 8.9
+    lower_z_m: -0.4
+    dz_m: 9.3
+    skew_deg: 1
+    structure: st02_i10
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 30 m"
+  - id: i10595971433_over_clevelandavenue181653622
+    upper: {osm_way: 595971433, name: "I 10", highway: motorway}
+    lower: {osm_way: 181653622, name: "Cleveland Avenue", highway: tertiary}
+    lonlat: [-90.078681, 29.95819]
+    upper_z_m: 8.3
+    lower_z_m: -0.4
+    dz_m: 8.7
+    skew_deg: 2
+    structure: st02_i10
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 32 m"
+  - id: i10595971433_over_saintlouisstreet595646625
+    upper: {osm_way: 595971433, name: "I 10", highway: motorway}
+    lower: {osm_way: 595646625, name: "Saint Louis Street", highway: residential}
+    lonlat: [-90.074985, 29.962329]
+    upper_z_m: 9.5
+    lower_z_m: 0.2
+    dz_m: 9.3
+    skew_deg: 0
+    structure: st02_i10
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 32 m"
+  - id: i10595971433_over_orleansavenue685402350
+    upper: {osm_way: 595971433, name: "I 10", highway: motorway}
+    lower: {osm_way: 685402350, name: "Orleans Avenue", highway: tertiary}
+    lonlat: [-90.073261, 29.964273]
+    upper_z_m: 9.2
+    lower_z_m: -0.4
+    dz_m: 9.6
+    skew_deg: 0
+    structure: st02_i10
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 30 m"
+  - id: i10595971433_over_orleansavenue685402354
+    upper: {osm_way: 595971433, name: "I 10", highway: motorway}
+    lower: {osm_way: 685402354, name: "Orleans Avenue", highway: tertiary}
+    lonlat: [-90.073171, 29.964376]
+    upper_z_m: 9.1
+    lower_z_m: -0.3
+    dz_m: 9.4
+    skew_deg: 1
+    structure: st02_i10
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 30 m"
+  - id: i10595971433_over_canalstreet805387474
+    upper: {osm_way: 595971433, name: "I 10", highway: motorway}
+    lower: {osm_way: 805387474, name: "Canal Street", highway: primary}
+    lonlat: [-90.077919, 29.959034]
+    upper_z_m: 9.7
+    lower_z_m: -0.2
+    dz_m: 9.9
+    skew_deg: 0
+    structure: st02_i10
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 36 m"
+  - id: i10595971433_over_canalstreet1031576818
+    upper: {osm_way: 595971433, name: "I 10", highway: motorway}
+    lower: {osm_way: 1031576818, name: "Canal Street", highway: primary}
+    lonlat: [-90.07777, 29.959203]
+    upper_z_m: 9.8
+    lower_z_m: -0.1
+    dz_m: 9.9
+    skew_deg: 0
+    structure: st02_i10
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 32 m"
+  - id: i10595971433_over_contistreet1049957769
+    upper: {osm_way: 595971433, name: "I 10", highway: motorway}
+    lower: {osm_way: 1049957769, name: "Conti Street", highway: residential}
+    lonlat: [-90.075608, 29.961634]
+    upper_z_m: 9.5
+    lower_z_m: -0.1
+    dz_m: 9.6
+    skew_deg: 0
+    structure: st02_i10
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 34 m"
+  - id: i10595971433_over_bienvillestreet1049957770
+    upper: {osm_way: 595971433, name: "I 10", highway: motorway}
+    lower: {osm_way: 1049957770, name: "Bienville Street", highway: tertiary}
+    lonlat: [-90.076348, 29.960809]
+    upper_z_m: 13.7
+    lower_z_m: -0.3
+    dz_m: 14.0
+    skew_deg: 12
+    structure: st02_i10
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper interpolated (occluded); lower interpolated over 32 m"
+  - id: i10595971433_over_bienvillestreet1049957771
+    upper: {osm_way: 595971433, name: "I 10", highway: motorway}
+    lower: {osm_way: 1049957771, name: "Bienville Street", highway: tertiary}
+    lonlat: [-90.076334, 29.960825]
+    upper_z_m: 9.5
+    lower_z_m: -0.2
+    dz_m: 9.7
+    skew_deg: 11
+    structure: st02_i10
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 32 m"
+  - id: i10595971433_over_lafittegreenway1235621726
+    upper: {osm_way: 595971433, name: "I 10", highway: motorway}
+    lower: {osm_way: 1235621726, name: "Lafitte Greenway", highway: cycleway}
+    lonlat: [-90.074295, 29.9631]
+    upper_z_m: 9.5
+    lower_z_m: 0.5
+    dz_m: 9.0
+    skew_deg: 0
+    structure: st02_i10
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 30 m"
+  - id: i10595971433_over_footway12356218461235621846
+    upper: {osm_way: 595971433, name: "I 10", highway: motorway}
+    lower: {osm_way: 1235621846, name: "footway1235621846", highway: footway}
+    lonlat: [-90.075041, 29.962267]
+    upper_z_m: 9.5
+    lower_z_m: 0.2
+    dz_m: 9.3
+    skew_deg: 2
+    structure: st02_i10
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 32 m"
+  - id: i10595971433_over_footway12356218491235621849
+    upper: {osm_way: 595971433, name: "I 10", highway: motorway}
+    lower: {osm_way: 1235621849, name: "footway1235621849", highway: footway}
+    lonlat: [-90.074947, 29.962371]
+    upper_z_m: 9.5
+    lower_z_m: 0.2
+    dz_m: 9.3
+    skew_deg: 1
+    structure: st02_i10
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 32 m"
+  - id: i10595971433_over_canalstreetneutralgr1481210626
+    upper: {osm_way: 595971433, name: "I 10", highway: motorway}
+    lower: {osm_way: 1481210626, name: "Canal Street Neutral Ground", highway: footway}
+    lonlat: [-90.077845, 29.959118]
+    upper_z_m: 9.7
+    lower_z_m: 0.0
+    dz_m: 9.7
+    skew_deg: 1
+    structure: st02_i10
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 32 m"
+  - id: i10595971433_over_footway14878582251487858225
+    upper: {osm_way: 595971433, name: "I 10", highway: motorway}
+    lower: {osm_way: 1487858225, name: "footway1487858225", highway: footway}
+    lonlat: [-90.077985, 29.958957]
+    upper_z_m: 9.6
+    lower_z_m: -0.4
+    dz_m: 10.0
+    skew_deg: 0
+    structure: st02_i10
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 36 m"
+  - id: i10595971433_over_footway14878582301487858230
+    upper: {osm_way: 595971433, name: "I 10", highway: motorway}
+    lower: {osm_way: 1487858230, name: "footway1487858230", highway: footway}
+    lonlat: [-90.077708, 29.959275]
+    upper_z_m: 9.8
+    lower_z_m: -0.1
+    dz_m: 9.9
+    skew_deg: 1
+    structure: st02_i10
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 32 m"
+  - id: i10595971433_over_footway14878599851487859985
+    upper: {osm_way: 595971433, name: "I 10", highway: motorway}
+    lower: {osm_way: 1487859985, name: "footway1487859985", highway: footway}
+    lonlat: [-90.076429, 29.960719]
+    upper_z_m: 10.3
+    lower_z_m: -0.2
+    dz_m: 10.5
+    skew_deg: 4
+    structure: st02_i10
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 38 m"
+  - id: i10595971433_over_footway14878599861487859986
+    upper: {osm_way: 595971433, name: "I 10", highway: motorway}
+    lower: {osm_way: 1487859986, name: "footway1487859986", highway: footway}
+    lonlat: [-90.076293, 29.96087]
+    upper_z_m: 9.5
+    lower_z_m: -0.3
+    dz_m: 9.8
+    skew_deg: 2
+    structure: st02_i10
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 32 m"
+  - id: i10595971433_over_footway14878658981487865898
+    upper: {osm_way: 595971433, name: "I 10", highway: motorway}
+    lower: {osm_way: 1487865898, name: "footway1487865898", highway: footway}
+    lonlat: [-90.078734, 29.958132]
+    upper_z_m: 8.3
+    lower_z_m: -0.4
+    dz_m: 8.7
+    skew_deg: 0
+    structure: st02_i10
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 36 m"
+  - id: i10595971433_over_footway14878658991487865899
+    upper: {osm_way: 595971433, name: "I 10", highway: motorway}
+    lower: {osm_way: 1487865899, name: "footway1487865899", highway: footway}
+    lonlat: [-90.078641, 29.958232]
+    upper_z_m: 8.3
+    lower_z_m: 3.7
+    dz_m: 4.6
+    skew_deg: 4
+    structure: st02_i10
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 22 m"
+  - id: i10595971433_over_footway14884768031488476803
+    upper: {osm_way: 595971433, name: "I 10", highway: motorway}
+    lower: {osm_way: 1488476803, name: "footway1488476803", highway: footway}
+    lonlat: [-90.073112, 29.964442]
+    upper_z_m: 9.1
+    lower_z_m: -0.4
+    dz_m: 9.5
+    skew_deg: 3
+    structure: st02_i10
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 30 m"
+  - id: i10595971433_over_footway14884768061488476806
+    upper: {osm_way: 595971433, name: "I 10", highway: motorway}
+    lower: {osm_way: 1488476806, name: "footway1488476806", highway: footway}
+    lonlat: [-90.073315, 29.964212]
+    upper_z_m: 9.2
+    lower_z_m: -0.4
+    dz_m: 9.6
+    skew_deg: 3
+    structure: st02_i10
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 30 m"
+  - id: i10595971433_over_footway14884799901488479990
+    upper: {osm_way: 595971433, name: "I 10", highway: motorway}
+    lower: {osm_way: 1488479990, name: "footway1488479990", highway: footway}
+    lonlat: [-90.073535, 29.963959]
+    upper_z_m: 9.2
+    lower_z_m: -0.4
+    dz_m: 9.6
+    skew_deg: 2
+    structure: st02_i10
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 28 m"
+  - id: i10682521418_over_palmyrastreet329133457
+    upper: {osm_way: 682521418, name: "I 10", highway: motorway}
+    lower: {osm_way: 329133457, name: "Palmyra Street", highway: residential}
+    lonlat: [-90.079413, 29.957374]
+    upper_z_m: 8.6
+    lower_z_m: -0.5
+    dz_m: 9.1
+    skew_deg: 3
+    structure: st02_i10
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 32 m"
+  - id: i101076265155_over_dumainestreet1050367830
+    upper: {osm_way: 1076265155, name: "I 10", highway: motorway}
+    lower: {osm_way: 1050367830, name: "Dumaine Street", highway: residential}
+    lonlat: [-90.072062, 29.96562]
+    upper_z_m: 8.7
+    lower_z_m: -0.4
+    dz_m: 9.1
+    skew_deg: 1
+    structure: st02_i10
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 34 m"
+  - id: i101076265155_over_footway14884799701488479970
+    upper: {osm_way: 1076265155, name: "I 10", highway: motorway}
+    lower: {osm_way: 1488479970, name: "footway1488479970", highway: footway}
+    lonlat: [-90.072096, 29.965583]
+    upper_z_m: 8.7
+    lower_z_m: -0.4
+    dz_m: 9.1
+    skew_deg: 0
+    structure: st02_i10
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 32 m"
+  - id: i101076265155_over_footway14884799721488479972
+    upper: {osm_way: 1076265155, name: "I 10", highway: motorway}
+    lower: {osm_way: 1488479972, name: "footway1488479972", highway: footway}
+    lonlat: [-90.072023, 29.965664]
+    upper_z_m: 8.7
+    lower_z_m: -0.3
+    dz_m: 9.0
+    skew_deg: 5
+    structure: st02_i10
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 30 m"
+  - id: i101076265155_over_footway14884799811488479981
+    upper: {osm_way: 1076265155, name: "I 10", highway: motorway}
+    lower: {osm_way: 1488479981, name: "footway1488479981", highway: footway}
+    lonlat: [-90.072721, 29.964888]
+    upper_z_m: 8.9
+    lower_z_m: -0.3
+    dz_m: 9.2
+    skew_deg: 2
+    structure: st02_i10
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 30 m"
+  - id: i101076300488_over_esplanadeavenue232076007
+    upper: {osm_way: 1076300488, name: "I 10", highway: motorway}
+    lower: {osm_way: 232076007, name: "Esplanade Avenue", highway: tertiary}
+    lonlat: [-90.068732, 29.969387]
+    upper_z_m: 9.1
+    lower_z_m: 0.2
+    dz_m: 8.9
+    skew_deg: 1
+    structure: st02_i10
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 38 m"
+  - id: i101076300488_over_saintphilipstreet837782794
+    upper: {osm_way: 1076300488, name: "I 10", highway: motorway}
+    lower: {osm_way: 837782794, name: "Saint Philip Street", highway: residential}
+    lonlat: [-90.071303, 29.966469]
+    upper_z_m: 8.4
+    lower_z_m: -0.2
+    dz_m: 8.6
+    skew_deg: 1
+    structure: st02_i10
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 30 m"
+  - id: i101076300488_over_esplanadeavenue1098995988
+    upper: {osm_way: 1076300488, name: "I 10", highway: motorway}
+    lower: {osm_way: 1098995988, name: "Esplanade Avenue", highway: tertiary}
+    lonlat: [-90.068622, 29.969512]
+    upper_z_m: 9.2
+    lower_z_m: 1.8
+    dz_m: 7.4
+    skew_deg: 1
+    structure: st02_i10
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 54 m"
+  - id: i101076300488_over_esplanadeavepath1389951771
+    upper: {osm_way: 1076300488, name: "I 10", highway: motorway}
+    lower: {osm_way: 1389951771, name: "Esplanade Ave. Path", highway: footway}
+    lonlat: [-90.068693, 29.969431]
+    upper_z_m: 9.1
+    lower_z_m: 0.3
+    dz_m: 8.8
+    skew_deg: 1
+    structure: st02_i10
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 36 m"
+  - id: i101076300488_over_ursulinesavenue1466238235
+    upper: {osm_way: 1076300488, name: "I 10", highway: motorway}
+    lower: {osm_way: 1466238235, name: "Ursulines Avenue", highway: residential}
+    lonlat: [-90.070613, 29.967252]
+    upper_z_m: 8.3
+    lower_z_m: -0.2
+    dz_m: 8.5
+    skew_deg: 7
+    structure: st02_i10
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 32 m"
+  - id: i101076300488_over_ursulinesavenue1466238236
+    upper: {osm_way: 1076300488, name: "I 10", highway: motorway}
+    lower: {osm_way: 1466238236, name: "Ursulines Avenue", highway: residential}
+    lonlat: [-90.070573, 29.967297]
+    upper_z_m: 8.3
+    lower_z_m: 4.3
+    dz_m: 4.0
+    skew_deg: 7
+    structure: st02_i10
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 48 m"
+  - id: i101076300488_over_footway14884781061488478106
+    upper: {osm_way: 1076300488, name: "I 10", highway: motorway}
+    lower: {osm_way: 1488478106, name: "footway1488478106", highway: footway}
+    lonlat: [-90.071351, 29.966415]
+    upper_z_m: 8.4
+    lower_z_m: -0.1
+    dz_m: 8.5
+    skew_deg: 0
+    structure: st02_i10
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 28 m"
+  - id: i101076300488_over_footway14884781081488478108
+    upper: {osm_way: 1076300488, name: "I 10", highway: motorway}
+    lower: {osm_way: 1488478108, name: "footway1488478108", highway: footway}
+    lonlat: [-90.071268, 29.966509]
+    upper_z_m: 8.4
+    lower_z_m: -0.1
+    dz_m: 8.5
+    skew_deg: 2
+    structure: st02_i10
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 30 m"
+  - id: i101076300488_over_footway14884915361488491536
+    upper: {osm_way: 1076300488, name: "I 10", highway: motorway}
+    lower: {osm_way: 1488491536, name: "footway1488491536", highway: footway}
+    lonlat: [-90.06969, 29.9683]
+    upper_z_m: 9.0
+    lower_z_m: 0.3
+    dz_m: 8.7
+    skew_deg: 12
+    structure: st02_i10
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 36 m"
+  - id: i101076300488_over_footway14884915371488491537
+    upper: {osm_way: 1076300488, name: "I 10", highway: motorway}
+    lower: {osm_way: 1488491537, name: "footway1488491537", highway: footway}
+    lonlat: [-90.069595, 29.968408]
+    upper_z_m: 9.0
+    lower_z_m: 0.3
+    dz_m: 8.7
+    skew_deg: 13
+    structure: st02_i10
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 32 m"
+  - id: i101076300488_over_footway14884915481488491548
+    upper: {osm_way: 1076300488, name: "I 10", highway: motorway}
+    lower: {osm_way: 1488491548, name: "footway1488491548", highway: footway}
+    lonlat: [-90.068778, 29.969335]
+    upper_z_m: 9.1
+    lower_z_m: 0.4
+    dz_m: 8.7
+    skew_deg: 4
+    structure: st02_i10
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 36 m"
+  - id: i101076300488_over_footway14884915541488491554
+    upper: {osm_way: 1076300488, name: "I 10", highway: motorway}
+    lower: {osm_way: 1488491554, name: "footway1488491554", highway: footway}
+    lonlat: [-90.068593, 29.969545]
+    upper_z_m: 9.1
+    lower_z_m: 4.6
+    dz_m: 4.5
+    skew_deg: 2
+    structure: st02_i10
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 24 m"
+unresolved:
+  - id: ramp31678110_x_footway14878659001487865900
+    a: {osm_way: 31678110, name: "ramp", highway: motorway_link, layer: "1", bridge: "yes"}
+    b: {osm_way: 1487865900, name: "footway1487865900", highway: footway, layer: "", bridge: ""}
+    lonlat: [-90.078374, 29.958067]
+    reason: "no lidar profile on one side of the crossing (b one-sided); cannot interpolate"
+  - id: ramp31705755_x_northclaiborneavenue456867570
+    a: {osm_way: 31705755, name: "ramp", highway: motorway_link, layer: "1", bridge: "yes"}
+    b: {osm_way: 456867570, name: "North Claiborne Avenue", highway: secondary, layer: "", bridge: ""}
+    lonlat: [-90.067346, 29.971069]
+    reason: "no lidar profile on one side of the crossing (a one-sided); cannot interpolate"
+  - id: ramp31705755_x_footway14884927861488492786
+    a: {osm_way: 31705755, name: "ramp", highway: motorway_link, layer: "1", bridge: "yes"}
+    b: {osm_way: 1488492786, name: "footway1488492786", highway: footway, layer: "", bridge: ""}
+    lonlat: [-90.067313, 29.971117]
+    reason: "no lidar profile on one side of the crossing (b one-sided); cannot interpolate"
+  - id: ramp31705755_x_footway14884927831488492783
+    a: {osm_way: 31705755, name: "ramp", highway: motorway_link, layer: "1", bridge: "yes"}
+    b: {osm_way: 1488492783, name: "footway1488492783", highway: footway, layer: "", bridge: ""}
+    lonlat: [-90.067238, 29.971225]
+    reason: "no lidar profile on one side of the crossing (b one-sided); cannot interpolate"
+  - id: i10595971433_x_footway14884799891488479989
+    a: {osm_way: 595971433, name: "I 10", highway: motorway, layer: "1", bridge: "yes"}
+    b: {osm_way: 1488479989, name: "footway1488479989", highway: footway, layer: "", bridge: ""}
+    lonlat: [-90.073637, 29.963843]
+    reason: "no lidar profile on one side of the crossing (b one-sided); cannot interpolate"
+  - id: i10595971433_x_saintpeterstreet685402357
+    a: {osm_way: 595971433, name: "I 10", highway: motorway, layer: "1", bridge: "yes"}
+    b: {osm_way: 685402357, name: "Saint Peter Street", highway: residential, layer: "", bridge: ""}
+    lonlat: [-90.073575, 29.963914]
+    reason: "no lidar profile on one side of the crossing (b one-sided); cannot interpolate"
+  - id: i10595971433_x_footway14884799821488479982
+    a: {osm_way: 595971433, name: "I 10", highway: motorway, layer: "1", bridge: "yes"}
+    b: {osm_way: 1488479982, name: "footway1488479982", highway: footway, layer: "", bridge: ""}
+    lonlat: [-90.072806, 29.964793]
+    reason: "no lidar profile on one side of the crossing (b one-sided); cannot interpolate"
+  - id: i10929869791_x_ramp1161017671
+    a: {osm_way: 929869791, name: "I 10", highway: motorway, layer: "1", bridge: "yes"}
+    b: {osm_way: 1161017671, name: "ramp", highway: secondary_link, layer: "", bridge: ""}
+    lonlat: [-90.068594, 29.969322]
+    reason: "no lidar profile on one side of the crossing (b one-sided); cannot interpolate"
+  - id: i101076300488_x_bayouroad1468711316
+    a: {osm_way: 1076300488, name: "I 10", highway: motorway, layer: "1", bridge: "yes"}
+    b: {osm_way: 1468711316, name: "Bayou Road", highway: residential, layer: "", bridge: ""}
+    lonlat: [-90.069644, 29.968352]
+    reason: "no grade separation in the lidar (dz 0.6 m)"
+  - id: i101076300488_x_ramp1098995986
+    a: {osm_way: 1076300488, name: "I 10", highway: motorway, layer: "1", bridge: "yes"}
+    b: {osm_way: 1098995986, name: "ramp", highway: secondary_link, layer: "", bridge: ""}
+    lonlat: [-90.068669, 29.969459]
+    reason: "no lidar profile on one side of the crossing (b one-sided); cannot interpolate"
+
+structure_ends:
+  status: draft, needs human review
+  structures:
+    - id: st01_i10
+      carries: [12687424, 12690278, 31678110, 31678161, 31705753, 595971432, 929869791, 1076293558, 1076297000, 1076321093]
+      over: [12697894, 28352478, 29050098, 31705754, 52186194, 80433326, 149716682, 181653622, 232076007, 317197583, 329133457, 595646625, 685402350, 685402354, 685402355, 685402357, 805387474, 837782794, 929869790, 1031576818, 1031576819, 1049957769, 1049959452, 1050367830, 1065784879, 1098995989, 1161017671, 1235621726, 1235621846, 1235621849, 1389951771, 1466238235, 1466238236, 1469127600, 1481210626, 1487858225, 1487858230, 1487859985, 1487859986, 1487865863, 1487865898, 1487865899, 1488476803, 1488476806, 1488478106, 1488478108, 1488479970, 1488479972, 1488479981, 1488479982, 1488479988, 1488479989, 1488479990, 1488480000, 1488491533, 1488491536, 1488491537, 1488491548, 1488491554, 1488491561, 1488491562, 1488492780, 1488492785]
+      ends:
+        - along: 12687424
+          start_lonlat: [-90.077152, 29.959736]
+          end_lonlat: [-90.071407, 29.962318]
+          length_m: 794.0
+          osm_bridge_length_m: 794.3
+          truncated_at_aoi_edge: true  # deck continues past the AOI; length is the part inside
+        - along: 12690278
+          start_lonlat: [-90.074155, 29.963096]
+          end_lonlat: [-90.069921, 29.967199]
+          length_m: 616.5
+          osm_bridge_length_m: 620.4
+          truncated_at_aoi_edge: true  # deck continues past the AOI; length is the part inside
+        - along: 31678110
+          start_lonlat: [-90.079001, 29.95702]
+          end_lonlat: [-90.074155, 29.963096]
+          length_m: 825.0
+          osm_bridge_length_m: 835.5
+          truncated_at_aoi_edge: true  # deck continues past the AOI; length is the part inside
+        - along: 31705753
+          start_lonlat: [-90.070588, 29.966727]
+          end_lonlat: [-90.066681, 29.971482]
+          length_m: 652.5
+          osm_bridge_length_m: 815.2
+          truncated_at_aoi_edge: true  # deck continues past the AOI; length is the part inside
+        - along: 595971432
+          start_lonlat: [-90.07956, 29.957021]
+          end_lonlat: [-90.074157, 29.963093]
+          length_m: 851.5
+          osm_bridge_length_m: 990.4
+          truncated_at_aoi_edge: true  # deck continues past the AOI; length is the part inside
+        - along: 929869791
+          start_lonlat: [-90.074155, 29.963096]
+          end_lonlat: [-90.066682, 29.97148]
+          length_m: 1176.5
+          osm_bridge_length_m: 1324.9
+          truncated_at_aoi_edge: true  # deck continues past the AOI; length is the part inside
+        - along: 1076293558
+          start_lonlat: [-90.079508, 29.957077]
+          end_lonlat: [-90.072212, 29.965274]
+          length_m: 1149.5
+          osm_bridge_length_m: 1149.8
+          truncated_at_aoi_edge: true  # deck continues past the AOI; length is the part inside
+        - along: 1076297000
+          start_lonlat: [-90.077152, 29.959736]
+          end_lonlat: [-90.068126, 29.969829]
+          length_m: 1418.0
+          osm_bridge_length_m: 1418.4
+          truncated_at_aoi_edge: true  # deck continues past the AOI; length is the part inside
+        - along: 1076321093
+          start_lonlat: [-90.070589, 29.966727]
+          end_lonlat: [-90.066681, 29.971481]
+          length_m: 652.5
+          osm_bridge_length_m: 815.2
+          truncated_at_aoi_edge: true  # deck continues past the AOI; length is the part inside
+    - id: st02_i10
+      carries: [12687612, 12687616, 12689523, 31705755, 161590923, 595971433, 682521418, 1076265155, 1076300488]
+      over: [12697894, 28352478, 29050098, 80433326, 149716682, 181653622, 181653730, 232076007, 329133457, 595646625, 685402350, 685402354, 805387474, 837782794, 1031576818, 1049957769, 1049957770, 1049957771, 1050367830, 1098995988, 1098995995, 1235621726, 1235621846, 1235621849, 1389951771, 1466238235, 1466238236, 1481210626, 1487858225, 1487858230, 1487859985, 1487859986, 1487865896, 1487865898, 1487865899, 1488476803, 1488476806, 1488478095, 1488478096, 1488478106, 1488478108, 1488479970, 1488479972, 1488479981, 1488479990, 1488491536, 1488491537, 1488491548, 1488491554, 1488491561, 1488491562, 1488492780, 1488492785]
+      ends:
+        - along: 12687612
+          start_lonlat: [-90.068012, 29.970205]
+          end_lonlat: [-90.073858, 29.965297]
+          length_m: 818.0
+          osm_bridge_length_m: 795.2
+          truncated_at_aoi_edge: true  # deck continues past the AOI; length is the part inside
+        - along: 12687616
+          start_lonlat: [-90.073795, 29.965255]
+          end_lonlat: [-90.078793, 29.958069]
+          length_m: 1200.0
+          osm_bridge_length_m: 1178.7
+          truncated_at_aoi_edge: true  # deck continues past the AOI; length is the part inside
+        - along: 12689523
+          start_lonlat: [-90.072758, 29.964848]
+          end_lonlat: [-90.079898, 29.958429]
+          length_m: 1148.5
+          osm_bridge_length_m: 1151.4
+          truncated_at_aoi_edge: true  # deck continues past the AOI; length is the part inside
+        - along: 31705755
+          start_lonlat: [-90.067086, 29.971481]
+          end_lonlat: [-90.071534, 29.966207]
+          length_m: 726.0
+          osm_bridge_length_m: 902.1
+          truncated_at_aoi_edge: true  # deck continues past the AOI; length is the part inside
+        - along: 161590923
+          start_lonlat: [-90.066851, 29.971481]
+          end_lonlat: [-90.071534, 29.966207]
+          length_m: 739.0
+          osm_bridge_length_m: 1294.5
+          truncated_at_aoi_edge: true  # deck continues past the AOI; length is the part inside
+        - along: 595971433
+          start_lonlat: [-90.068012, 29.970205]
+          end_lonlat: [-90.079729, 29.957021]
+          length_m: 1848.0
+          osm_bridge_length_m: 1954.4
+          truncated_at_aoi_edge: true  # deck continues past the AOI; length is the part inside
+        - along: 682521418
+          start_lonlat: [-90.072758, 29.964848]
+          end_lonlat: [-90.079729, 29.957021]
+          length_m: 1098.0
+          osm_bridge_length_m: 1204.4
+          truncated_at_aoi_edge: true  # deck continues past the AOI; length is the part inside
+        - along: 1076265155
+          start_lonlat: [-90.068012, 29.970205]
+          end_lonlat: [-90.078794, 29.958067]
+          length_m: 1701.0
+          osm_bridge_length_m: 1701.0
+          truncated_at_aoi_edge: true  # deck continues past the AOI; length is the part inside
+        - along: 1076300488
+          start_lonlat: [-90.066851, 29.971481]
+          end_lonlat: [-90.078794, 29.958067]
+          length_m: 1881.5
+          osm_bridge_length_m: 2437.1
+          truncated_at_aoi_edge: true  # deck continues past the AOI; length is the part inside

@@ -1,0 +1,20 @@
+# Catalogue unit: I-71 / SR 161 diamond, Columbus, OH (tests/sites.yaml).
+# Hashes are the pins written by scripts/fetch_fixtures.py (FR-PL-3, D-008).
+
+[unit]
+site_id = "columbus_i71_sr161"
+aoi_lonlat = [-82.9925, 40.0820, -82.9815, 40.0930]
+imagery_enabled = false
+
+[lidar]
+path = "data/fixtures/columbus_i71_sr161/lidar.laz"
+name = "USGS_LPC_OH_Columbus_2019"
+year = 2019
+quality_level = "QL1"
+sha256 = "5b1742412eb0a89f627a587848fa9d1078fddafbceedd5d4b46377e8ba770fad"
+
+[vectors.osm]
+enabled = true
+path = "data/fixtures/columbus_i71_sr161/osm.json"
+license = "ODbL-1.0"
+sha256 = "c67591768fb591f27e70d746d94e76c117ac5548dd4302a155ef90e0127ef86f"

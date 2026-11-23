@@ -1,0 +1,82 @@
+# AC-H2 hand-labeled crossing list for seattle_i5_beacon_hill (I-5 on the west slope of Beacon Hill, Seattle WA).
+#
+# status: draft, needs human review. Drafted 2026-11-23 from the pinned fixture
+# (lidar_sha256 ca552401..., vector_sha256 a3611ff7...), not from a site visit or plans.
+# Crossings are every plan intersection inside the AOI, without a shared node, between
+# in-scope OSM edges (roader.io.in_scope) where at least one edge is limited-access
+# (D-037): 2 crossings. Footways, cycleways and service roads are in scope under
+# roader.io.in_scope and are listed.
+#
+# Class 17 (bridge deck) is present in this collection: 67,058 returns in the AOI.
+#
+# Method (unit frame, heights NAVD88 assumed, meters; classes 1, 2, 11 and 17). Each way
+# is traced along its OSM centerline, extended through the least-deflected continuing
+# way (under 40 deg) up to 300 m each side. Every 2 m the returns within 1.5 m are split
+# into height clusters (1 m gaps) and one surface is tracked from each end toward the
+# crossing with a 7 % grade limit, so a deck above or below is not taken for the road.
+# At a crossing each way's height is interpolated from its tracked stations outside the
+# other way's footprint (half width by OSM class plus 4 m); the higher way is the upper.
+# upper_z_m is the upper way's own returns at the crossing when they agree with that
+# profile, else the interpolation. lower_z_m is the interpolation; `evidence` gives its
+# span. dz is upper minus lower (FR-CR-1), to 0.1 m. skew_deg is from perpendicular,
+# between the traced centerlines. Pairs with no grade separation in the lidar (dz under
+# 2 m) or with no profile on one side are listed under `unresolved`, not as crossings.
+# A `review` note marks rows where the lidar order disagrees with the OSM layer / bridge
+# tags.
+#
+# Structures group crossings whose upper ways are connected bridge ways at one OSM
+# layer (FR-CR-3 chains); deck ends are the run of class 17 returns within 1.0 m of the
+# carried centerline through the crossing, with no gap over 3 m, clipped 2 m inside the
+# AOI (`truncated_at_aoi_edge` when the deck runs on past it). Ends along a ramp can run
+# on along the mainline deck the ramp's centerline continues onto.
+#
+# Review checklist: confirm the vertical order; the only grade separations of in-scope
+# roads are the two I-5 bridges over Military Road South (the northbound carriageway
+# there 4.9 m above the southbound), so this site exercises independent carriageway
+# profiles (FR-XS-4) more than crossings; the southbound bridge OSM way 806572224 (134
+# m) has no mapped road under it and is not listed; confirm the deck ends (no class 17
+# run was found on the northbound bridge).
+
+site_id: seattle_i5_beacon_hill
+status: draft, needs human review
+crossings:
+  - id: i5306258918_over_militaryroadsouth53621395
+    upper: {osm_way: 306258918, name: "I 5", highway: motorway}
+    lower: {osm_way: 53621395, name: "Military Road South", highway: unclassified}
+    lonlat: [-122.294484, 47.530324]
+    upper_z_m: 18.2
+    lower_z_m: 10.7
+    dz_m: 7.5
+    skew_deg: 1
+    structure: st01_i5
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 22 m"
+  - id: i5306258921_over_militaryroadsouth53621395
+    upper: {osm_way: 306258921, name: "I 5", highway: motorway}
+    lower: {osm_way: 53621395, name: "Military Road South", highway: unclassified}
+    lonlat: [-122.293739, 47.530491]
+    upper_z_m: 23.1
+    lower_z_m: 15.4
+    dz_m: 7.7
+    skew_deg: 14
+    structure: st02_i5
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 24 m"
+
+structure_ends:
+  status: draft, needs human review
+  structures:
+    - id: st01_i5
+      carries: [306258918]
+      over: [53621395]
+      ends:
+        - along: 306258918
+          start_lonlat: [-122.294585, 47.530528]
+          end_lonlat: [-122.294377, 47.53011]
+          length_m: 49.0
+          osm_bridge_length_m: 44.8
+    - id: st02_i5
+      carries: [306258921]
+      over: [53621395]
+      ends: []
+      ends_unavailable: "no class 17 run on the carried centerline at the crossing"

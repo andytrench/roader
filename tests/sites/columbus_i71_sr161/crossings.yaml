@@ -1,0 +1,105 @@
+# AC-H2 hand-labeled crossing list for columbus_i71_sr161 (I-71 / SR 161 (East Dublin-Granville Road) diamond, Columbus OH).
+#
+# status: draft, needs human review. Drafted 2026-11-23 from the pinned fixture
+# (lidar_sha256 5b174241..., vector_sha256 c6759176...), not from a site visit or plans.
+# Crossings are every plan intersection inside the AOI, without a shared node, between
+# in-scope OSM edges (roader.io.in_scope) where at least one edge is limited-access
+# (D-037): 4 crossings. Footways, cycleways and service roads are in scope under
+# roader.io.in_scope and are listed.
+#
+# Class 17 (bridge deck) is present in this collection: 56,118 returns in the AOI.
+#
+# Method (unit frame, heights NAVD88 assumed, meters; classes 1, 2, 11 and 17). Each way
+# is traced along its OSM centerline, extended through the least-deflected continuing
+# way (under 40 deg) up to 300 m each side. Every 2 m the returns within 1.5 m are split
+# into height clusters (1 m gaps) and one surface is tracked from each end toward the
+# crossing with a 7 % grade limit, so a deck above or below is not taken for the road.
+# At a crossing each way's height is interpolated from its tracked stations outside the
+# other way's footprint (half width by OSM class plus 4 m); the higher way is the upper.
+# upper_z_m is the upper way's own returns at the crossing when they agree with that
+# profile, else the interpolation. lower_z_m is the interpolation; `evidence` gives its
+# span. dz is upper minus lower (FR-CR-1), to 0.1 m. skew_deg is from perpendicular,
+# between the traced centerlines. Pairs with no grade separation in the lidar (dz under
+# 2 m) or with no profile on one side are listed under `unresolved`, not as crossings.
+# A `review` note marks rows where the lidar order disagrees with the OSM layer / bridge
+# tags.
+#
+# Structures group crossings whose upper ways are connected bridge ways at one OSM
+# layer (FR-CR-3 chains); deck ends are the run of class 17 returns within 1.0 m of the
+# carried centerline through the crossing, with no gap over 3 m, clipped 2 m inside the
+# AOI (`truncated_at_aoi_edge` when the deck runs on past it). Ends along a ramp can run
+# on along the mainline deck the ramp's centerline continues onto.
+#
+# Review checklist: confirm the vertical order (twin I-71 bridges over both SR 161
+# carriageways); confirm that no other grade separation of in-scope roads lies in the
+# AOI; confirm the deck ends.
+
+site_id: columbus_i71_sr161
+status: draft, needs human review
+crossings:
+  - id: i7130304860_over_eastdublingranviller704227090
+    upper: {osm_way: 30304860, name: "I 71", highway: motorway}
+    lower: {osm_way: 704227090, name: "East Dublin Granville Road", highway: primary}
+    lonlat: [-82.987152, 40.087537]
+    upper_z_m: 284.3
+    lower_z_m: 279.2
+    dz_m: 5.1
+    skew_deg: 1
+    structure: st01_i71
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 46 m"
+  - id: i7130304860_over_eastdublingranviller704229259
+    upper: {osm_way: 30304860, name: "I 71", highway: motorway}
+    lower: {osm_way: 704229259, name: "East Dublin Granville Road", highway: primary}
+    lonlat: [-82.987143, 40.087687]
+    upper_z_m: 284.4
+    lower_z_m: 279.1
+    dz_m: 5.3
+    skew_deg: 1
+    structure: st01_i71
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 46 m"
+  - id: i7130304878_over_eastdublingranviller704227090
+    upper: {osm_way: 30304878, name: "I 71", highway: motorway}
+    lower: {osm_way: 704227090, name: "East Dublin Granville Road", highway: primary}
+    lonlat: [-82.987425, 40.087547]
+    upper_z_m: 284.3
+    lower_z_m: 279.2
+    dz_m: 5.1
+    skew_deg: 0
+    structure: st02_i71
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 42 m"
+  - id: i7130304878_over_eastdublingranviller704229259
+    upper: {osm_way: 30304878, name: "I 71", highway: motorway}
+    lower: {osm_way: 704229259, name: "East Dublin Granville Road", highway: primary}
+    lonlat: [-82.987414, 40.087698]
+    upper_z_m: 284.4
+    lower_z_m: 279.0
+    dz_m: 5.4
+    skew_deg: 1
+    structure: st02_i71
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 42 m"
+
+structure_ends:
+  status: draft, needs human review
+  structures:
+    - id: st01_i71
+      carries: [30304860]
+      over: [704227090, 704229259]
+      ends:
+        - along: 30304860
+          start_lonlat: [-82.987167, 40.08733]
+          end_lonlat: [-82.987135, 40.087834]
+          length_m: 56.0
+          osm_bridge_length_m: 56.9
+    - id: st02_i71
+      carries: [30304878]
+      over: [704227090, 704229259]
+      ends:
+        - along: 30304878
+          start_lonlat: [-82.987403, 40.087843]
+          end_lonlat: [-82.987435, 40.087339]
+          length_m: 56.0
+          osm_bridge_length_m: 56.2

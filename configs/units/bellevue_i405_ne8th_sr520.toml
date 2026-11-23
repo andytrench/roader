@@ -1,0 +1,20 @@
+# Catalogue unit: I-405 C-D roads and braided ramps, NE 8th St to SR 520, Bellevue, WA (tests/sites.yaml).
+# Hashes are the pins written by scripts/fetch_fixtures.py (FR-PL-3, D-008).
+
+[unit]
+site_id = "bellevue_i405_ne8th_sr520"
+aoi_lonlat = [-122.1950, 47.6150, -122.1810, 47.6370]
+imagery_enabled = false
+
+[lidar]
+path = "data/fixtures/bellevue_i405_ne8th_sr520/lidar.laz"
+name = "WA_KingCo_1_2021"
+year = 2021
+quality_level = "QL1"
+sha256 = "668d42ef670d67a32db14eac95f2d2177a9af3e44f561c8ab53b73c7c96903f4"
+
+[vectors.osm]
+enabled = true
+path = "data/fixtures/bellevue_i405_ne8th_sr520/osm.json"
+license = "ODbL-1.0"
+sha256 = "bcd554d163dca335c55e9c4f0cc7bde635b4dab97d2d649b309d4df2d676e719"

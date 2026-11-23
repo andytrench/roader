@@ -1,0 +1,20 @@
+# Catalogue unit: I-5 split-level carriageways on Beacon Hill, Seattle, WA (tests/sites.yaml).
+# Hashes are the pins written by scripts/fetch_fixtures.py (FR-PL-3, D-008).
+
+[unit]
+site_id = "seattle_i5_beacon_hill"
+aoi_lonlat = [-122.3050, 47.5290, -122.2920, 47.5430]
+imagery_enabled = false
+
+[lidar]
+path = "data/fixtures/seattle_i5_beacon_hill/lidar.laz"
+name = "WA_KingCo_1_2021"
+year = 2021
+quality_level = "QL1"
+sha256 = "ca552401df33f5ab9ffbe3d22d461acfdee4999fae15b56a603bdf68996e30b1"
+
+[vectors.osm]
+enabled = true
+path = "data/fixtures/seattle_i5_beacon_hill/osm.json"
+license = "ODbL-1.0"
+sha256 = "a3611ff72daee898a4af59777ee177aa498c3ec4ad5ded710f6fcc4ad23f370c"

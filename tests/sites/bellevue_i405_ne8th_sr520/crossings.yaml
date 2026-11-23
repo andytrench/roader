@@ -1,0 +1,2124 @@
+# AC-H2 hand-labeled crossing list for bellevue_i405_ne8th_sr520 (I-405 collector-distributor roads and braided ramps between NE 8th Street and SR 520, Bellevue WA).
+#
+# status: draft, needs human review. Drafted 2026-11-23 from the pinned fixture
+# (lidar_sha256 668d42ef..., vector_sha256 bcd554d1...), not from a site visit or plans.
+# Crossings are every plan intersection inside the AOI, without a shared node, between
+# in-scope OSM edges (roader.io.in_scope) where at least one edge is limited-access
+# (D-037): 153 crossings. Footways, cycleways and service roads are in scope under
+# roader.io.in_scope and are listed.
+#
+# Class 17 (bridge deck) is present in this collection: 695,482 returns in the AOI.
+#
+# Method (unit frame, heights NAVD88 assumed, meters; classes 1, 2, 11 and 17). Each way
+# is traced along its OSM centerline, extended through the least-deflected continuing
+# way (under 40 deg) up to 300 m each side. Every 2 m the returns within 1.5 m are split
+# into height clusters (1 m gaps) and one surface is tracked from each end toward the
+# crossing with a 7 % grade limit, so a deck above or below is not taken for the road.
+# At a crossing each way's height is interpolated from its tracked stations outside the
+# other way's footprint (half width by OSM class plus 4 m); the higher way is the upper.
+# upper_z_m is the upper way's own returns at the crossing when they agree with that
+# profile, else the interpolation. lower_z_m is the interpolation; `evidence` gives its
+# span. dz is upper minus lower (FR-CR-1), to 0.1 m. skew_deg is from perpendicular,
+# between the traced centerlines. Pairs with no grade separation in the lidar (dz under
+# 2 m) or with no profile on one side are listed under `unresolved`, not as crossings.
+# A `review` note marks rows where the lidar order disagrees with the OSM layer / bridge
+# tags.
+#
+# Structures group crossings whose upper ways are connected bridge ways at one OSM
+# layer (FR-CR-3 chains); deck ends are the run of class 17 returns within 1.0 m of the
+# carried centerline through the crossing, with no gap over 3 m, clipped 2 m inside the
+# AOI (`truncated_at_aoi_edge` when the deck runs on past it). Ends along a ramp can run
+# on along the mainline deck the ramp's centerline continues onto.
+#
+# Review checklist: confirm the vertical order, starting with the row marked review (a
+# service way about 2 m above a ramp, likely the tunnel / underpass mapping); confirm
+# which crossings are the braided-ramp crossings; decide whether footway and cycleway
+# crossings belong in the AC-H2 list; confirm the structure grouping and the deck ends.
+
+site_id: bellevue_i405_ne8th_sr520
+status: draft, needs human review
+crossings:
+  - id: ramp4744437_over_116thavenuenortheast24549539
+    upper: {osm_way: 4744437, name: "ramp", highway: motorway_link}
+    lower: {osm_way: 24549539, name: "116th Avenue Northeast", highway: secondary}
+    lonlat: [-122.185646, 47.63213]
+    upper_z_m: 56.4
+    lower_z_m: 50.3
+    dz_m: 6.1
+    skew_deg: 4
+    structure: st01_ramp
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 46 m"
+  - id: ramp4744437_over_footway607986248607986248
+    upper: {osm_way: 4744437, name: "ramp", highway: motorway_link}
+    lower: {osm_way: 607986248, name: "footway607986248", highway: footway}
+    lonlat: [-122.185792, 47.632139]
+    upper_z_m: 56.2
+    lower_z_m: 52.0
+    dz_m: 4.2
+    skew_deg: 8
+    structure: st01_ramp
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 48 m"
+  - id: ramp4744437_over_footway12713520051271352005
+    upper: {osm_way: 4744437, name: "ramp", highway: motorway_link}
+    lower: {osm_way: 1271352005, name: "footway1271352005", highway: footway}
+    lonlat: [-122.185491, 47.632123]
+    upper_z_m: 56.7
+    lower_z_m: 51.6
+    dz_m: 5.1
+    skew_deg: 3
+    structure: st01_ramp
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 46 m"
+  - id: ramp24549540_over_116thavenuenortheast24549539
+    upper: {osm_way: 24549540, name: "ramp", highway: motorway_link}
+    lower: {osm_way: 24549539, name: "116th Avenue Northeast", highway: secondary}
+    lonlat: [-122.185656, 47.631745]
+    upper_z_m: 58.1
+    lower_z_m: 50.3
+    dz_m: 7.8
+    skew_deg: 5
+    structure: st02_ramp
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 56 m"
+  - id: ramp24549540_over_footway607986248607986248
+    upper: {osm_way: 24549540, name: "ramp", highway: motorway_link}
+    lower: {osm_way: 607986248, name: "footway607986248", highway: footway}
+    lonlat: [-122.185794, 47.631738]
+    upper_z_m: 58.2
+    lower_z_m: 52.2
+    dz_m: 6.0
+    skew_deg: 5
+    structure: st02_ramp
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 58 m"
+  - id: ramp24549540_over_footway12713520051271352005
+    upper: {osm_way: 24549540, name: "ramp", highway: motorway_link}
+    lower: {osm_way: 1271352005, name: "footway1271352005", highway: footway}
+    lonlat: [-122.185496, 47.631753]
+    upper_z_m: 58.1
+    lower_z_m: 51.9
+    dz_m: 6.2
+    skew_deg: 5
+    structure: st02_ramp
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 54 m"
+  - id: ramp24549555_over_northupway363687554
+    upper: {osm_way: 24549555, name: "ramp", highway: motorway_link}
+    lower: {osm_way: 363687554, name: "Northup Way", highway: secondary}
+    lonlat: [-122.186918, 47.633395]
+    upper_z_m: 59.2
+    lower_z_m: 52.2
+    dz_m: 7.0
+    skew_deg: 10
+    structure: st03_ramp
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 20 m"
+  - id: ramp24549555_over_footway609387674609387674
+    upper: {osm_way: 24549555, name: "ramp", highway: motorway_link}
+    lower: {osm_way: 609387674, name: "footway609387674", highway: footway}
+    lonlat: [-122.186904, 47.633446]
+    upper_z_m: 59.4
+    lower_z_m: 52.0
+    dz_m: 7.4
+    skew_deg: 10
+    structure: st03_ramp
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 20 m"
+  - id: ramp24549555_over_footway939529926939529926
+    upper: {osm_way: 24549555, name: "ramp", highway: motorway_link}
+    lower: {osm_way: 939529926, name: "footway939529926", highway: footway}
+    lonlat: [-122.186934, 47.633341]
+    upper_z_m: 59.0
+    lower_z_m: 54.6
+    dz_m: 4.4
+    skew_deg: 9
+    structure: st03_ramp
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 28 m"
+  - id: ramp24549556_over_eastrail24549536
+    upper: {osm_way: 24549556, name: "ramp", highway: motorway_link}
+    lower: {osm_way: 24549536, name: "Eastrail", highway: cycleway}
+    lonlat: [-122.186623, 47.634509]
+    upper_z_m: 60.3
+    lower_z_m: 48.4
+    dz_m: 11.9
+    skew_deg: 41
+    structure: st04_ramp
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 24 m"
+  - id: ramp24549557_over_eastrail24549536
+    upper: {osm_way: 24549557, name: "ramp", highway: motorway_link}
+    lower: {osm_way: 24549536, name: "Eastrail", highway: cycleway}
+    lonlat: [-122.186631, 47.634516]
+    upper_z_m: 60.2
+    lower_z_m: 48.4
+    dz_m: 11.8
+    skew_deg: 36
+    structure: st04_ramp
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 20 m"
+  - id: ramp980461371_over_115thavenuenortheast6350179
+    upper: {osm_way: 980461371, name: "ramp", highway: motorway_link}
+    lower: {osm_way: 6350179, name: "115th Avenue Northeast", highway: residential}
+    lonlat: [-122.186552, 47.634755]
+    upper_z_m: 60.4
+    lower_z_m: 52.0
+    dz_m: 8.4
+    skew_deg: 30
+    structure: st04_ramp
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 20 m"
+  - id: ramp24549558_over_northupway363687554
+    upper: {osm_way: 24549558, name: "ramp", highway: motorway_link}
+    lower: {osm_way: 363687554, name: "Northup Way", highway: secondary}
+    lonlat: [-122.187025, 47.633422]
+    upper_z_m: 61.0
+    lower_z_m: 51.9
+    dz_m: 9.1
+    skew_deg: 7
+    structure: st05_ramp
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 24 m"
+  - id: ramp24549558_over_footway609387674609387674
+    upper: {osm_way: 24549558, name: "ramp", highway: motorway_link}
+    lower: {osm_way: 609387674, name: "footway609387674", highway: footway}
+    lonlat: [-122.187007, 47.633473]
+    upper_z_m: 60.9
+    lower_z_m: 51.8
+    dz_m: 9.1
+    skew_deg: 8
+    structure: st05_ramp
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 24 m"
+  - id: ramp24549558_over_footway939529926939529926
+    upper: {osm_way: 24549558, name: "ramp", highway: motorway_link}
+    lower: {osm_way: 939529926, name: "footway939529926", highway: footway}
+    lonlat: [-122.187044, 47.633368]
+    upper_z_m: 61.1
+    lower_z_m: 55.6
+    dz_m: 5.5
+    skew_deg: 7
+    structure: st05_ramp
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 24 m"
+  - id: ramp24549563_over_115thavenuenortheast6350179
+    upper: {osm_way: 24549563, name: "ramp", highway: motorway_link}
+    lower: {osm_way: 6350179, name: "115th Avenue Northeast", highway: residential}
+    lonlat: [-122.187377, 47.635463]
+    upper_z_m: 58.7
+    lower_z_m: 51.8
+    dz_m: 6.9
+    skew_deg: 39
+    structure: st06_ramp
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 24 m"
+  - id: ramp24549563_over_eastrail24549536
+    upper: {osm_way: 24549563, name: "ramp", highway: motorway_link}
+    lower: {osm_way: 24549536, name: "Eastrail", highway: cycleway}
+    lonlat: [-122.187468, 47.635309]
+    upper_z_m: 58.1
+    lower_z_m: 48.9
+    dz_m: 9.2
+    skew_deg: 36
+    structure: st06_ramp
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 22 m"
+  - id: ramp24549570_over_115thavenuenortheast6350179
+    upper: {osm_way: 24549570, name: "ramp", highway: motorway_link}
+    lower: {osm_way: 6350179, name: "115th Avenue Northeast", highway: residential}
+    lonlat: [-122.187358, 47.63544]
+    upper_z_m: 58.7
+    lower_z_m: 51.8
+    dz_m: 6.9
+    skew_deg: 48
+    structure: st06_ramp
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 28 m"
+  - id: ramp24549570_over_eastrail24549536
+    upper: {osm_way: 24549570, name: "ramp", highway: motorway_link}
+    lower: {osm_way: 24549536, name: "Eastrail", highway: cycleway}
+    lonlat: [-122.187418, 47.635259]
+    upper_z_m: 58.0
+    lower_z_m: 48.9
+    dz_m: 9.1
+    skew_deg: 43
+    structure: st06_ramp
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 24 m"
+  - id: ramp24549571_over_sr5204752353
+    upper: {osm_way: 24549571, name: "ramp", highway: motorway_link}
+    lower: {osm_way: 4752353, name: "SR 520", highway: motorway}
+    lonlat: [-122.189836, 47.633123]
+    upper_z_m: 56.6
+    lower_z_m: 51.1
+    dz_m: 5.5
+    skew_deg: 27
+    structure: st07_ramp
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 128 m"
+  - id: ramp24549571_over_sr520310013775
+    upper: {osm_way: 24549571, name: "ramp", highway: motorway_link}
+    lower: {osm_way: 310013775, name: "SR 520", highway: motorway}
+    lonlat: [-122.189772, 47.633271]
+    upper_z_m: 55.9
+    lower_z_m: 49.3
+    dz_m: 6.6
+    skew_deg: 37
+    structure: st07_ramp
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 20 m"
+  - id: ramp34530546_over_northupway363687554
+    upper: {osm_way: 34530546, name: "ramp", highway: motorway_link}
+    lower: {osm_way: 363687554, name: "Northup Way", highway: secondary}
+    lonlat: [-122.188472, 47.634021]
+    upper_z_m: 52.6
+    lower_z_m: 47.1
+    dz_m: 5.5
+    skew_deg: 27
+    structure: st08_ramp
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 20 m"
+  - id: ramp34530546_over_footway609387674609387674
+    upper: {osm_way: 34530546, name: "ramp", highway: motorway_link}
+    lower: {osm_way: 609387674, name: "footway609387674", highway: footway}
+    lonlat: [-122.188394, 47.634043]
+    upper_z_m: 52.7
+    lower_z_m: 47.0
+    dz_m: 5.7
+    skew_deg: 21
+    structure: st08_ramp
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 20 m"
+  - id: ramp34530546_over_footway939529926939529926
+    upper: {osm_way: 34530546, name: "ramp", highway: motorway_link}
+    lower: {osm_way: 939529926, name: "footway939529926", highway: footway}
+    lonlat: [-122.188566, 47.634003]
+    upper_z_m: 52.5
+    lower_z_m: 48.0
+    dz_m: 4.5
+    skew_deg: 30
+    structure: st08_ramp
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 144 m"
+  - id: ramp34530554_over_sr5204752353
+    upper: {osm_way: 34530554, name: "ramp", highway: motorway_link}
+    lower: {osm_way: 4752353, name: "SR 520", highway: motorway}
+    lonlat: [-122.188528, 47.63243]
+    upper_z_m: 62.8
+    lower_z_m: 52.3
+    dz_m: 10.5
+    skew_deg: 33
+    structure: st09_ramp
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 20 m"
+  - id: ramp34530554_over_ramp4752358
+    upper: {osm_way: 34530554, name: "ramp", highway: motorway_link}
+    lower: {osm_way: 4752358, name: "ramp", highway: motorway_link}
+    lonlat: [-122.188524, 47.63261]
+    upper_z_m: 63.2
+    lower_z_m: 51.2
+    dz_m: 12.0
+    skew_deg: 42
+    structure: st09_ramp
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 24 m"
+  - id: ramp34530554_over_ramp4752358_2
+    upper: {osm_way: 34530554, name: "ramp", highway: motorway_link}
+    lower: {osm_way: 4752358, name: "ramp", highway: motorway_link}
+    lonlat: [-122.188177, 47.633551]
+    upper_z_m: 62.1
+    lower_z_m: 55.0
+    dz_m: 7.1
+    skew_deg: 36
+    structure: st09_ramp
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 22 m"
+  - id: ramp34530554_over_sr520310013775
+    upper: {osm_way: 34530554, name: "ramp", highway: motorway_link}
+    lower: {osm_way: 310013775, name: "SR 520", highway: motorway}
+    lonlat: [-122.188525, 47.632574]
+    upper_z_m: 63.1
+    lower_z_m: 51.5
+    dz_m: 11.6
+    skew_deg: 29
+    structure: st09_ramp
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 20 m"
+  - id: ramp34530554_over_northupway363687554
+    upper: {osm_way: 34530554, name: "ramp", highway: motorway_link}
+    lower: {osm_way: 363687554, name: "Northup Way", highway: secondary}
+    lonlat: [-122.188035, 47.633781]
+    upper_z_m: 60.6
+    lower_z_m: 48.6
+    dz_m: 12.0
+    skew_deg: 13
+    structure: st09_ramp
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 20 m"
+  - id: ramp34530554_over_footway609387674609387674
+    upper: {osm_way: 34530554, name: "ramp", highway: motorway_link}
+    lower: {osm_way: 609387674, name: "footway609387674", highway: footway}
+    lonlat: [-122.188006, 47.633829]
+    upper_z_m: 60.2
+    lower_z_m: 48.4
+    dz_m: 11.8
+    skew_deg: 13
+    structure: st09_ramp
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 20 m"
+  - id: ramp34530554_over_ramp782862427
+    upper: {osm_way: 34530554, name: "ramp", highway: motorway_link}
+    lower: {osm_way: 782862427, name: "ramp", highway: motorway_link}
+    lonlat: [-122.18853, 47.632345]
+    upper_z_m: 62.6
+    lower_z_m: 52.9
+    dz_m: 9.7
+    skew_deg: 14
+    structure: st09_ramp
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 20 m"
+  - id: ramp34530554_over_footway939529926939529926
+    upper: {osm_way: 34530554, name: "ramp", highway: motorway_link}
+    lower: {osm_way: 939529926, name: "footway939529926", highway: footway}
+    lonlat: [-122.188067, 47.63373]
+    upper_z_m: 60.9
+    lower_z_m: 49.0
+    dz_m: 11.9
+    skew_deg: 11
+    structure: st09_ramp
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 20 m"
+  - id: ramp34530893_over_ramp4744446
+    upper: {osm_way: 34530893, name: "ramp", highway: motorway_link}
+    lower: {osm_way: 4744446, name: "ramp", highway: motorway_link}
+    lonlat: [-122.18987, 47.631108]
+    upper_z_m: 70.0
+    lower_z_m: 60.8
+    dz_m: 9.2
+    skew_deg: 71
+    structure: st10_ramp
+    tags: {upper_layer: "3", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 66 m"
+  - id: ramp34530893_over_i40524549573
+    upper: {osm_way: 34530893, name: "ramp", highway: motorway_link}
+    lower: {osm_way: 24549573, name: "I 405", highway: motorway}
+    lonlat: [-122.188395, 47.631003]
+    upper_z_m: 74.3
+    lower_z_m: 65.2
+    dz_m: 9.1
+    skew_deg: 30
+    structure: st10_ramp
+    tags: {upper_layer: "3", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 20 m"
+  - id: ramp34530893_over_i40553189327
+    upper: {osm_way: 34530893, name: "ramp", highway: motorway_link}
+    lower: {osm_way: 53189327, name: "I 405", highway: motorway}
+    lonlat: [-122.18802, 47.631164]
+    upper_z_m: 74.0
+    lower_z_m: 64.6
+    dz_m: 9.4
+    skew_deg: 53
+    structure: st10_ramp
+    tags: {upper_layer: "3", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 28 m"
+  - id: ramp34530893_over_sr520623957736
+    upper: {osm_way: 34530893, name: "ramp", highway: motorway_link}
+    lower: {osm_way: 623957736, name: "SR 520", highway: motorway}
+    lonlat: [-122.18741, 47.632218]
+    upper_z_m: 66.9
+    lower_z_m: 54.1
+    dz_m: 12.8
+    skew_deg: 10
+    structure: st10_ramp
+    tags: {upper_layer: "3", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 20 m"
+  - id: ramp34530893_over_sr5201106679176
+    upper: {osm_way: 34530893, name: "ramp", highway: motorway_link}
+    lower: {osm_way: 1106679176, name: "SR 520", highway: motorway}
+    lonlat: [-122.187441, 47.632106]
+    upper_z_m: 67.8
+    lower_z_m: 54.4
+    dz_m: 13.4
+    skew_deg: 5
+    structure: st10_ramp
+    tags: {upper_layer: "3", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 20 m"
+  - id: ramp34531016_over_sr520623957736
+    upper: {osm_way: 34531016, name: "ramp", highway: motorway_link}
+    lower: {osm_way: 623957736, name: "SR 520", highway: motorway}
+    lonlat: [-122.188147, 47.632435]
+    upper_z_m: 59.4
+    lower_z_m: 52.2
+    dz_m: 7.2
+    skew_deg: 22
+    structure: st11_i405
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 26 m"
+  - id: ramp34531016_over_sr5201106679176
+    upper: {osm_way: 34531016, name: "ramp", highway: motorway_link}
+    lower: {osm_way: 1106679176, name: "SR 520", highway: motorway}
+    lonlat: [-122.188168, 47.632283]
+    upper_z_m: 60.0
+    lower_z_m: 53.2
+    dz_m: 6.8
+    skew_deg: 15
+    structure: st11_i405
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 24 m"
+  - id: i405310013200_over_sr520623957736
+    upper: {osm_way: 310013200, name: "I 405", highway: motorway}
+    lower: {osm_way: 623957736, name: "SR 520", highway: motorway}
+    lonlat: [-122.18809, 47.632415]
+    upper_z_m: 59.5
+    lower_z_m: 52.4
+    dz_m: 7.1
+    skew_deg: 16
+    structure: st11_i405
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 24 m"
+  - id: i405310013200_over_sr5201106679176
+    upper: {osm_way: 310013200, name: "I 405", highway: motorway}
+    lower: {osm_way: 1106679176, name: "SR 520", highway: motorway}
+    lonlat: [-122.188131, 47.632273]
+    upper_z_m: 60.1
+    lower_z_m: 53.2
+    dz_m: 6.9
+    skew_deg: 9
+    structure: st11_i405
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 24 m"
+  - id: northeast10thstreet48995748_over_ramp26370149
+    upper: {osm_way: 48995748, name: "Northeast 10th Street", highway: secondary}
+    lower: {osm_way: 26370149, name: "ramp", highway: motorway_link}
+    lonlat: [-122.188318, 47.619238]
+    upper_z_m: 54.4
+    lower_z_m: 43.0
+    dz_m: 11.4
+    skew_deg: 1
+    structure: st12_northeast10thstreet
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 26 m"
+  - id: northeast10thstreet48995748_over_ramp30615045
+    upper: {osm_way: 48995748, name: "Northeast 10th Street", highway: secondary}
+    lower: {osm_way: 30615045, name: "ramp", highway: motorway_link}
+    lonlat: [-122.188681, 47.61924]
+    upper_z_m: 54.6
+    lower_z_m: 43.3
+    dz_m: 11.3
+    skew_deg: 1
+    structure: st12_northeast10thstreet
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 24 m"
+  - id: northeast10thstreet48995748_over_ramp132147575
+    upper: {osm_way: 48995748, name: "Northeast 10th Street", highway: secondary}
+    lower: {osm_way: 132147575, name: "ramp", highway: motorway_link}
+    lonlat: [-122.188282, 47.619237]
+    upper_z_m: 54.4
+    lower_z_m: 43.0
+    dz_m: 11.4
+    skew_deg: 7
+    structure: st12_northeast10thstreet
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 26 m"
+  - id: northeast10thstreet48995748_over_ramp428073561
+    upper: {osm_way: 48995748, name: "Northeast 10th Street", highway: secondary}
+    lower: {osm_way: 428073561, name: "ramp", highway: motorway_link}
+    lonlat: [-122.188885, 47.61925]
+    upper_z_m: 54.6
+    lower_z_m: 43.7
+    dz_m: 10.9
+    skew_deg: 6
+    structure: st12_northeast10thstreet
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 26 m"
+  - id: northeast10thstreet48995748_over_i405736892506
+    upper: {osm_way: 48995748, name: "Northeast 10th Street", highway: secondary}
+    lower: {osm_way: 736892506, name: "I 405", highway: motorway}
+    lonlat: [-122.188536, 47.619239]
+    upper_z_m: 54.6
+    lower_z_m: 43.3
+    dz_m: 11.3
+    skew_deg: 0
+    structure: st12_northeast10thstreet
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 26 m"
+  - id: footway137068147137068147_over_ramp6330434
+    upper: {osm_way: 137068147, name: "footway137068147", highway: footway}
+    lower: {osm_way: 6330434, name: "ramp", highway: motorway_link}
+    lonlat: [-122.189111, 47.619353]
+    upper_z_m: 54.3
+    lower_z_m: 43.6
+    dz_m: 10.7
+    skew_deg: 1
+    structure: st12_northeast10thstreet
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 34 m"
+  - id: footway137068147137068147_over_ramp30615045
+    upper: {osm_way: 137068147, name: "footway137068147", highway: footway}
+    lower: {osm_way: 30615045, name: "ramp", highway: motorway_link}
+    lonlat: [-122.18868, 47.619337]
+    upper_z_m: 54.6
+    lower_z_m: 43.6
+    dz_m: 11.0
+    skew_deg: 1
+    structure: st12_northeast10thstreet
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 34 m"
+  - id: footway137068147137068147_over_ramp428073561
+    upper: {osm_way: 137068147, name: "footway137068147", highway: footway}
+    lower: {osm_way: 428073561, name: "ramp", highway: motorway_link}
+    lonlat: [-122.188888, 47.619343]
+    upper_z_m: 54.6
+    lower_z_m: 44.0
+    dz_m: 10.6
+    skew_deg: 5
+    structure: st12_northeast10thstreet
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 34 m"
+  - id: footway137068147137068147_over_ramp513238704
+    upper: {osm_way: 137068147, name: "footway137068147", highway: footway}
+    lower: {osm_way: 513238704, name: "ramp", highway: motorway_link}
+    lonlat: [-122.189091, 47.619352]
+    upper_z_m: 54.4
+    lower_z_m: 43.6
+    dz_m: 10.8
+    skew_deg: 4
+    structure: st12_northeast10thstreet
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 34 m"
+  - id: footway137068147137068147_over_i405622462903
+    upper: {osm_way: 137068147, name: "footway137068147", highway: footway}
+    lower: {osm_way: 622462903, name: "I 405", highway: motorway}
+    lonlat: [-122.188917, 47.619344]
+    upper_z_m: 54.6
+    lower_z_m: 43.9
+    dz_m: 10.7
+    skew_deg: 2
+    structure: st12_northeast10thstreet
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 34 m"
+  - id: footway137068147137068147_over_i405736892506
+    upper: {osm_way: 137068147, name: "footway137068147", highway: footway}
+    lower: {osm_way: 736892506, name: "I 405", highway: motorway}
+    lonlat: [-122.188536, 47.619335]
+    upper_z_m: 54.6
+    lower_z_m: 43.6
+    dz_m: 11.0
+    skew_deg: 1
+    structure: st12_northeast10thstreet
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 34 m"
+  - id: northeast10thstreet428073523_over_ramp6330434
+    upper: {osm_way: 428073523, name: "Northeast 10th Street", highway: secondary}
+    lower: {osm_way: 6330434, name: "ramp", highway: motorway_link}
+    lonlat: [-122.189126, 47.619263]
+    upper_z_m: 54.3
+    lower_z_m: 43.3
+    dz_m: 11.0
+    skew_deg: 1
+    structure: st12_northeast10thstreet
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 26 m"
+  - id: northeast10thstreet428073523_over_ramp513238704
+    upper: {osm_way: 428073523, name: "Northeast 10th Street", highway: secondary}
+    lower: {osm_way: 513238704, name: "ramp", highway: motorway_link}
+    lonlat: [-122.189095, 47.619262]
+    upper_z_m: 54.4
+    lower_z_m: 43.3
+    dz_m: 11.1
+    skew_deg: 3
+    structure: st12_northeast10thstreet
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 26 m"
+  - id: northeast10thstreet428073523_over_i405622462903
+    upper: {osm_way: 428073523, name: "Northeast 10th Street", highway: secondary}
+    lower: {osm_way: 622462903, name: "I 405", highway: motorway}
+    lonlat: [-122.18892, 47.619252]
+    upper_z_m: 54.5
+    lower_z_m: 43.6
+    dz_m: 10.9
+    skew_deg: 4
+    structure: st12_northeast10thstreet
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 26 m"
+  - id: footway503281920503281920_over_ramp26370149
+    upper: {osm_way: 503281920, name: "footway503281920", highway: footway}
+    lower: {osm_way: 26370149, name: "ramp", highway: motorway_link}
+    lonlat: [-122.188318, 47.619331]
+    upper_z_m: 54.2
+    lower_z_m: 43.3
+    dz_m: 10.9
+    skew_deg: 2
+    structure: st12_northeast10thstreet
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 34 m"
+  - id: footway503281920503281920_over_ramp132147575
+    upper: {osm_way: 503281920, name: "footway503281920", highway: footway}
+    lower: {osm_way: 132147575, name: "ramp", highway: motorway_link}
+    lonlat: [-122.188298, 47.619331]
+    upper_z_m: 54.2
+    lower_z_m: 43.3
+    dz_m: 10.9
+    skew_deg: 8
+    structure: st12_northeast10thstreet
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 32 m"
+  - id: northeast8thstreet55481043_over_ramp30615045
+    upper: {osm_way: 55481043, name: "Northeast 8th Street", highway: primary}
+    lower: {osm_way: 30615045, name: "ramp", highway: motorway_link}
+    lonlat: [-122.188688, 47.61726]
+    upper_z_m: 44.9
+    lower_z_m: 36.8
+    dz_m: 8.1
+    skew_deg: 1
+    structure: st13_northeast8thstreet
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 38 m"
+  - id: northeast8thstreet55481043_over_ramp428073561
+    upper: {osm_way: 55481043, name: "Northeast 8th Street", highway: primary}
+    lower: {osm_way: 428073561, name: "ramp", highway: motorway_link}
+    lonlat: [-122.188814, 47.617262]
+    upper_z_m: 44.8
+    lower_z_m: 36.8
+    dz_m: 8.0
+    skew_deg: 2
+    structure: st13_northeast8thstreet
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 38 m"
+  - id: northeast8thstreet55481043_over_ramp531665400
+    upper: {osm_way: 55481043, name: "Northeast 8th Street", highway: primary}
+    lower: {osm_way: 531665400, name: "ramp", highway: motorway_link}
+    lonlat: [-122.189175, 47.617266]
+    upper_z_m: 44.5
+    lower_z_m: 36.3
+    dz_m: 8.2
+    skew_deg: 1
+    structure: st13_northeast8thstreet
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 38 m"
+  - id: northeast8thstreet55481043_over_i405622462903
+    upper: {osm_way: 55481043, name: "Northeast 8th Street", highway: primary}
+    lower: {osm_way: 622462903, name: "I 405", highway: motorway}
+    lonlat: [-122.188973, 47.617264]
+    upper_z_m: 44.8
+    lower_z_m: 36.6
+    dz_m: 8.2
+    skew_deg: 0
+    structure: st13_northeast8thstreet
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 38 m"
+  - id: northeast8thstreet55481043_over_i405736892506
+    upper: {osm_way: 55481043, name: "Northeast 8th Street", highway: primary}
+    lower: {osm_way: 736892506, name: "I 405", highway: motorway}
+    lonlat: [-122.188525, 47.617258]
+    upper_z_m: 44.9
+    lower_z_m: 36.8
+    dz_m: 8.1
+    skew_deg: 2
+    structure: st13_northeast8thstreet
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 38 m"
+  - id: northeast8thstreet55481043_over_ramp967452420
+    upper: {osm_way: 55481043, name: "Northeast 8th Street", highway: primary}
+    lower: {osm_way: 967452420, name: "ramp", highway: motorway_link}
+    lonlat: [-122.188316, 47.617256]
+    upper_z_m: 44.7
+    lower_z_m: 36.5
+    dz_m: 8.2
+    skew_deg: 1
+    structure: st13_northeast8thstreet
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 36 m"
+  - id: footway6714485467144854_over_ramp30615045
+    upper: {osm_way: 67144854, name: "footway67144854", highway: footway}
+    lower: {osm_way: 30615045, name: "ramp", highway: motorway_link}
+    lonlat: [-122.18869, 47.617482]
+    upper_z_m: 44.9
+    lower_z_m: 37.5
+    dz_m: 7.4
+    skew_deg: 1
+    structure: st14_footway67144854
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 44 m"
+  - id: footway6714485467144854_over_ramp428073561
+    upper: {osm_way: 67144854, name: "footway67144854", highway: footway}
+    lower: {osm_way: 428073561, name: "ramp", highway: motorway_link}
+    lonlat: [-122.188821, 47.617483]
+    upper_z_m: 44.8
+    lower_z_m: 37.5
+    dz_m: 7.3
+    skew_deg: 2
+    structure: st14_footway67144854
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 44 m"
+  - id: footway6714485467144854_over_ramp531665400
+    upper: {osm_way: 67144854, name: "footway67144854", highway: footway}
+    lower: {osm_way: 531665400, name: "ramp", highway: motorway_link}
+    lonlat: [-122.189178, 47.617487]
+    upper_z_m: 44.5
+    lower_z_m: 37.0
+    dz_m: 7.5
+    skew_deg: 1
+    structure: st14_footway67144854
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 44 m"
+  - id: footway6714485467144854_over_i405622462903
+    upper: {osm_way: 67144854, name: "footway67144854", highway: footway}
+    lower: {osm_way: 622462903, name: "I 405", highway: motorway}
+    lonlat: [-122.188968, 47.617484]
+    upper_z_m: 44.7
+    lower_z_m: 37.3
+    dz_m: 7.4
+    skew_deg: 0
+    structure: st14_footway67144854
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 44 m"
+  - id: footway6714485467144854_over_i405736892506
+    upper: {osm_way: 67144854, name: "footway67144854", highway: footway}
+    lower: {osm_way: 736892506, name: "I 405", highway: motorway}
+    lonlat: [-122.188528, 47.61748]
+    upper_z_m: 44.9
+    lower_z_m: 37.5
+    dz_m: 7.4
+    skew_deg: 1
+    structure: st14_footway67144854
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 44 m"
+  - id: footway6714485467144854_over_ramp967452420
+    upper: {osm_way: 67144854, name: "footway67144854", highway: footway}
+    lower: {osm_way: 967452420, name: "ramp", highway: motorway_link}
+    lonlat: [-122.188312, 47.617478]
+    upper_z_m: 44.7
+    lower_z_m: 37.2
+    dz_m: 7.5
+    skew_deg: 0
+    structure: st14_footway67144854
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 44 m"
+  - id: footway111869523111869523_over_ramp6334468
+    upper: {osm_way: 111869523, name: "footway111869523", highway: footway}
+    lower: {osm_way: 6334468, name: "ramp", highway: motorway_link}
+    lonlat: [-122.188303, 47.617172]
+    upper_z_m: 44.6
+    lower_z_m: 36.2
+    dz_m: 8.4
+    skew_deg: 9
+    structure: st15_footway111869523
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 42 m"
+  - id: footway111869523111869523_over_ramp30615045
+    upper: {osm_way: 111869523, name: "footway111869523", highway: footway}
+    lower: {osm_way: 30615045, name: "ramp", highway: motorway_link}
+    lonlat: [-122.188687, 47.617176]
+    upper_z_m: 44.9
+    lower_z_m: 36.5
+    dz_m: 8.4
+    skew_deg: 1
+    structure: st15_footway111869523
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 42 m"
+  - id: footway111869523111869523_over_ramp428073561
+    upper: {osm_way: 111869523, name: "footway111869523", highway: footway}
+    lower: {osm_way: 428073561, name: "ramp", highway: motorway_link}
+    lonlat: [-122.18881, 47.617178]
+    upper_z_m: 44.8
+    lower_z_m: 36.5
+    dz_m: 8.3
+    skew_deg: 2
+    structure: st15_footway111869523
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 42 m"
+  - id: footway111869523111869523_over_ramp531651939
+    upper: {osm_way: 111869523, name: "footway111869523", highway: footway}
+    lower: {osm_way: 531651939, name: "ramp", highway: motorway_link}
+    lonlat: [-122.188314, 47.617172]
+    upper_z_m: 44.6
+    lower_z_m: 36.3
+    dz_m: 8.3
+    skew_deg: 3
+    structure: st15_footway111869523
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 42 m"
+  - id: footway111869523111869523_over_ramp531665400
+    upper: {osm_way: 111869523, name: "footway111869523", highway: footway}
+    lower: {osm_way: 531665400, name: "ramp", highway: motorway_link}
+    lonlat: [-122.189174, 47.617182]
+    upper_z_m: 44.4
+    lower_z_m: 36.0
+    dz_m: 8.4
+    skew_deg: 1
+    structure: st15_footway111869523
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 44 m"
+  - id: footway111869523111869523_over_i405622462903
+    upper: {osm_way: 111869523, name: "footway111869523", highway: footway}
+    lower: {osm_way: 622462903, name: "I 405", highway: motorway}
+    lonlat: [-122.188975, 47.61718]
+    upper_z_m: 44.7
+    lower_z_m: 36.3
+    dz_m: 8.4
+    skew_deg: 0
+    structure: st15_footway111869523
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 42 m"
+  - id: footway111869523111869523_over_i405736892506
+    upper: {osm_way: 111869523, name: "footway111869523", highway: footway}
+    lower: {osm_way: 736892506, name: "I 405", highway: motorway}
+    lonlat: [-122.188524, 47.617175]
+    upper_z_m: 44.8
+    lower_z_m: 36.5
+    dz_m: 8.3
+    skew_deg: 1
+    structure: st15_footway111869523
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 42 m"
+  - id: footway137067810137067810_over_ramp6330434
+    upper: {osm_way: 137067810, name: "footway137067810", highway: footway}
+    lower: {osm_way: 6330434, name: "ramp", highway: motorway_link}
+    lonlat: [-122.189152, 47.619142]
+    upper_z_m: 54.3
+    lower_z_m: 42.9
+    dz_m: 11.4
+    skew_deg: 7
+    structure: st16_footway137067810
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 32 m"
+  - id: footway137067810137067810_over_ramp26370149
+    upper: {osm_way: 137067810, name: "footway137067810", highway: footway}
+    lower: {osm_way: 26370149, name: "ramp", highway: motorway_link}
+    lonlat: [-122.188318, 47.619122]
+    upper_z_m: 54.4
+    lower_z_m: 42.6
+    dz_m: 11.8
+    skew_deg: 2
+    structure: st16_footway137067810
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 32 m"
+  - id: footway137067810137067810_over_ramp30615045
+    upper: {osm_way: 137067810, name: "footway137067810", highway: footway}
+    lower: {osm_way: 30615045, name: "ramp", highway: motorway_link}
+    lonlat: [-122.188683, 47.619125]
+    upper_z_m: 54.6
+    lower_z_m: 42.9
+    dz_m: 11.7
+    skew_deg: 1
+    structure: st16_footway137067810
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 32 m"
+  - id: footway137067810137067810_over_ramp132147575
+    upper: {osm_way: 137067810, name: "footway137067810", highway: footway}
+    lower: {osm_way: 132147575, name: "ramp", highway: motorway_link}
+    lonlat: [-122.188262, 47.619123]
+    upper_z_m: 54.3
+    lower_z_m: 42.6
+    dz_m: 11.7
+    skew_deg: 5
+    structure: st16_footway137067810
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 32 m"
+  - id: footway137067810137067810_over_ramp428073561
+    upper: {osm_way: 137067810, name: "footway137067810", highway: footway}
+    lower: {osm_way: 428073561, name: "ramp", highway: motorway_link}
+    lonlat: [-122.18888, 47.619131]
+    upper_z_m: 54.5
+    lower_z_m: 43.3
+    dz_m: 11.2
+    skew_deg: 5
+    structure: st16_footway137067810
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 32 m"
+  - id: footway137067810137067810_over_ramp513238704
+    upper: {osm_way: 137067810, name: "footway137067810", highway: footway}
+    lower: {osm_way: 513238704, name: "ramp", highway: motorway_link}
+    lonlat: [-122.1891, 47.61914]
+    upper_z_m: 54.3
+    lower_z_m: 42.9
+    dz_m: 11.4
+    skew_deg: 2
+    structure: st16_footway137067810
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 32 m"
+  - id: footway137067810137067810_over_i405622462903
+    upper: {osm_way: 137067810, name: "footway137067810", highway: footway}
+    lower: {osm_way: 622462903, name: "I 405", highway: motorway}
+    lonlat: [-122.188925, 47.619133]
+    upper_z_m: 54.5
+    lower_z_m: 43.3
+    dz_m: 11.2
+    skew_deg: 2
+    structure: st16_footway137067810
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 32 m"
+  - id: footway137067810137067810_over_i405736892506
+    upper: {osm_way: 137067810, name: "footway137067810", highway: footway}
+    lower: {osm_way: 736892506, name: "I 405", highway: motorway}
+    lonlat: [-122.188536, 47.619122]
+    upper_z_m: 54.5
+    lower_z_m: 42.9
+    dz_m: 11.6
+    skew_deg: 2
+    structure: st16_footway137067810
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 32 m"
+  - id: ramp160180168_over_ramp974011516
+    upper: {osm_way: 160180168, name: "ramp", highway: motorway_link}
+    lower: {osm_way: 974011516, name: "ramp", highway: motorway_link}
+    lonlat: [-122.188222, 47.624112]
+    upper_z_m: 67.3
+    lower_z_m: 58.7
+    dz_m: 8.6
+    skew_deg: 78
+    structure: st17_ramp
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 88 m"
+  - id: northeast12thstreet160183572_over_ramp30615045
+    upper: {osm_way: 160183572, name: "Northeast 12th Street", highway: primary}
+    lower: {osm_way: 30615045, name: "ramp", highway: motorway_link}
+    lonlat: [-122.188569, 47.621881]
+    upper_z_m: 61.7
+    lower_z_m: 51.7
+    dz_m: 10.0
+    skew_deg: 43
+    structure: st18_northeast12thstreet
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 36 m"
+  - id: northeast12thstreet160183572_over_ramp621646784
+    upper: {osm_way: 160183572, name: "Northeast 12th Street", highway: primary}
+    lower: {osm_way: 621646784, name: "ramp", highway: motorway_link}
+    lonlat: [-122.188187, 47.622076]
+    upper_z_m: 62.1
+    lower_z_m: 53.2
+    dz_m: 8.9
+    skew_deg: 39
+    structure: st18_northeast12thstreet
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 36 m"
+  - id: northeast12thstreet160183572_over_i405622462902
+    upper: {osm_way: 160183572, name: "Northeast 12th Street", highway: primary}
+    lower: {osm_way: 622462902, name: "I 405", highway: motorway}
+    lonlat: [-122.188534, 47.621899]
+    upper_z_m: 61.8
+    lower_z_m: 51.8
+    dz_m: 10.0
+    skew_deg: 36
+    structure: st18_northeast12thstreet
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 34 m"
+  - id: northeast12thstreet160183572_over_ramp967566386
+    upper: {osm_way: 160183572, name: "Northeast 12th Street", highway: primary}
+    lower: {osm_way: 967566386, name: "ramp", highway: motorway_link}
+    lonlat: [-122.188313, 47.622013]
+    upper_z_m: 62.0
+    lower_z_m: 53.6
+    dz_m: 8.4
+    skew_deg: 38
+    structure: st18_northeast12thstreet
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 36 m"
+  - id: northeast12thstreet428067757_over_i4051340255201
+    upper: {osm_way: 428067757, name: "Northeast 12th Street", highway: primary}
+    lower: {osm_way: 1340255201, name: "I 405", highway: motorway}
+    lonlat: [-122.188897, 47.621716]
+    upper_z_m: 61.1
+    lower_z_m: 51.5
+    dz_m: 9.6
+    skew_deg: 37
+    structure: st18_northeast12thstreet
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 34 m"
+  - id: cycleway289828827289828827_over_ramp30615045
+    upper: {osm_way: 289828827, name: "cycleway289828827", highway: cycleway}
+    lower: {osm_way: 30615045, name: "ramp", highway: motorway_link}
+    lonlat: [-122.188555, 47.621985]
+    upper_z_m: 61.7
+    lower_z_m: 52.1
+    dz_m: 9.6
+    skew_deg: 42
+    structure: st19_cycleway289828827
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 44 m"
+  - id: cycleway289828827289828827_over_ramp621646784
+    upper: {osm_way: 289828827, name: "cycleway289828827", highway: cycleway}
+    lower: {osm_way: 621646784, name: "ramp", highway: motorway_link}
+    lonlat: [-122.188182, 47.622172]
+    upper_z_m: 62.0
+    lower_z_m: 53.1
+    dz_m: 8.9
+    skew_deg: 39
+    structure: st19_cycleway289828827
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 42 m"
+  - id: cycleway289828827289828827_over_i405622462902
+    upper: {osm_way: 289828827, name: "cycleway289828827", highway: cycleway}
+    lower: {osm_way: 622462902, name: "I 405", highway: motorway}
+    lonlat: [-122.188536, 47.621994]
+    upper_z_m: 61.7
+    lower_z_m: 52.1
+    dz_m: 9.6
+    skew_deg: 36
+    structure: st19_cycleway289828827
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 40 m"
+  - id: cycleway289828827289828827_over_ramp967566386
+    upper: {osm_way: 289828827, name: "cycleway289828827", highway: cycleway}
+    lower: {osm_way: 967566386, name: "ramp", highway: motorway_link}
+    lonlat: [-122.188311, 47.622107]
+    upper_z_m: 61.9
+    lower_z_m: 54.2
+    dz_m: 7.7
+    skew_deg: 37
+    structure: st19_cycleway289828827
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 42 m"
+  - id: cycleway289828827289828827_over_i4051340255201
+    upper: {osm_way: 289828827, name: "cycleway289828827", highway: cycleway}
+    lower: {osm_way: 1340255201, name: "I 405", highway: motorway}
+    lonlat: [-122.188896, 47.621813]
+    upper_z_m: 61.1
+    lower_z_m: 51.8
+    dz_m: 9.3
+    skew_deg: 37
+    structure: st19_cycleway289828827
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 42 m"
+  - id: ramp309999158_over_ramp26371191
+    upper: {osm_way: 309999158, name: "ramp", highway: motorway_link}
+    lower: {osm_way: 26371191, name: "ramp", highway: motorway_link}
+    lonlat: [-122.189233, 47.615387]
+    upper_z_m: 38.0
+    lower_z_m: 25.0
+    dz_m: 13.0
+    skew_deg: 2
+    structure: st20_ramp
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 26 m"
+  - id: ramp309999158_over_ramp30614989
+    upper: {osm_way: 309999158, name: "ramp", highway: motorway_link}
+    lower: {osm_way: 30614989, name: "ramp", highway: motorway_link}
+    lonlat: [-122.189129, 47.615387]
+    upper_z_m: 38.1
+    lower_z_m: 30.9
+    dz_m: 7.2
+    skew_deg: 4
+    structure: st20_ramp
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 26 m"
+  - id: ramp309999158_over_ramp169303084
+    upper: {osm_way: 309999158, name: "ramp", highway: motorway_link}
+    lower: {osm_way: 169303084, name: "ramp", highway: motorway_link}
+    lonlat: [-122.189313, 47.615386]
+    upper_z_m: 37.8
+    lower_z_m: 25.1
+    dz_m: 12.7
+    skew_deg: 11
+    structure: st20_ramp
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 26 m"
+  - id: ramp309999158_over_cycleway609543474609543474
+    upper: {osm_way: 309999158, name: "ramp", highway: motorway_link}
+    lower: {osm_way: 609543474, name: "cycleway609543474", highway: cycleway}
+    lonlat: [-122.189443, 47.615385]
+    upper_z_m: 37.4
+    lower_z_m: 30.6
+    dz_m: 6.8
+    skew_deg: 8
+    structure: st20_ramp
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 26 m"
+  - id: ramp309999158_over_i405880540177
+    upper: {osm_way: 309999158, name: "ramp", highway: motorway_link}
+    lower: {osm_way: 880540177, name: "I 405", highway: motorway}
+    lonlat: [-122.18895, 47.615389]
+    upper_z_m: 38.2
+    lower_z_m: 31.1
+    dz_m: 7.1
+    skew_deg: 0
+    structure: st20_ramp
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 26 m"
+  - id: i405expresstolllanes310012089_over_115thavenuenortheast6350179
+    upper: {osm_way: 310012089, name: "I-405 Express Toll Lanes", highway: motorway}
+    lower: {osm_way: 6350179, name: "115th Avenue Northeast", highway: residential}
+    lonlat: [-122.186851, 47.634948]
+    upper_z_m: 59.3
+    lower_z_m: 51.6
+    dz_m: 7.7
+    skew_deg: 38
+    structure: st21_i405expresstolllanes
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 30 m"
+  - id: i405expresstolllanes310012089_over_eastrail24549536
+    upper: {osm_way: 310012089, name: "I-405 Express Toll Lanes", highway: motorway}
+    lower: {osm_way: 24549536, name: "Eastrail", highway: cycleway}
+    lonlat: [-122.186911, 47.634763]
+    upper_z_m: 58.9
+    lower_z_m: 48.6
+    dz_m: 10.3
+    skew_deg: 41
+    structure: st21_i405expresstolllanes
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 30 m"
+  - id: i405310012092_over_115thavenuenortheast6350179
+    upper: {osm_way: 310012092, name: "I 405", highway: motorway}
+    lower: {osm_way: 6350179, name: "115th Avenue Northeast", highway: residential}
+    lonlat: [-122.18715, 47.635208]
+    upper_z_m: 58.4
+    lower_z_m: 51.6
+    dz_m: 6.8
+    skew_deg: 43
+    structure: st22_i405
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 28 m"
+  - id: i405310012092_over_eastrail24549536
+    upper: {osm_way: 310012092, name: "I 405", highway: motorway}
+    lower: {osm_way: 24549536, name: "Eastrail", highway: cycleway}
+    lonlat: [-122.187204, 47.635044]
+    upper_z_m: 57.8
+    lower_z_m: 48.8
+    dz_m: 9.0
+    skew_deg: 44
+    structure: st22_i405
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 28 m"
+  - id: i405310013196_over_northupway363687554
+    upper: {osm_way: 310013196, name: "I 405", highway: motorway}
+    lower: {osm_way: 363687554, name: "Northup Way", highway: secondary}
+    lonlat: [-122.187717, 47.633644]
+    upper_z_m: 56.2
+    lower_z_m: 49.7
+    dz_m: 6.5
+    skew_deg: 18
+    structure: st23_i405
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 24 m"
+  - id: i405310013196_over_footway609387674609387674
+    upper: {osm_way: 310013196, name: "I 405", highway: motorway}
+    lower: {osm_way: 609387674, name: "footway609387674", highway: footway}
+    lonlat: [-122.187698, 47.633698]
+    upper_z_m: 56.1
+    lower_z_m: 49.4
+    dz_m: 6.7
+    skew_deg: 16
+    structure: st23_i405
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 24 m"
+  - id: i405310013196_over_footway939529926939529926
+    upper: {osm_way: 310013196, name: "I 405", highway: motorway}
+    lower: {osm_way: 939529926, name: "footway939529926", highway: footway}
+    lonlat: [-122.187734, 47.633595]
+    upper_z_m: 56.2
+    lower_z_m: 50.0
+    dz_m: 6.2
+    skew_deg: 16
+    structure: st23_i405
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 24 m"
+  - id: i405310013201_over_ramp4744446
+    upper: {osm_way: 310013201, name: "I 405", highway: motorway}
+    lower: {osm_way: 4744446, name: "ramp", highway: motorway_link}
+    lonlat: [-122.188517, 47.630335]
+    upper_z_m: 67.2
+    lower_z_m: 61.3
+    dz_m: 5.9
+    skew_deg: 30
+    structure: st24_i405
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 128 m"
+  - id: i405310013251_over_sr520623957736
+    upper: {osm_way: 310013251, name: "I 405", highway: motorway}
+    lower: {osm_way: 623957736, name: "SR 520", highway: motorway}
+    lonlat: [-122.187724, 47.632298]
+    upper_z_m: 60.8
+    lower_z_m: 53.3
+    dz_m: 7.5
+    skew_deg: 9
+    structure: st25_i405
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 24 m"
+  - id: i405310013251_over_sr5201106679176
+    upper: {osm_way: 310013251, name: "I 405", highway: motorway}
+    lower: {osm_way: 1106679176, name: "SR 520", highway: motorway}
+    lonlat: [-122.187759, 47.63218]
+    upper_z_m: 61.2
+    lower_z_m: 53.8
+    dz_m: 7.4
+    skew_deg: 9
+    structure: st25_i405
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 24 m"
+  - id: i405310013252_over_northupway363687554
+    upper: {osm_way: 310013252, name: "I 405", highway: motorway}
+    lower: {osm_way: 363687554, name: "Northup Way", highway: secondary}
+    lonlat: [-122.18734, 47.633514]
+    upper_z_m: 58.0
+    lower_z_m: 50.9
+    dz_m: 7.1
+    skew_deg: 11
+    structure: st26_i405
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 26 m"
+  - id: i405310013252_over_footway609387674609387674
+    upper: {osm_way: 310013252, name: "I 405", highway: motorway}
+    lower: {osm_way: 609387674, name: "footway609387674", highway: footway}
+    lonlat: [-122.187321, 47.633567]
+    upper_z_m: 57.9
+    lower_z_m: 50.8
+    dz_m: 7.1
+    skew_deg: 12
+    structure: st26_i405
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 26 m"
+  - id: i405310013252_over_footway939529926939529926
+    upper: {osm_way: 310013252, name: "I 405", highway: motorway}
+    lower: {osm_way: 939529926, name: "footway939529926", highway: footway}
+    lonlat: [-122.18736, 47.633458]
+    upper_z_m: 58.0
+    lower_z_m: 53.7
+    dz_m: 4.3
+    skew_deg: 11
+    structure: st26_i405
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 70 m"
+  - id: sr520310013774_over_eastrail1081880292
+    upper: {osm_way: 310013774, name: "SR 520", highway: motorway}
+    lower: {osm_way: 1081880292, name: "Eastrail", highway: cycleway}
+    lonlat: [-122.184401, 47.632079]
+    upper_z_m: 57.4
+    lower_z_m: 47.7
+    dz_m: 9.7
+    skew_deg: 9
+    structure: st27_sr520
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 24 m"
+  - id: ramp492889075_over_eastrail1081880292
+    upper: {osm_way: 492889075, name: "ramp", highway: motorway_link}
+    lower: {osm_way: 1081880292, name: "Eastrail", highway: cycleway}
+    lonlat: [-122.184415, 47.632118]
+    upper_z_m: 57.3
+    lower_z_m: 47.7
+    dz_m: 9.6
+    skew_deg: 15
+    structure: st27_sr520
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 24 m"
+  - id: sr520310013776_over_footway607985202607985202
+    upper: {osm_way: 310013776, name: "SR 520", highway: motorway}
+    lower: {osm_way: 607985202, name: "footway607985202", highway: footway}
+    lonlat: [-122.181451, 47.632163]
+    upper_z_m: 57.4
+    lower_z_m: 53.3
+    dz_m: 4.1
+    skew_deg: 54
+    structure: st28_sr520
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 40 m"
+  - id: sr520310013776_over_cycleway12807952491280795249
+    upper: {osm_way: 310013776, name: "SR 520", highway: motorway}
+    lower: {osm_way: 1280795249, name: "cycleway1280795249", highway: cycleway}
+    lonlat: [-122.181401, 47.632162]
+    upper_z_m: 57.5
+    lower_z_m: 52.5
+    dz_m: 5.0
+    skew_deg: 56
+    structure: st28_sr520
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 52 m"
+  - id: northeast12thstreet378376409_over_ramp30615045
+    upper: {osm_way: 378376409, name: "Northeast 12th Street", highway: primary}
+    lower: {osm_way: 30615045, name: "ramp", highway: motorway_link}
+    lonlat: [-122.188585, 47.621769]
+    upper_z_m: 61.5
+    lower_z_m: 51.4
+    dz_m: 10.1
+    skew_deg: 42
+    structure: st29_northeast12thstreet
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 40 m"
+  - id: northeast12thstreet378376409_over_ramp621646784
+    upper: {osm_way: 378376409, name: "Northeast 12th Street", highway: primary}
+    lower: {osm_way: 621646784, name: "ramp", highway: motorway_link}
+    lonlat: [-122.188195, 47.621966]
+    upper_z_m: 62.0
+    lower_z_m: 53.4
+    dz_m: 8.6
+    skew_deg: 40
+    structure: st29_northeast12thstreet
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 38 m"
+  - id: northeast12thstreet378376409_over_i405622462902
+    upper: {osm_way: 378376409, name: "Northeast 12th Street", highway: primary}
+    lower: {osm_way: 622462902, name: "I 405", highway: motorway}
+    lonlat: [-122.188532, 47.621796]
+    upper_z_m: 61.6
+    lower_z_m: 51.4
+    dz_m: 10.2
+    skew_deg: 36
+    structure: st29_northeast12thstreet
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 38 m"
+  - id: northeast12thstreet378376409_over_ramp967566386
+    upper: {osm_way: 378376409, name: "Northeast 12th Street", highway: primary}
+    lower: {osm_way: 967566386, name: "ramp", highway: motorway_link}
+    lonlat: [-122.188315, 47.621905]
+    upper_z_m: 61.9
+    lower_z_m: 52.8
+    dz_m: 9.1
+    skew_deg: 38
+    structure: st29_northeast12thstreet
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 38 m"
+  - id: northeast12thstreet378376409_over_i4051340255201
+    upper: {osm_way: 378376409, name: "Northeast 12th Street", highway: primary}
+    lower: {osm_way: 1340255201, name: "I 405", highway: motorway}
+    lonlat: [-122.188898, 47.621611]
+    upper_z_m: 60.9
+    lower_z_m: 51.2
+    dz_m: 9.7
+    skew_deg: 37
+    structure: st29_northeast12thstreet
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 38 m"
+  - id: northeast8thstreet428073537_over_ramp30615045
+    upper: {osm_way: 428073537, name: "Northeast 8th Street", highway: primary}
+    lower: {osm_way: 30615045, name: "ramp", highway: motorway_link}
+    lonlat: [-122.188689, 47.617388]
+    upper_z_m: 44.9
+    lower_z_m: 37.2
+    dz_m: 7.7
+    skew_deg: 1
+    structure: st30_northeast8thstreet
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 36 m"
+  - id: northeast8thstreet428073537_over_ramp428073561
+    upper: {osm_way: 428073537, name: "Northeast 8th Street", highway: primary}
+    lower: {osm_way: 428073561, name: "ramp", highway: motorway_link}
+    lonlat: [-122.188818, 47.61739]
+    upper_z_m: 44.8
+    lower_z_m: 37.2
+    dz_m: 7.6
+    skew_deg: 2
+    structure: st30_northeast8thstreet
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 38 m"
+  - id: northeast8thstreet428073537_over_ramp531665400
+    upper: {osm_way: 428073537, name: "Northeast 8th Street", highway: primary}
+    lower: {osm_way: 531665400, name: "ramp", highway: motorway_link}
+    lonlat: [-122.189177, 47.617393]
+    upper_z_m: 44.5
+    lower_z_m: 36.7
+    dz_m: 7.8
+    skew_deg: 1
+    structure: st30_northeast8thstreet
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 38 m"
+  - id: northeast8thstreet428073537_over_i405622462903
+    upper: {osm_way: 428073537, name: "Northeast 8th Street", highway: primary}
+    lower: {osm_way: 622462903, name: "I 405", highway: motorway}
+    lonlat: [-122.18897, 47.617391]
+    upper_z_m: 44.8
+    lower_z_m: 37.0
+    dz_m: 7.8
+    skew_deg: 0
+    structure: st30_northeast8thstreet
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 38 m"
+  - id: northeast8thstreet428073537_over_i405736892506
+    upper: {osm_way: 428073537, name: "Northeast 8th Street", highway: primary}
+    lower: {osm_way: 736892506, name: "I 405", highway: motorway}
+    lonlat: [-122.188526, 47.617387]
+    upper_z_m: 44.9
+    lower_z_m: 37.2
+    dz_m: 7.7
+    skew_deg: 1
+    structure: st30_northeast8thstreet
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 38 m"
+  - id: northeast8thstreet513238699_over_ramp967452420
+    upper: {osm_way: 513238699, name: "Northeast 8th Street", highway: primary}
+    lower: {osm_way: 967452420, name: "ramp", highway: motorway_link}
+    lonlat: [-122.188314, 47.617385]
+    upper_z_m: 44.8
+    lower_z_m: 36.9
+    dz_m: 7.9
+    skew_deg: 0
+    structure: st30_northeast8thstreet
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 36 m"
+  - id: footway476492817476492817_over_ramp30615045
+    upper: {osm_way: 476492817, name: "footway476492817", highway: footway}
+    lower: {osm_way: 30615045, name: "ramp", highway: motorway_link}
+    lonlat: [-122.188595, 47.6217]
+    upper_z_m: 61.5
+    lower_z_m: 51.2
+    dz_m: 10.3
+    skew_deg: 42
+    structure: st31_footway476492817
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 44 m"
+  - id: footway476492817476492817_over_ramp621646784
+    upper: {osm_way: 476492817, name: "footway476492817", highway: footway}
+    lower: {osm_way: 621646784, name: "ramp", highway: motorway_link}
+    lonlat: [-122.1882, 47.621899]
+    upper_z_m: 62.0
+    lower_z_m: 53.6
+    dz_m: 8.4
+    skew_deg: 40
+    structure: st31_footway476492817
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 42 m"
+  - id: footway476492817476492817_over_i405622462902
+    upper: {osm_way: 476492817, name: "footway476492817", highway: footway}
+    lower: {osm_way: 622462902, name: "I 405", highway: motorway}
+    lonlat: [-122.18853, 47.621732]
+    upper_z_m: 61.6
+    lower_z_m: 51.2
+    dz_m: 10.4
+    skew_deg: 36
+    structure: st31_footway476492817
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 40 m"
+  - id: footway476492817476492817_over_ramp967566386
+    upper: {osm_way: 476492817, name: "footway476492817", highway: footway}
+    lower: {osm_way: 967566386, name: "ramp", highway: motorway_link}
+    lonlat: [-122.188316, 47.621841]
+    upper_z_m: 61.9
+    lower_z_m: 52.4
+    dz_m: 9.5
+    skew_deg: 38
+    structure: st31_footway476492817
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 40 m"
+  - id: footway476492817476492817_over_i4051340255201
+    upper: {osm_way: 476492817, name: "footway476492817", highway: footway}
+    lower: {osm_way: 1340255201, name: "I 405", highway: motorway}
+    lonlat: [-122.188899, 47.621546]
+    upper_z_m: 60.8
+    lower_z_m: 51.0
+    dz_m: 9.8
+    skew_deg: 37
+    structure: st31_footway476492817
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 42 m"
+  - id: ramp492889072_over_eastrail1081880292
+    upper: {osm_way: 492889072, name: "ramp", highway: motorway_link}
+    lower: {osm_way: 1081880292, name: "Eastrail", highway: cycleway}
+    lonlat: [-122.184315, 47.631839]
+    upper_z_m: 57.2
+    lower_z_m: 47.6
+    dz_m: 9.6
+    skew_deg: 3
+    structure: st32_sr520
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 22 m"
+  - id: sr520492889073_over_eastrail1081880292
+    upper: {osm_way: 492889073, name: "SR 520", highway: motorway}
+    lower: {osm_way: 1081880292, name: "Eastrail", highway: cycleway}
+    lonlat: [-122.18433, 47.631883]
+    upper_z_m: 57.3
+    lower_z_m: 47.5
+    dz_m: 9.8
+    skew_deg: 12
+    structure: st32_sr520
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 24 m"
+  - id: sr520492889077_over_116thavenuenortheast24549539
+    upper: {osm_way: 492889077, name: "SR 520", highway: motorway}
+    lower: {osm_way: 24549539, name: "116th Avenue Northeast", highway: secondary}
+    lonlat: [-122.185648, 47.63203]
+    upper_z_m: 57.1
+    lower_z_m: 50.0
+    dz_m: 7.1
+    skew_deg: 1
+    structure: st33_sr520
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 40 m"
+  - id: sr520492889077_over_footway607986248607986248
+    upper: {osm_way: 492889077, name: "SR 520", highway: motorway}
+    lower: {osm_way: 607986248, name: "footway607986248", highway: footway}
+    lonlat: [-122.185792, 47.632032]
+    upper_z_m: 56.9
+    lower_z_m: 52.2
+    dz_m: 4.7
+    skew_deg: 1
+    structure: st33_sr520
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 42 m"
+  - id: sr520492889077_over_footway12713520051271352005
+    upper: {osm_way: 492889077, name: "SR 520", highway: motorway}
+    lower: {osm_way: 1271352005, name: "footway1271352005", highway: footway}
+    lonlat: [-122.185492, 47.632031]
+    upper_z_m: 57.1
+    lower_z_m: 51.9
+    dz_m: 5.2
+    skew_deg: 1
+    structure: st33_sr520
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 40 m"
+  - id: sr520492889078_over_116thavenuenortheast24549539
+    upper: {osm_way: 492889078, name: "SR 520", highway: motorway}
+    lower: {osm_way: 24549539, name: "116th Avenue Northeast", highway: secondary}
+    lonlat: [-122.185652, 47.631885]
+    upper_z_m: 57.3
+    lower_z_m: 50.0
+    dz_m: 7.3
+    skew_deg: 1
+    structure: st34_sr520
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 42 m"
+  - id: sr520492889078_over_footway607986248607986248
+    upper: {osm_way: 492889078, name: "SR 520", highway: motorway}
+    lower: {osm_way: 607986248, name: "footway607986248", highway: footway}
+    lonlat: [-122.185793, 47.631889]
+    upper_z_m: 57.1
+    lower_z_m: 52.3
+    dz_m: 4.8
+    skew_deg: 2
+    structure: st34_sr520
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 44 m"
+  - id: sr520492889078_over_footway12713520051271352005
+    upper: {osm_way: 492889078, name: "SR 520", highway: motorway}
+    lower: {osm_way: 1271352005, name: "footway1271352005", highway: footway}
+    lonlat: [-122.185494, 47.631881]
+    upper_z_m: 57.4
+    lower_z_m: 52.1
+    dz_m: 5.3
+    skew_deg: 2
+    structure: st34_sr520
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 42 m"
+  - id: ramp492889081_over_eastrail1081880292
+    upper: {osm_way: 492889081, name: "ramp", highway: motorway_link}
+    lower: {osm_way: 1081880292, name: "Eastrail", highway: cycleway}
+    lonlat: [-122.184264, 47.631699]
+    upper_z_m: 57.3
+    lower_z_m: 50.1
+    dz_m: 7.2
+    skew_deg: 10
+    structure: st35_ramp
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 40 m"
+  - id: ramp492889082_over_116thavenuenortheast24549539
+    upper: {osm_way: 492889082, name: "ramp", highway: motorway_link}
+    lower: {osm_way: 24549539, name: "116th Avenue Northeast", highway: secondary}
+    lonlat: [-122.185659, 47.631623]
+    upper_z_m: 57.7
+    lower_z_m: 50.4
+    dz_m: 7.3
+    skew_deg: 6
+    structure: st36_ramp
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 26 m"
+  - id: ramp492889082_over_footway607986248607986248
+    upper: {osm_way: 492889082, name: "ramp", highway: motorway_link}
+    lower: {osm_way: 607986248, name: "footway607986248", highway: footway}
+    lonlat: [-122.185795, 47.631616]
+    upper_z_m: 57.8
+    lower_z_m: 51.9
+    dz_m: 5.9
+    skew_deg: 5
+    structure: st36_ramp
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 26 m"
+  - id: ramp492889082_over_footway12713520051271352005
+    upper: {osm_way: 492889082, name: "ramp", highway: motorway_link}
+    lower: {osm_way: 1271352005, name: "footway1271352005", highway: footway}
+    lonlat: [-122.185497, 47.631632]
+    upper_z_m: 57.7
+    lower_z_m: 51.6
+    dz_m: 6.1
+    skew_deg: 5
+    structure: st36_ramp
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 26 m"
+  - id: ramp622462906_over_ramp26371191
+    upper: {osm_way: 622462906, name: "ramp", highway: motorway_link}
+    lower: {osm_way: 26371191, name: "ramp", highway: motorway_link}
+    lonlat: [-122.189229, 47.615482]
+    upper_z_m: 38.2
+    lower_z_m: 25.7
+    dz_m: 12.5
+    skew_deg: 2
+    structure: st37_ramp
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 24 m"
+  - id: ramp622462906_over_ramp30614989
+    upper: {osm_way: 622462906, name: "ramp", highway: motorway_link}
+    lower: {osm_way: 30614989, name: "ramp", highway: motorway_link}
+    lonlat: [-122.189121, 47.615482]
+    upper_z_m: 38.4
+    lower_z_m: 31.1
+    dz_m: 7.3
+    skew_deg: 4
+    structure: st37_ramp
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 24 m"
+  - id: ramp622462906_over_ramp169303084
+    upper: {osm_way: 622462906, name: "ramp", highway: motorway_link}
+    lower: {osm_way: 169303084, name: "ramp", highway: motorway_link}
+    lonlat: [-122.189341, 47.615481]
+    upper_z_m: 37.9
+    lower_z_m: 25.8
+    dz_m: 12.1
+    skew_deg: 12
+    structure: st37_ramp
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 24 m"
+  - id: ramp622462906_over_cycleway609543474609543474
+    upper: {osm_way: 622462906, name: "ramp", highway: motorway_link}
+    lower: {osm_way: 609543474, name: "cycleway609543474", highway: cycleway}
+    lonlat: [-122.18947, 47.61548]
+    upper_z_m: 37.6
+    lower_z_m: 31.0
+    dz_m: 6.6
+    skew_deg: 10
+    structure: st37_ramp
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 24 m"
+  - id: ramp622462906_over_i405880540177
+    upper: {osm_way: 622462906, name: "ramp", highway: motorway_link}
+    lower: {osm_way: 880540177, name: "I 405", highway: motorway}
+    lonlat: [-122.188951, 47.615484]
+    upper_z_m: 38.4
+    lower_z_m: 31.4
+    dz_m: 7.0
+    skew_deg: 0
+    structure: st37_ramp
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 24 m"
+  - id: ramp622462906_over_service13826539941382653994
+    upper: {osm_way: 622462906, name: "ramp", highway: motorway_link}
+    lower: {osm_way: 1382653994, name: "service1382653994", highway: service}
+    lonlat: [-122.189585, 47.615479]
+    upper_z_m: 37.2
+    lower_z_m: 35.1
+    dz_m: 2.1
+    skew_deg: 20
+    structure: st37_ramp
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 32 m"
+  - id: i405983156127_over_ramp4744446
+    upper: {osm_way: 983156127, name: "I 405", highway: motorway}
+    lower: {osm_way: 4744446, name: "ramp", highway: motorway_link}
+    lonlat: [-122.188248, 47.630152]
+    upper_z_m: 67.9
+    lower_z_m: 60.4
+    dz_m: 7.5
+    skew_deg: 51
+    structure: st38_i405
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 34 m"
+  - id: service13826539941382653994_over_ramp309999158
+    upper: {osm_way: 1382653994, name: "service1382653994", highway: service}
+    lower: {osm_way: 309999158, name: "ramp", highway: motorway_link}
+    lonlat: [-122.189562, 47.615385]
+    upper_z_m: 39.2
+    lower_z_m: 37.1
+    dz_m: 2.1
+    skew_deg: 0
+    structure: st39_service1382653994
+    tags: {upper_layer: "", upper_bridge: "", lower_layer: "1"}
+    evidence: "upper interpolated (occluded); lower interpolated over 16 m"
+    review: "lidar order disagrees with OSM layer/bridge tags"
+unresolved:
+  - id: sr520310013776_x_northupway428067775
+    a: {osm_way: 310013776, name: "SR 520", highway: motorway, layer: "1", bridge: "yes"}
+    b: {osm_way: 428067775, name: "Northup Way", highway: secondary, layer: "", bridge: ""}
+    lonlat: [-122.181184, 47.632153]
+    reason: "no lidar profile on one side of the crossing (a one-sided); cannot interpolate"
+
+structure_ends:
+  status: draft, needs human review
+  structures:
+    - id: st01_ramp
+      carries: [4744437]
+      over: [24549539, 607986248, 1271352005]
+      ends: []
+      ends_unavailable: "no class 17 run on the carried centerline at the crossing"
+    - id: st02_ramp
+      carries: [24549540]
+      over: [24549539, 607986248, 1271352005]
+      ends:
+        - along: 24549540
+          start_lonlat: [-122.18597, 47.631729]
+          end_lonlat: [-122.185287, 47.631764]
+          length_m: 51.5
+          osm_bridge_length_m: 50.3
+    - id: st03_ramp
+      carries: [24549555]
+      over: [363687554, 609387674, 939529926]
+      ends:
+        - along: 24549555
+          start_lonlat: [-122.186966, 47.633202]
+          end_lonlat: [-122.186477, 47.635002]
+          length_m: 203.5
+          osm_bridge_length_m: 66.9
+    - id: st04_ramp
+      carries: [24549556, 24549557, 980461371]
+      over: [6350179, 24549536]
+      ends:
+        - along: 24549556
+          start_lonlat: [-122.186966, 47.633203]
+          end_lonlat: [-122.186477, 47.635002]
+          length_m: 203.5
+          osm_bridge_length_m: 117.6
+        - along: 24549557
+          start_lonlat: [-122.190215, 47.631368]
+          end_lonlat: [-122.186477, 47.635002]
+          length_m: 636.5
+          osm_bridge_length_m: 114.1
+          truncated_at_aoi_edge: true  # deck continues past the AOI; length is the part inside
+        - along: 980461371
+          start_lonlat: [-122.186966, 47.633205]
+          end_lonlat: [-122.186477, 47.635]
+          length_m: 203.0
+          osm_bridge_length_m: 117.6
+    - id: st05_ramp
+      carries: [24549558]
+      over: [363687554, 609387674, 939529926]
+      ends:
+        - along: 24549558
+          start_lonlat: [-122.190215, 47.631368]
+          end_lonlat: [-122.186477, 47.635002]
+          length_m: 636.5
+          osm_bridge_length_m: 65.1
+          truncated_at_aoi_edge: true  # deck continues past the AOI; length is the part inside
+    - id: st06_ramp
+      carries: [24549563, 24549570]
+      over: [6350179, 24549536]
+      ends:
+        - along: 24549563
+          start_lonlat: [-122.188212, 47.63411]
+          end_lonlat: [-122.188729, 47.633971]
+          length_m: 42.0
+          osm_bridge_length_m: 67.9
+        - along: 24549570
+          start_lonlat: [-122.187896, 47.634007]
+          end_lonlat: [-122.18852, 47.632114]
+          length_m: 219.0
+          osm_bridge_length_m: 72.9
+    - id: st07_ramp
+      carries: [24549571]
+      over: [4752353, 310013775]
+      ends:
+        - along: 24549571
+          start_lonlat: [-122.189975, 47.632851]
+          end_lonlat: [-122.189708, 47.633543]
+          length_m: 80.0
+          osm_bridge_length_m: 62.5
+    - id: st08_ramp
+      carries: [34530546]
+      over: [363687554, 609387674, 939529926]
+      ends:
+        - along: 34530546
+          start_lonlat: [-122.188213, 47.634109]
+          end_lonlat: [-122.188729, 47.633971]
+          length_m: 42.0
+          osm_bridge_length_m: 39.8
+    - id: st09_ramp
+      carries: [34530554]
+      over: [4752353, 4752358, 310013775, 363687554, 609387674, 782862427, 939529926]
+      ends:
+        - along: 34530554
+          start_lonlat: [-122.187896, 47.634006]
+          end_lonlat: [-122.18852, 47.632113]
+          length_m: 219.0
+          osm_bridge_length_m: 237.8
+    - id: st10_ramp
+      carries: [34530893]
+      over: [4744446, 24549573, 53189327, 623957736, 1106679176]
+      ends:
+        - along: 34530893
+          start_lonlat: [-122.190272, 47.631447]
+          end_lonlat: [-122.186477, 47.635]
+          length_m: 646.0
+          osm_bridge_length_m: 357.5
+    - id: st11_i405
+      carries: [34531016, 310013200]
+      over: [623957736, 1106679176]
+      ends:
+        - along: 34531016
+          start_lonlat: [-122.188107, 47.632721]
+          end_lonlat: [-122.188196, 47.632085]
+          length_m: 71.0
+          osm_bridge_length_m: 77.0
+        - along: 310013200
+          start_lonlat: [-122.188012, 47.632682]
+          end_lonlat: [-122.188188, 47.632082]
+          length_m: 68.0
+          osm_bridge_length_m: 74.1
+    - id: st12_northeast10thstreet
+      carries: [48995748, 103757285, 137068147, 428073522, 428073523, 503281920, 513185002, 513238745, 816411880, 816411881]
+      over: [6330434, 26370149, 30615045, 132147575, 428073561, 513238704, 622462903, 736892506]
+      ends:
+        - along: 48995748
+          start_lonlat: [-122.189621, 47.619293]
+          end_lonlat: [-122.186705, 47.619243]
+          length_m: 219.5
+          osm_bridge_length_m: 112.6
+        - along: 137068147
+          start_lonlat: [-122.189601, 47.619389]
+          end_lonlat: [-122.186709, 47.619348]
+          length_m: 218.0
+          osm_bridge_length_m: 112.8
+        - along: 428073523
+          start_lonlat: [-122.189618, 47.619293]
+          end_lonlat: [-122.186702, 47.619243]
+          length_m: 219.5
+          osm_bridge_length_m: 112.6
+        - along: 503281920
+          start_lonlat: [-122.189603, 47.619389]
+          end_lonlat: [-122.18671, 47.619347]
+          length_m: 218.0
+          osm_bridge_length_m: 112.8
+    - id: st13_northeast8thstreet
+      carries: [55481043]
+      over: [30615045, 428073561, 531665400, 622462903, 736892506, 967452420]
+      ends:
+        - along: 55481043
+          start_lonlat: [-122.189448, 47.617269]
+          end_lonlat: [-122.187985, 47.617252]
+          length_m: 110.0
+          osm_bridge_length_m: 114.6
+    - id: st14_footway67144854
+      carries: [67144854]
+      over: [30615045, 428073561, 531665400, 622462903, 736892506, 967452420]
+      ends:
+        - along: 67144854
+          start_lonlat: [-122.187982, 47.617478]
+          end_lonlat: [-122.189451, 47.617494]
+          length_m: 110.5
+          osm_bridge_length_m: 117.9
+    - id: st15_footway111869523
+      carries: [111869523]
+      over: [6334468, 30615045, 428073561, 531651939, 531665400, 622462903, 736892506]
+      ends:
+        - along: 111869523
+          start_lonlat: [-122.189444, 47.617183]
+          end_lonlat: [-122.187981, 47.617169]
+          length_m: 110.0
+          osm_bridge_length_m: 117.7
+    - id: st16_footway137067810
+      carries: [137067810]
+      over: [6330434, 26370149, 30615045, 132147575, 428073561, 513238704, 622462903, 736892506]
+      ends:
+        - along: 137067810
+          start_lonlat: [-122.189638, 47.619172]
+          end_lonlat: [-122.186704, 47.619131]
+          length_m: 221.0
+          osm_bridge_length_m: 112.5
+    - id: st17_ramp
+      carries: [160180168]
+      over: [974011516]
+      ends:
+        - along: 160180168
+          start_lonlat: [-122.188317, 47.621797]
+          end_lonlat: [-122.188248, 47.624624]
+          length_m: 314.5
+          osm_bridge_length_m: 155.7
+    - id: st18_northeast12thstreet
+      carries: [160183572, 428067757, 513238758]
+      over: [30615045, 621646784, 622462902, 967566386, 1340255201]
+      ends:
+        - along: 160183572
+          start_lonlat: [-122.186735, 47.622671]
+          end_lonlat: [-122.189408, 47.621466]
+          length_m: 242.5
+          osm_bridge_length_m: 114.8
+        - along: 428067757
+          start_lonlat: [-122.186737, 47.622671]
+          end_lonlat: [-122.189409, 47.621465]
+          length_m: 242.5
+          osm_bridge_length_m: 114.8
+    - id: st19_cycleway289828827
+      carries: [289828827]
+      over: [30615045, 621646784, 622462902, 967566386, 1340255201]
+      ends:
+        - along: 289828827
+          start_lonlat: [-122.186793, 47.622738]
+          end_lonlat: [-122.189474, 47.621524]
+          length_m: 243.5
+          osm_bridge_length_m: 115.3
+    - id: st20_ramp
+      carries: [30615035, 309999158]
+      over: [26371191, 30614989, 169303084, 609543474, 880540177]
+      ends:
+        - along: 309999158
+          start_lonlat: [-122.19052, 47.615396]
+          end_lonlat: [-122.188678, 47.61539]
+          length_m: 138.5
+          osm_bridge_length_m: 80.9
+          truncated_at_aoi_edge: true  # deck continues past the AOI; length is the part inside
+    - id: st21_i405expresstolllanes
+      carries: [310012089]
+      over: [6350179, 24549536]
+      ends:
+        - along: 310012089
+          start_lonlat: [-122.187021, 47.634422]
+          end_lonlat: [-122.186773, 47.635191]
+          length_m: 87.5
+          osm_bridge_length_m: 97.8
+    - id: st22_i405
+      carries: [310012092]
+      over: [6350179, 24549536]
+      ends:
+        - along: 310012092
+          start_lonlat: [-122.187666, 47.633791]
+          end_lonlat: [-122.18778, 47.633462]
+          length_m: 37.5
+          osm_bridge_length_m: 60.5
+    - id: st23_i405
+      carries: [310013196]
+      over: [363687554, 609387674, 939529926]
+      ends:
+        - along: 310013196
+          start_lonlat: [-122.187666, 47.63379]
+          end_lonlat: [-122.18778, 47.633462]
+          length_m: 37.5
+          osm_bridge_length_m: 45.6
+    - id: st24_i405
+      carries: [310013201]
+      over: [4744446]
+      ends:
+        - along: 310013201
+          start_lonlat: [-122.188481, 47.630541]
+          end_lonlat: [-122.188555, 47.630117]
+          length_m: 47.5
+          osm_bridge_length_m: 64.6
+    - id: st25_i405
+      carries: [310013251]
+      over: [623957736, 1106679176]
+      ends:
+        - along: 310013251
+          start_lonlat: [-122.187839, 47.631913]
+          end_lonlat: [-122.18765, 47.632544]
+          length_m: 71.5
+          osm_bridge_length_m: 73.9
+    - id: st26_i405
+      carries: [310013252]
+      over: [363687554, 609387674, 939529926]
+      ends:
+        - along: 310013252
+          start_lonlat: [-122.187416, 47.633297]
+          end_lonlat: [-122.187273, 47.633704]
+          length_m: 46.5
+          osm_bridge_length_m: 61.6
+    - id: st27_sr520
+      carries: [310013774, 492889075]
+      over: [1081880292]
+      ends: []
+      ends_unavailable: "no class 17 run on the carried centerline at the crossing"
+    - id: st28_sr520
+      carries: [310013776]
+      over: [607985202, 1280795249]
+      ends: []
+      ends_unavailable: "no class 17 run on the carried centerline at the crossing"
+    - id: st29_northeast12thstreet
+      carries: [378376409]
+      over: [30615045, 621646784, 622462902, 967566386, 1340255201]
+      ends:
+        - along: 378376409
+          start_lonlat: [-122.189332, 47.621392]
+          end_lonlat: [-122.186681, 47.622601]
+          length_m: 241.5
+          osm_bridge_length_m: 114.1
+    - id: st30_northeast8thstreet
+      carries: [30615115, 428073537, 513238699, 623055163, 1058885032]
+      over: [30615045, 428073561, 531665400, 622462903, 736892506, 967452420]
+      ends:
+        - along: 428073537
+          start_lonlat: [-122.187983, 47.617381]
+          end_lonlat: [-122.189446, 47.617396]
+          length_m: 110.0
+          osm_bridge_length_m: 115.9
+        - along: 513238699
+          start_lonlat: [-122.187983, 47.617381]
+          end_lonlat: [-122.189446, 47.617396]
+          length_m: 110.0
+          osm_bridge_length_m: 115.9
+    - id: st31_footway476492817
+      carries: [476492817]
+      over: [30615045, 621646784, 622462902, 967566386, 1340255201]
+      ends:
+        - along: 476492817
+          start_lonlat: [-122.189287, 47.62135]
+          end_lonlat: [-122.186629, 47.622545]
+          length_m: 241.0
+          osm_bridge_length_m: 113.8
+    - id: st32_sr520
+      carries: [492889072, 492889073]
+      over: [1081880292]
+      ends:
+        - along: 492889072
+          start_lonlat: [-122.184728, 47.63179]
+          end_lonlat: [-122.184014, 47.631876]
+          length_m: 54.5
+          osm_bridge_length_m: 62.6
+        - along: 492889073
+          start_lonlat: [-122.184742, 47.631876]
+          end_lonlat: [-122.18401, 47.631889]
+          length_m: 55.0
+          osm_bridge_length_m: 64.0
+    - id: st33_sr520
+      carries: [492889077]
+      over: [24549539, 607986248, 1271352005]
+      ends: []
+      ends_unavailable: "no class 17 run on the carried centerline at the crossing"
+    - id: st34_sr520
+      carries: [492889078]
+      over: [24549539, 607986248, 1271352005]
+      ends:
+        - along: 492889078
+          start_lonlat: [-122.185896, 47.631892]
+          end_lonlat: [-122.185311, 47.631876]
+          length_m: 44.0
+          osm_bridge_length_m: 49.9
+    - id: st35_ramp
+      carries: [492889081]
+      over: [1081880292]
+      ends:
+        - along: 492889081
+          start_lonlat: [-122.184674, 47.631678]
+          end_lonlat: [-122.181032, 47.631761]
+          length_m: 274.5
+          osm_bridge_length_m: 150.9
+          truncated_at_aoi_edge: true  # deck continues past the AOI; length is the part inside
+    - id: st36_ramp
+      carries: [492889082]
+      over: [24549539, 607986248, 1271352005]
+      ends:
+        - along: 492889082
+          start_lonlat: [-122.185929, 47.631608]
+          end_lonlat: [-122.185273, 47.631644]
+          length_m: 49.5
+          osm_bridge_length_m: 50.7
+    - id: st37_ramp
+      carries: [622462906]
+      over: [26371191, 30614989, 169303084, 609543474, 880540177, 1382653994]
+      ends:
+        - along: 622462906
+          start_lonlat: [-122.188676, 47.615485]
+          end_lonlat: [-122.190511, 47.61549]
+          length_m: 138.0
+          osm_bridge_length_m: 79.8
+          truncated_at_aoi_edge: true  # deck continues past the AOI; length is the part inside
+    - id: st38_i405
+      carries: [310013250, 983156127]
+      over: [4744446]
+      ends:
+        - along: 983156127
+          start_lonlat: [-122.188308, 47.629833]
+          end_lonlat: [-122.188183, 47.630489]
+          length_m: 73.5
+          osm_bridge_length_m: 75.7
+    - id: st39_service1382653994
+      carries: [1382653994]
+      over: [309999158]
+      ends:
+        - along: 1382653994
+          start_lonlat: [-122.189617, 47.615534]
+          end_lonlat: [-122.189561, 47.615347]
+          length_m: 21.5
+          osm_bridge_length_m: 0

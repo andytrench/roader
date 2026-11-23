@@ -1,0 +1,20 @@
+# Catalogue unit: I-215 / Arroyo Grande Boulevard SPUI, Henderson, NV (tests/sites.yaml).
+# Hashes are the pins written by scripts/fetch_fixtures.py (FR-PL-3, D-008).
+
+[unit]
+site_id = "henderson_i215_arroyo_grande"
+aoi_lonlat = [-115.0715, 36.0245, -115.0540, 36.0305]
+imagery_enabled = false
+
+[lidar]
+path = "data/fixtures/henderson_i215_arroyo_grande/lidar.laz"
+name = "NV_ClarkCo_2_B22"
+year = 2022
+quality_level = "QL1"
+sha256 = "f133303044e087d4162232ce18bae2e1005cf247d0c0d3232effb40c8e6a07c8"
+
+[vectors.osm]
+enabled = true
+path = "data/fixtures/henderson_i215_arroyo_grande/osm.json"
+license = "ODbL-1.0"
+sha256 = "c8504d3554bbc942bb415544453455d43a4d15b37c16227b7a478cbfcf30053c"

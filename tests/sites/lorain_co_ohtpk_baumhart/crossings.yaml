@@ -1,0 +1,164 @@
+# AC-H2 hand-labeled crossing list for lorain_co_ohtpk_baumhart (Ohio Turnpike exit 135 (Baumhart Road) trumpet, Lorain County OH).
+#
+# status: draft, needs human review. Drafted 2026-11-23 from the pinned fixture
+# (lidar_sha256 221944b4..., vector_sha256 136cfefc...), not from a site visit or plans.
+# Crossings are every plan intersection inside the AOI, without a shared node, between
+# in-scope OSM edges (roader.io.in_scope) where at least one edge is limited-access
+# (D-037): 8 crossings. Footways, cycleways and service roads are in scope under
+# roader.io.in_scope and are listed.
+#
+# Class 17 (bridge deck) is present in this collection: 25,863 returns in the AOI.
+#
+# Method (unit frame, heights NAVD88 assumed, meters; classes 1, 2, 11 and 17). Each way
+# is traced along its OSM centerline, extended through the least-deflected continuing
+# way (under 40 deg) up to 300 m each side. Every 2 m the returns within 1.5 m are split
+# into height clusters (1 m gaps) and one surface is tracked from each end toward the
+# crossing with a 7 % grade limit, so a deck above or below is not taken for the road.
+# At a crossing each way's height is interpolated from its tracked stations outside the
+# other way's footprint (half width by OSM class plus 4 m); the higher way is the upper.
+# upper_z_m is the upper way's own returns at the crossing when they agree with that
+# profile, else the interpolation. lower_z_m is the interpolation; `evidence` gives its
+# span. dz is upper minus lower (FR-CR-1), to 0.1 m. skew_deg is from perpendicular,
+# between the traced centerlines. Pairs with no grade separation in the lidar (dz under
+# 2 m) or with no profile on one side are listed under `unresolved`, not as crossings.
+# A `review` note marks rows where the lidar order disagrees with the OSM layer / bridge
+# tags.
+#
+# Structures group crossings whose upper ways are connected bridge ways at one OSM
+# layer (FR-CR-3 chains); deck ends are the run of class 17 returns within 1.0 m of the
+# carried centerline through the crossing, with no gap over 3 m, clipped 2 m inside the
+# AOI (`truncated_at_aoi_edge` when the deck runs on past it). Ends along a ramp can run
+# on along the mainline deck the ramp's centerline continues onto.
+#
+# Review checklist: confirm the vertical order; the two flyover-over-loop rows (ramps
+# 88086635 and 88086681 over ramp 19126770) were completed by hand from the lidar
+# profiles, since the drafted trace was one-sided there; confirm the deck ends (no class
+# 17 run on one Turnpike bridge over Baumhart Road).
+
+site_id: lorain_co_ohtpk_baumhart
+status: draft, needs human review
+crossings:
+  - id: ohioturnpike88086308_over_baumhartroad284926972
+    upper: {osm_way: 88086308, name: "Ohio Turnpike", highway: motorway}
+    lower: {osm_way: 284926972, name: "Baumhart Road", highway: primary}
+    lonlat: [-82.278837, 41.362415]
+    upper_z_m: 246.9
+    lower_z_m: 241.4
+    dz_m: 5.5
+    skew_deg: 20
+    structure: st01_ohioturnpike
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 40 m"
+  - id: ohioturnpike88086532_over_baumhartroad284926972
+    upper: {osm_way: 88086532, name: "Ohio Turnpike", highway: motorway}
+    lower: {osm_way: 284926972, name: "Baumhart Road", highway: primary}
+    lonlat: [-82.278893, 41.362618]
+    upper_z_m: 246.9
+    lower_z_m: 241.3
+    dz_m: 5.6
+    skew_deg: 21
+    structure: st02_ohioturnpike
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 42 m"
+  - id: ramp88086635_over_ohioturnpike1233206724
+    upper: {osm_way: 88086635, name: "ramp", highway: motorway_link}
+    lower: {osm_way: 1233206724, name: "Ohio Turnpike", highway: motorway}
+    lonlat: [-82.28418, 41.360223]
+    upper_z_m: 250.2
+    lower_z_m: 243.0
+    dz_m: 7.2
+    skew_deg: 0
+    structure: st03_ramp
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 22 m"
+  - id: ramp88086635_over_ohioturnpike1233206727
+    upper: {osm_way: 88086635, name: "ramp", highway: motorway_link}
+    lower: {osm_way: 1233206727, name: "Ohio Turnpike", highway: motorway}
+    lonlat: [-82.284307, 41.360406]
+    upper_z_m: 250.0
+    lower_z_m: 243.0
+    dz_m: 7.0
+    skew_deg: 0
+    structure: st03_ramp
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 22 m"
+  - id: ramp88086681_over_ohioturnpike1233206724
+    upper: {osm_way: 88086681, name: "ramp", highway: motorway_link}
+    lower: {osm_way: 1233206724, name: "Ohio Turnpike", highway: motorway}
+    lonlat: [-82.2841, 41.360254]
+    upper_z_m: 250.2
+    lower_z_m: 243.1
+    dz_m: 7.1
+    skew_deg: 1
+    structure: st04_ramp
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 22 m"
+  - id: ramp88086681_over_ohioturnpike1233206727
+    upper: {osm_way: 88086681, name: "ramp", highway: motorway_link}
+    lower: {osm_way: 1233206727, name: "Ohio Turnpike", highway: motorway}
+    lonlat: [-82.284229, 41.360437]
+    upper_z_m: 250.0
+    lower_z_m: 243.1
+    dz_m: 6.9
+    skew_deg: 0
+    structure: st04_ramp
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 22 m"
+  - id: ramp88086635_over_ramp19126770
+    upper: {osm_way: 88086635, name: "ramp", highway: motorway_link}
+    lower: {osm_way: 19126770, name: "ramp", highway: motorway_link}
+    lonlat: [-82.28413, 41.360152]
+    upper_z_m: 250.3
+    lower_z_m: 242.9
+    dz_m: 7.4
+    skew_deg: 1
+    structure: st03_ramp
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 32 m by hand (the drafted trace was one-sided at the end of the 88 m bridge way)"
+  - id: ramp88086681_over_ramp19126770
+    upper: {osm_way: 88086681, name: "ramp", highway: motorway_link}
+    lower: {osm_way: 19126770, name: "ramp", highway: motorway_link}
+    lonlat: [-82.284051, 41.360184]
+    upper_z_m: 250.3
+    lower_z_m: 242.9
+    dz_m: 7.4
+    skew_deg: 1
+    structure: st04_ramp
+    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
+    evidence: "upper measured; lower interpolated over 32 m by hand (the drafted trace was one-sided at the end of the 88 m bridge way)"
+
+structure_ends:
+  status: draft, needs human review
+  structures:
+    - id: st01_ohioturnpike
+      carries: [88086308]
+      over: [284926972]
+      ends:
+        - along: 88086308
+          start_lonlat: [-82.279005, 41.362338]
+          end_lonlat: [-82.278662, 41.362495]
+          length_m: 33.5
+          osm_bridge_length_m: 36.4
+    - id: st02_ohioturnpike
+      carries: [88086532]
+      over: [284926972]
+      ends: []
+      ends_unavailable: "no class 17 run on the carried centerline at the crossing"
+    - id: st03_ramp
+      carries: [88086635]
+      over: [19126770, 1233206724, 1233206727]
+      ends:
+        - along: 88086635
+          start_lonlat: [-82.284482, 41.360658]
+          end_lonlat: [-82.283955, 41.3599]
+          length_m: 95.0
+          osm_bridge_length_m: 88.2
+    - id: st04_ramp
+      carries: [88086681]
+      over: [19126770, 1233206724, 1233206727]
+      ends:
+        - along: 88086681
+          start_lonlat: [-82.283873, 41.35993]
+          end_lonlat: [-82.284406, 41.36069]
+          length_m: 95.5
+          osm_bridge_length_m: 88.2

@@ -1,0 +1,20 @@
+# Catalogue unit: I-94 / Fenning Avenue NE partial cloverleaf, Wright County, MN (tests/sites.yaml).
+# Hashes are the pins written by scripts/fetch_fixtures.py (FR-PL-3, D-008).
+
+[unit]
+site_id = "wright_co_i94_fenning"
+aoi_lonlat = [-93.7745, 45.2875, -93.7600, 45.2935]
+imagery_enabled = false
+
+[lidar]
+path = "data/fixtures/wright_co_i94_fenning/lidar.laz"
+name = "MN_CentralMissRiver_4_B22"
+year = 2022
+quality_level = "QL1"
+sha256 = "bd7acdde0e93b212fe546ef3822e37eea254d1248924425dd61175e320abeded"
+
+[vectors.osm]
+enabled = true
+path = "data/fixtures/wright_co_i94_fenning/osm.json"
+license = "ODbL-1.0"
+sha256 = "a696539afe8bbaf343cd7346821fd51f920a7c28ce14a657b62756fab708ed98"

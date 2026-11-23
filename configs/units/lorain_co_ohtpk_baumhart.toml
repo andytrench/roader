@@ -1,0 +1,20 @@
+# Catalogue unit: Ohio Turnpike exit 135 (Baumhart Road) trumpet, Lorain County, OH (tests/sites.yaml).
+# Hashes are the pins written by scripts/fetch_fixtures.py (FR-PL-3, D-008).
+
+[unit]
+site_id = "lorain_co_ohtpk_baumhart"
+aoi_lonlat = [-82.2920, 41.3560, -82.2765, 41.3680]
+imagery_enabled = false
+
+[lidar]
+path = "data/fixtures/lorain_co_ohtpk_baumhart/lidar.laz"
+name = "OH_Statewide_Phase1_3_2019"
+year = 2020
+quality_level = "QL1"
+sha256 = "221944b4439bd4adf15894813eead07c49d97311a91ed36deca4a24c79ae22de"
+
+[vectors.osm]
+enabled = true
+path = "data/fixtures/lorain_co_ohtpk_baumhart/osm.json"
+license = "ODbL-1.0"
+sha256 = "136cfefc2d47a8d89613fa25927569399381c7decd2938ff4e284d1bf7c11ef7"

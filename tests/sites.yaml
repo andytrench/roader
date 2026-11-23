@@ -22,9 +22,31 @@ classes:
     status: assigned
     sites: [dallas_high_five_i635_us75]
   - class: long_urban_viaduct
-    status: unassigned
+    status: assigned
+    sites: [neworleans_i10_claiborne_viaduct]
   - class: twin_carriageways_different_elevations
-    status: unassigned
+    status: assigned
+    sites: [seattle_i5_beacon_hill]
+  # Interchange catalogue: one site per spec section 1 interchange type beyond the
+  # section 9 classes, milestone "catalogue" (not tied to a section 10 milestone yet).
+  - class: diamond_interchange
+    status: assigned
+    sites: [columbus_i71_sr161]
+  - class: single_point_urban_interchange
+    status: assigned
+    sites: [henderson_i215_arroyo_grande]
+  - class: partial_cloverleaf
+    status: assigned
+    sites: [wright_co_i94_fenning]
+  - class: trumpet_interchange
+    status: assigned
+    sites: [lorain_co_ohtpk_baumhart]
+  - class: directional_interchange
+    status: assigned
+    sites: [chandler_loop101_loop202]
+  - class: collector_distributor_braided
+    status: assigned
+    sites: [bellevue_i405_ne8th_sr520]
   - class: major_river_crossing_truss_or_arch
     status: unassigned
   - class: mountain_cuts_fills_walls
@@ -157,3 +179,319 @@ sites:
     crossings: tests/sites/dallas_high_five_i635_us75/crossings.yaml
     lidar_sha256: "1534bf766c32363b00b5ba754ac8cd9123d697a1757591f34cecf7bd59c7a4d7"
     vector_sha256: "772220bb78dd53b31d47e416b02fc74402cdefd74fcc1df4c83cf5e591892d4c"
+
+  - id: neworleans_i10_claiborne_viaduct
+    class: long_urban_viaduct
+    milestone: catalogue
+    description: >-
+      I-10 Claiborne Avenue Expressway viaduct over North Claiborne Avenue in the Treme
+      and 7th Ward, New Orleans, LA: about 1.9 km of twin-deck viaduct (one deck per
+      carriageway on shared piers over the Claiborne neutral ground) crossing every street
+      of the grid, with the Orleans Avenue / Vieux Carre ramp pair (two hook ramps on
+      bridges), the Canal Street ramps at the south-west end and the Esplanade Avenue
+      ramp. The lidar holds two continuous class 17 decks through the AOI, one per
+      carriageway with its ramps; 139 draft crossings, almost all streets and sidewalks
+      under the viaduct. The south-west edge (lon -90.0805, lat
+      29.9570) stops north-east of the I-10 / US 90 Business (Pontchartrain Expressway)
+      interchange ramps and of the Tulane Avenue crossing; the north-east edge (lon
+      -90.0660, lat 29.9715) stops before the St. Bernard Avenue ramps, so every
+      structure in the AOI belongs to the viaduct.
+      Runner-up: the US 90 Business (Pontchartrain Expressway) viaduct south-west of the
+      I-10 junction, same EPT, 10 to 13 pts/m2 with class 17.
+    aoi_lonlat: [-90.0805, 29.9570, -90.0660, 29.9715]
+    crossing_lonlat: [-90.0735, 29.9640]
+    lidar:
+      project: LA_2021GNO_1_C22
+      ept: https://s3-us-west-2.amazonaws.com/usgs-lidar-public/LA_2021GNO_1_C22/ept.json
+      year: 2021
+      quality_level: QL1
+      horizontal_crs: EPSG:3857
+      vertical_crs: NAVD88 (assumed; not declared in the EPT metadata)
+      collected: 2021-11-12 to 2021-11-20 (USGS WESM, LA_2021GreaterNewOrleans_C22)
+      density_pts_m2: 11.0
+      classes_seen: [1, 2, 7, 9, 17, 18]
+      class_17_points: 683122
+      point_count: 24772606
+      laz_bytes: 120525769
+    vectors:
+      source: osm
+      license: ODbL-1.0
+      path: data/fixtures/neworleans_i10_claiborne_viaduct/osm.json
+    lidar_path: data/fixtures/neworleans_i10_claiborne_viaduct/lidar.laz
+    crossings: tests/sites/neworleans_i10_claiborne_viaduct/crossings.yaml
+    lidar_sha256: "6a95cda077cde7dae2c314abfb3612b4ff86d8c3762d97e2414ee1c1d24eeb43"
+    vector_sha256: "c411fed3d9ab98853e95fe16fd79227f91c48d797834d1892f692ab6e546d63d"
+
+  - id: seattle_i5_beacon_hill
+    class: twin_carriageways_different_elevations
+    milestone: catalogue
+    description: >-
+      I-5 along the west slope of Beacon Hill above Georgetown, Seattle, WA: the
+      northbound carriageway runs 4.5 to 20.6 m above the southbound one (lidar, sampled
+      every 120 m), 50 to 68 m apart across a wooded, sloping median. Each carriageway
+      has its own bridge over Military Road South at the south end, the only grade
+      separation of in-scope roads in the AOI; the southbound carriageway also has a
+      134 m bridge (OSM way 806572224) with no mapped road under it. Airport Way South
+      runs parallel below on the west. The AOI is the stretch where the carriageways sit
+      at clearly different elevations: the north edge (lat 47.5430) stops short of the
+      ramps at lat 47.545, the south edge (lat 47.5290) is about 140 m south of the
+      Military Road South bridges, where the two levels have nearly rejoined.
+      Runner-up: I-5 at South 188th Street, SeaTac / Tukwila WA (-122.2770, 47.4275),
+      same EPT, carriageways about 55 m apart and 12 m different in elevation.
+    aoi_lonlat: [-122.3050, 47.5290, -122.2920, 47.5430]
+    crossing_lonlat: [-122.2985, 47.5362]
+    lidar:
+      project: WA_KingCo_1_2021
+      ept: https://s3-us-west-2.amazonaws.com/usgs-lidar-public/WA_KingCo_1_2021/ept.json
+      year: 2021
+      quality_level: QL1
+      horizontal_crs: EPSG:3857
+      vertical_crs: NAVD88 (assumed; not declared in the EPT metadata)
+      collected: 2021-04-01 to 2021-04-24 (USGS WESM, WA_KingCounty_2021_B21)
+      density_pts_m2: 12.0
+      classes_seen: [1, 2, 7, 17, 18]
+      class_17_points: 67058
+      point_count: 18310503
+      laz_bytes: 101354615
+    vectors:
+      source: osm
+      license: ODbL-1.0
+      path: data/fixtures/seattle_i5_beacon_hill/osm.json
+    lidar_path: data/fixtures/seattle_i5_beacon_hill/lidar.laz
+    crossings: tests/sites/seattle_i5_beacon_hill/crossings.yaml
+    lidar_sha256: "ca552401df33f5ab9ffbe3d22d461acfdee4999fae15b56a603bdf68996e30b1"
+    vector_sha256: "a3611ff72daee898a4af59777ee177aa498c3ec4ad5ded710f6fcc4ad23f370c"
+
+  - id: henderson_i215_arroyo_grande
+    class: single_point_urban_interchange
+    milestone: catalogue
+    description: >-
+      I-215 (Bruce Woodbury Beltway) / Arroyo Grande Boulevard single-point urban
+      interchange, Henderson, NV: Arroyo Grande Boulevard crosses over I-215 on twin
+      bridges carrying the single signalised junction where all four ramps meet. The AOI
+      holds both gores of all four ramps (lon -115.0690 to -115.0560) plus the Valle Verde
+      Drive bridges over I-215 at the east edge (with the ramp terminals on them), with
+      at least 80 m margin; the north and south edges are about 250 m off the mainline,
+      beyond the ramp terminals.
+      Runner-up: SR 51 (Piestewa Freeway) / Glendale Avenue SPUI, Phoenix AZ
+      (-112.0417, 33.5383), EPT AZ_MaricopaPinal_1_2020 (WESM AZ_MaricopaPinal_2020_B20,
+      QL1, collected 2020-10-02 to 2021-12-18), 19.5 pts/m2 over a 300 m window, class 17 present.
+    aoi_lonlat: [-115.0715, 36.0245, -115.0540, 36.0305]
+    crossing_lonlat: [-115.0632, 36.0275]
+    lidar:
+      project: NV_ClarkCo_2_B22
+      ept: https://s3-us-west-2.amazonaws.com/usgs-lidar-public/NV_ClarkCo_2_B22/ept.json
+      year: 2022
+      quality_level: QL1
+      horizontal_crs: EPSG:3857
+      vertical_crs: NAVD88 (assumed; not declared in the EPT metadata)
+      collected: 2022-07-08 to 2022-08-01 (USGS WESM, NV_ClarkCounty_B22)
+      density_pts_m2: 16.5
+      classes_seen: [1, 2, 7, 17, 18, 20]
+      class_17_points: 45521
+      point_count: 17293553
+      laz_bytes: 65587263
+      older_vintage: >-
+        EPT USGS_LPC_NV_LasVegas_QL1_2016_LAS_2018 also covers the AOI (WESM
+        NV_Las_Vegas_Region_2016_A16, QL1, collected 2016-04-21 to 2016-05-16); not fetched
+    vectors:
+      source: osm
+      license: ODbL-1.0
+      path: data/fixtures/henderson_i215_arroyo_grande/osm.json
+    lidar_path: data/fixtures/henderson_i215_arroyo_grande/lidar.laz
+    crossings: tests/sites/henderson_i215_arroyo_grande/crossings.yaml
+    lidar_sha256: "f133303044e087d4162232ce18bae2e1005cf247d0c0d3232effb40c8e6a07c8"
+    vector_sha256: "c8504d3554bbc942bb415544453455d43a4d15b37c16227b7a478cbfcf30053c"
+
+  - id: chandler_loop101_loop202
+    class: directional_interchange
+    milestone: catalogue
+    description: >-
+      Loop 101 (Price Freeway) / Loop 202 (Santan Freeway) directional T, Chandler, AZ:
+      Loop 101 ends at Loop 202 and all four movements use flyover or semi-direct ramps,
+      no loops, over Price Road and the Santan Village Parkway frontage. The AOI holds
+      every flyover and both gores of the connectors on the Loop 101 leg (north gores
+      about lat 33.2985) and the west leg of Loop 202 (gores near lon -111.900), plus the
+      Loop 202 bridge at lon -111.9025, with at least 90 m margin. Outside: the east
+      ends of the two longest connectors, which merge into and diverge from Loop 202
+      eastbound / westbound near lon -111.880, about 1.2 km from the T; keeping them
+      would double the AOI (laz about 500 MB at this density).
+      Runner-up: I-215 / I-11 / US 95 (Henderson Spaghetti Bowl), Henderson NV
+      (-115.0175, 36.0335), EPT NV_ClarkCo_2_B22 (WESM NV_ClarkCounty_B22, QL1, collected
+      2022-07-08 to 2022-08-01), 22.5 pts/m2 over a 300 m window, class 17 present.
+    aoi_lonlat: [-111.9040, 33.2875, -111.8830, 33.2995]
+    crossing_lonlat: [-111.8945, 33.2925]
+    lidar:
+      project: AZ_MaricopaPinal_1_2020
+      ept: https://s3-us-west-2.amazonaws.com/usgs-lidar-public/AZ_MaricopaPinal_1_2020/ept.json
+      year: 2020
+      quality_level: QL1
+      horizontal_crs: EPSG:3857
+      vertical_crs: NAVD88 (assumed; not declared in the EPT metadata)
+      collected: 2020-10-02 to 2021-12-18 (USGS WESM, AZ_MaricopaPinal_2020_B20; work unit span)
+      density_pts_m2: 17.8
+      classes_seen: [1, 2, 7, 17, 18, 20]
+      class_17_points: 388651
+      point_count: 46442273
+      laz_bytes: 266096495
+    vectors:
+      source: osm
+      license: ODbL-1.0
+      path: data/fixtures/chandler_loop101_loop202/osm.json
+    lidar_path: data/fixtures/chandler_loop101_loop202/lidar.laz
+    crossings: tests/sites/chandler_loop101_loop202/crossings.yaml
+    lidar_sha256: "ca573143b2e40ac9b730543572935992136bd29d825754e62cd9276e8026306a"
+    vector_sha256: "ba6057a58086ba2bfc1f0c1cc508d3c5a793c6ea3f6365687b228cfd84005a1a"
+
+  - id: bellevue_i405_ne8th_sr520
+    class: collector_distributor_braided
+    milestone: catalogue
+    description: >-
+      I-405 between NE 8th Street and SR 520, Bellevue, WA: collector-distributor roads
+      on both sides of I-405 between the NE 8th Street interchange and the I-405 / SR 520
+      interchange, with the braided ramps of WSDOT's NE 8th Street to SR 520 braided-ramps
+      project (ramps toward SR 520 / 124th Avenue NE pass over and under the ramps from
+      NE 8th Street), the NE 6th Street HOV direct-access ramps in the median, and the
+      SR 520 ramps that cross over and under them. The AOI runs from just south of the
+      NE 8th Street ramps (lat 47.6150) to north of the SR 520 ramp gores on I-405
+      (lat 47.6370), about 450 m either side of I-405, so the C-D roads and braided
+      ramps are whole; the NE 4th Street ramps and the south ends of the NE 6th Street
+      ramps continue past the south edge.
+      Runner-up: I-35E / I-694 ("Unweave the Weave") interchange, Vadnais Heights MN
+      (-93.0600, 45.0380), EPT MN_CentralMissRiver_5_B22 (WESM MN_CentralMissRiver_B22,
+      QL1, collected 2022-05-13 to 2022-05-24), 15.4 pts/m2 over a 300 m window.
+    aoi_lonlat: [-122.1950, 47.6150, -122.1810, 47.6370]
+    crossing_lonlat: [-122.1885, 47.6300]
+    lidar:
+      project: WA_KingCo_1_2021
+      ept: https://s3-us-west-2.amazonaws.com/usgs-lidar-public/WA_KingCo_1_2021/ept.json
+      year: 2021
+      quality_level: QL1
+      horizontal_crs: EPSG:3857
+      vertical_crs: NAVD88 (assumed; not declared in the EPT metadata)
+      collected: 2021-04-01 to 2021-04-24 (USGS WESM, WA_KingCounty_2021_B21)
+      density_pts_m2: 12.8
+      classes_seen: [1, 2, 7, 9, 17, 18, 20]
+      class_17_points: 695482
+      point_count: 32851074
+      laz_bytes: 198020364
+    vectors:
+      source: osm
+      license: ODbL-1.0
+      path: data/fixtures/bellevue_i405_ne8th_sr520/osm.json
+    lidar_path: data/fixtures/bellevue_i405_ne8th_sr520/lidar.laz
+    crossings: tests/sites/bellevue_i405_ne8th_sr520/crossings.yaml
+    lidar_sha256: "668d42ef670d67a32db14eac95f2d2177a9af3e44f561c8ab53b73c7c96903f4"
+    vector_sha256: "bcd554d163dca335c55e9c4f0cc7bde635b4dab97d2d649b309d4df2d676e719"
+
+  - id: columbus_i71_sr161
+    class: diamond_interchange
+    milestone: catalogue
+    description: >-
+      I-71 / SR 161 (East Dublin-Granville Road) diamond, Columbus, OH: SR 161 (four
+      lanes, divided) passes under I-71 on twin I-71 bridges; four ramps, no loops, ramp
+      terminals about 120 to 150 m either side of I-71. The AOI holds both gores of all
+      four ramps (lat 40.0835 to 40.0915) with at least 100 m margin; the west edge
+      stops short of the SR 161 / Sinclair Road junction (lon -82.993) and the east edge
+      is about 450 m off I-71, beyond the ramp terminals.
+      Runner-up: I-270 / Tuttle Crossing Boulevard diamond, Dublin OH (-83.1355, 40.0758),
+      EPT OH_StatewideP3_5_B21 (WESM OH_Statewide_Phase3_2021_B21, QL1, collected
+      2022-02-20 to 2022-12-21).
+    aoi_lonlat: [-82.9925, 40.0820, -82.9815, 40.0930]
+    crossing_lonlat: [-82.9871, 40.0866]
+    lidar:
+      project: USGS_LPC_OH_Columbus_2019
+      ept: https://s3-us-west-2.amazonaws.com/usgs-lidar-public/USGS_LPC_OH_Columbus_2019/ept.json
+      year: 2019
+      quality_level: QL1
+      horizontal_crs: EPSG:3857
+      vertical_crs: NAVD88 (assumed; not declared in the EPT metadata)
+      collected: 2019-03-24 to 2019-04-07 (USGS WESM, OH_Columbus_2019_B19)
+      density_pts_m2: 22.6
+      classes_seen: [1, 2, 7, 9, 17, 18, 20]
+      class_17_points: 56118
+      point_count: 25920327
+      laz_bytes: 137809867
+      newer_vintage: >-
+        EPT OH_StatewideP3_5_B21 also covers the AOI (WESM OH_Statewide_Phase3_2021_B21,
+        QL1, collected 2022-02-20 to 2022-12-21, about 48 pts/m2); not fetched
+    vectors:
+      source: osm
+      license: ODbL-1.0
+      path: data/fixtures/columbus_i71_sr161/osm.json
+    lidar_path: data/fixtures/columbus_i71_sr161/lidar.laz
+    crossings: tests/sites/columbus_i71_sr161/crossings.yaml
+    lidar_sha256: "5b1742412eb0a89f627a587848fa9d1078fddafbceedd5d4b46377e8ba770fad"
+    vector_sha256: "c67591768fb591f27e70d746d94e76c117ac5548dd4302a155ef90e0127ef86f"
+
+  - id: wright_co_i94_fenning
+    class: partial_cloverleaf
+    milestone: catalogue
+    description: >-
+      I-94 / Fenning Avenue NE partial cloverleaf, Wright County, MN (between Albertville
+      and Monticello): Fenning Avenue crosses over I-94 on twin bridges; two loops and two
+      outer ramps, all in the two east quadrants (parclo A2 / B2 form), no west-side ramps.
+      The AOI holds both gores of every ramp and loop (lon -93.7735 to -93.7625) and the
+      I-94 bridges over the frontage road at lon -93.762, with at least 100 m margin; the
+      north and south edges are about 300 m off I-94, past the loops.
+      Runner-up: I-94 / 60th Street NE, Albertville MN (-93.6486, 45.2378), same EPT
+      family (MN_CentralMissRiver_B22, QL1, collected May 2022).
+    aoi_lonlat: [-93.7745, 45.2875, -93.7600, 45.2935]
+    crossing_lonlat: [-93.7705, 45.2907]
+    lidar:
+      project: MN_CentralMissRiver_4_B22
+      ept: https://s3-us-west-2.amazonaws.com/usgs-lidar-public/MN_CentralMissRiver_4_B22/ept.json
+      year: 2022
+      quality_level: QL1
+      horizontal_crs: EPSG:3857
+      vertical_crs: NAVD88 (assumed; not declared in the EPT metadata)
+      collected: 2022-05-04 to 2022-05-24 (USGS WESM, MN_CentralMissRiver_B22)
+      density_pts_m2: 55.8
+      classes_seen: [1, 2, 7, 9, 17, 18, 20]
+      class_17_points: 260388
+      point_count: 42340204
+      laz_bytes: 177296659
+    vectors:
+      source: osm
+      license: ODbL-1.0
+      path: data/fixtures/wright_co_i94_fenning/osm.json
+    lidar_path: data/fixtures/wright_co_i94_fenning/lidar.laz
+    crossings: tests/sites/wright_co_i94_fenning/crossings.yaml
+    lidar_sha256: "bd7acdde0e93b212fe546ef3822e37eea254d1248924425dd61175e320abeded"
+    vector_sha256: "a696539afe8bbaf343cd7346821fd51f920a7c28ce14a657b62756fab708ed98"
+
+  - id: lorain_co_ohtpk_baumhart
+    class: trumpet_interchange
+    milestone: catalogue
+    description: >-
+      Ohio Turnpike (I-80 / I-90) exit 135, Baumhart Road, Lorain County, OH (near
+      Amherst / Vermilion): a trumpet with one loop south of the Turnpike, a semi-direct
+      ramp on a bridge over the Turnpike, and a two-way ramp road north to the toll plaza
+      and Baumhart Road. The AOI holds both Turnpike gores (lon -82.2895 / -82.2810), the
+      loop, the ramp road up to Baumhart Road (lat 41.3668) and the Turnpike bridges over
+      Baumhart Road (lon -82.2787), with at least 100 m margin.
+      Runner-up: Ohio Turnpike exit 140 / SR 58, Amherst OH (-82.2020, 41.3820), EPT
+      OH_Statewide_Phase1_3_2019, a two-loop variant of the Turnpike trumpet.
+    aoi_lonlat: [-82.2920, 41.3560, -82.2765, 41.3680]
+    crossing_lonlat: [-82.2842, 41.3605]
+    lidar:
+      project: OH_Statewide_Phase1_3_2019
+      ept: https://s3-us-west-2.amazonaws.com/usgs-lidar-public/OH_Statewide_Phase1_3_2019/ept.json
+      year: 2020
+      quality_level: QL1
+      horizontal_crs: EPSG:3857
+      vertical_crs: NAVD88 (assumed; not declared in the EPT metadata)
+      collected: 2019-11-08 to 2020-04-19 (USGS WESM, OH_Statewide_Phase1_2019_B19; work unit span)
+      density_pts_m2: 13.1
+      classes_seen: [1, 2, 7, 17, 18]
+      class_17_points: 25863
+      point_count: 22654065
+      laz_bytes: 109785302
+    vectors:
+      source: osm
+      license: ODbL-1.0
+      path: data/fixtures/lorain_co_ohtpk_baumhart/osm.json
+    lidar_path: data/fixtures/lorain_co_ohtpk_baumhart/lidar.laz
+    crossings: tests/sites/lorain_co_ohtpk_baumhart/crossings.yaml
+    lidar_sha256: "221944b4439bd4adf15894813eead07c49d97311a91ed36deca4a24c79ae22de"
+    vector_sha256: "136cfefc2d47a8d89613fa25927569399381c7decd2938ff4e284d1bf7c11ef7"

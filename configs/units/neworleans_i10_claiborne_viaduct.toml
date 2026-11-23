@@ -1,0 +1,20 @@
+# Catalogue unit: I-10 Claiborne Avenue viaduct, New Orleans, LA (tests/sites.yaml).
+# Hashes are the pins written by scripts/fetch_fixtures.py (FR-PL-3, D-008).
+
+[unit]
+site_id = "neworleans_i10_claiborne_viaduct"
+aoi_lonlat = [-90.0805, 29.9570, -90.0660, 29.9715]
+imagery_enabled = false
+
+[lidar]
+path = "data/fixtures/neworleans_i10_claiborne_viaduct/lidar.laz"
+name = "LA_2021GNO_1_C22"
+year = 2021
+quality_level = "QL1"
+sha256 = "6a95cda077cde7dae2c314abfb3612b4ff86d8c3762d97e2414ee1c1d24eeb43"
+
+[vectors.osm]
+enabled = true
+path = "data/fixtures/neworleans_i10_claiborne_viaduct/osm.json"
+license = "ODbL-1.0"
+sha256 = "c411fed3d9ab98853e95fe16fd79227f91c48d797834d1892f692ab6e546d63d"
