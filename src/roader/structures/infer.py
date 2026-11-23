@@ -129,6 +129,21 @@ def support_skew(crossing_skews: list[float]) -> tuple[float, list[str]]:
     return math.copysign(MAX_SUPPORT_SKEW_RAD, skew), [f"FR-ST-4:skew_capped_from_{math.degrees(skew):.1f}deg"]
 
 
+def clearance_limited_depth(depth: float, below: list[tuple[float, float]], floor: float) -> tuple[float, str | None]:
+    """FR-ST-5: a rule depth never takes the soffit into the vertical clearance of a road the deck spans.
+
+    ``below``: (deck height above the road, its minimum vertical clearance) per crossing;
+    one with less than ``floor`` of room is not passed under (a merge, a misread level).
+    """
+    room = [(dz - need, dz) for dz, need in below if dz - need >= floor]
+    if not room:
+        return depth, None
+    lim, dz = min(room)
+    if depth <= lim:
+        return depth, None
+    return lim, f"FR-ST-5:depth_limited_by_clearance:{dz:.2f}m_below"
+
+
 def support_skews(stations: list[float], crossed: list[tuple[float, tuple[float, float]]]) -> list[tuple[float, list[str]]]:
     """FR-ST-4: each support takes the skew of what it crosses, capped as in ``support_skew``.
 
@@ -575,6 +590,10 @@ def infer_structure(
             deck_prov.flags.append(f"FR-RL-3:out_of_range:{rule.id}")
     else:
         deck_flags.append(f"FR-ST-5:fascia_returns:{n_fascia}:coverage:{coverage:.2f}")
+        below = [(c.dz_m, rules.fill("clearance.vertical.rural", road_class=fits[c.lower_road].road.road_class)[0]) for c in on]
+        depth, limited = clearance_limited_depth(depth, below, slab_t)
+        if limited:
+            deck_flags.append(limited)
         deck_prov = Provenance(Source.RULE, ratio_prov.confidence, rule_id=ratio_prov.rule_id, flags=deck_flags + ratio_prov.flags)
     deck = DeckSpec(depth, slab_t, overhang, deck_prov)
 

@@ -520,3 +520,13 @@ def test_fr_st_3_long_span_over_merged_clear_zones_takes_piers_in_gores_off_the_
     # Clear zones with room between them: no pier goes inside one.
     _piers2, _even2, in_zone2 = _even_piers(extent, [], [(20.0, 100.0), (180.0, 280.0)], 2.0, rules, "*", [(25.0, 95.0), (185.0, 275.0)])
     assert not in_zone2
+
+
+def test_fr_st_5_rule_depth_leaves_the_vertical_clearance_over_every_road_spanned():
+    from roader.structures.infer import clearance_limited_depth
+
+    # A long stack span gives a 11.8 m rule depth; roads pass 8.4 and 16.9 m below the deck.
+    depth, flag = clearance_limited_depth(11.8, [(8.4, 4.877), (16.9, 4.877), (0.0, 4.877)], 0.2)
+    assert depth == pytest.approx(8.4 - 4.877) and flag == "FR-ST-5:depth_limited_by_clearance:8.40m_below"
+    assert clearance_limited_depth(1.5, [(8.4, 4.877)], 0.2) == (1.5, None)  # already clear
+    assert clearance_limited_depth(2.0, [(3.0, 4.877), (0.02, 4.3)], 0.2) == (2.0, None)  # no room under it: not a road it spans
