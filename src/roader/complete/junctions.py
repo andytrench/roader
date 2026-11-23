@@ -85,6 +85,9 @@ OUTLINE_CHORD_M = 0.01
 # over a ramp estimated with this generous toe allowance in umax (D-073).
 FAN_TOE_M = 60.0
 INTERSECTION_ANGLE = math.radians(45.0)
+END_OVERLAP_M2 = 1.0  # two road ends at one node whose pavements overlap more than this meet in an area (D-152)
+END_REACH_M = 30.0  # pavement considered either side of such an end
+CROSSING_ANGLE = math.radians(20.0)  # centrelines crossing on one level wider than this meet in an area; narrower weave (D-135, D-151)
 STEP_FLAG_M = 0.05  # participants disagreeing by more at the node are flagged (FR-AF-3)
 DERIV_STEP_M = 1e-3  # one-sided rates at the seam itself, not across a knot just past it (D-130)
 GORE_OUTSIDE_FRACTION = 0.99
@@ -414,9 +417,48 @@ def _touches(model: RoadModel) -> tuple[list[_Node], list[Flag]]:
                 s = _snap_end(other, s)
                 anchors[other.id] = s
                 interior = interior or 0.0 < s < other.length
-            if interior or len(anchors) >= 3:
+            if interior or len(anchors) >= 3 or (len(anchors) == 2 and _ends_overlap(model, anchors)):
                 nodes.append(_Node(x, y, anchors))
+    nodes.extend(_at_grade_crossings(model, coarse))
     return nodes, flags
+
+
+def _ends_overlap(model: RoadModel, anchors: dict[str, float]) -> bool:
+    """Two road ends at one node whose pavements overlap past the node: a corner or a ragged joint (D-152)."""
+    (ra, sa), (rb, sb) = sorted(anchors.items())
+    a, b = model.road(ra), model.road(rb)
+
+    def near(road: Road, s: float) -> Polygon:
+        return _rfp(road, max(0.0, s - END_REACH_M), min(road.length, s + END_REACH_M))
+
+    pa, pb = near(a, sa), near(b, sb)
+    return not pa.is_empty and not pb.is_empty and pa.intersection(pb).area > END_OVERLAP_M2
+
+
+def _at_grade_crossings(model: RoadModel, coarse) -> list[_Node]:
+    """Centrelines crossing on one level wider than ``CROSSING_ANGLE``, away from both roads' ends, meet in an area (D-151)."""
+    out = []
+    roads = sorted(model.roads, key=lambda r: r.id)
+    for i, a in enumerate(roads):
+        for b in roads[i + 1 :]:
+            la, lb = coarse[a.id][0], coarse[b.id][0]
+            if not la.intersects(lb):
+                continue
+            inter = la.intersection(lb)
+            for p in sorted((g for g in shapely.get_parts(inter) if g.geom_type == "Point"), key=lambda g: (g.x, g.y)):
+                sa, ua = _project(a, p.x, p.y)
+                sb, ub = _project(b, p.x, p.y)
+                if min(sa, a.length - sa, sb, b.length - sb) <= END_SNAP_M:
+                    continue  # a road end on the other: found as a touch
+                if abs(math.sin(a.alignment.evaluate(sa)[2] - b.alignment.evaluate(sb)[2])) <= math.sin(CROSSING_ANGLE):
+                    continue  # side by side: shared pavement (D-070, D-135)
+                if abs(a.surface_z(sa, ua) - b.surface_z(sb, ub)) > LEVEL_DZ_M:
+                    continue  # one passes over the other
+                if _span_at(a.id, sa) is not None or _span_at(b.id, sb) is not None:
+                    continue  # on a deck or riding another road: a structure, not a street corner
+                x, y = a.alignment.offset_point(sa, 0.0)
+                out.append(_Node(x, y, {a.id: sa, b.id: _project(b, x, y)[0]}))
+    return out
 
 
 # ---------------------------------------------------------------- intervals
@@ -593,7 +635,9 @@ def _build_junctions(model: RoadModel) -> tuple[list[JunctionArea], list[Flag]]:
             continue
         groups.append(([node], intervals))
     full = {rid: _rfp(r, 0.0, r.length) for rid, r in roads.items()}
-    areas, group_of, settle_flags = _settle(model, roads, _merge(groups))
+    # Nodes merged into one group were grown against their own roads only: regrow against all (D-153).
+    groups = [(ns, (_regrow(roads, iv) or iv) if len(ns) > 1 else iv) for ns, iv in _merge(groups)]
+    areas, group_of, settle_flags = _settle(model, roads, groups)
     flags.extend(settle_flags)
     areas = _split_overlaps(areas, roads, group_of, flags)
     zone_map: dict[str, list[tuple[str, tuple[float, float]]]] = {}
@@ -735,12 +779,13 @@ def _settle(model: RoadModel, roads: dict[str, Road], groups):
 
 def _entering(roads: dict[str, Road], area: JunctionArea, poly: Polygon, intervals, fulls: dict[str, Polygon],
               skip: set[str]) -> tuple[str, tuple[float, float]] | None:
-    """A road outside the area whose pavement runs into it at its level, alongside a participant (D-136).
+    """A road whose pavement outside the area runs into it at its level, alongside a participant (D-136).
 
-    Returns the road and the stations of its pavement inside the area, or None.
+    Also a participant's own pavement beyond its interval. Returns the road and the interval
+    covering its pavement inside the area, or None.
     """
     for rid in sorted(roads):
-        if rid in intervals or rid in skip:
+        if rid in skip:
             continue
         road = roads[rid]
         if rid not in fulls:
@@ -748,6 +793,9 @@ def _entering(roads: dict[str, Road], area: JunctionArea, poly: Polygon, interva
         fp = fulls[rid]
         if fp.is_empty or not fp.intersects(poly):
             continue
+        if rid in intervals:
+            # A participant's own pavement beyond its interval running back into the area (D-136).
+            fp = fp.difference(_rfp(road, *intervals[rid]).buffer(EDGE_TOL_M))
         for piece in shapely.get_parts(fp.intersection(poly)):
             if piece.geom_type != "Polygon" or piece.area < SHARED_MIN_M2:
                 continue
@@ -758,13 +806,18 @@ def _entering(roads: dict[str, Road], area: JunctionArea, poly: Polygon, interva
             h = road.alignment.evaluate(s)[2]
             alongside = False
             for other in intervals:
+                if other == rid:
+                    continue
                 po = roads[other]
                 so, uo = _project(po, q.x, q.y)
                 xs = po.cross_section
                 if -xs.width_right(so) - TOUCH_LATERAL_M <= uo <= xs.width_left(so) + TOUCH_LATERAL_M:
                     alongside = alongside or abs(math.sin(h - po.alignment.evaluate(so)[2])) < math.sin(INTERSECTION_ANGLE)
             if alongside:
-                return rid, _stations_of(road, piece)
+                lo, hi = _stations_of(road, piece)
+                if rid in intervals:
+                    lo, hi = min(lo, intervals[rid][0]), max(hi, intervals[rid][1])
+                return rid, (lo, hi)
     return None
 
 

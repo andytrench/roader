@@ -489,3 +489,70 @@ def test_d150_build_junctions_never_raises(monkeypatch):
     model = _two_diverges()
     assert model.junctions == []
     assert sorted(f.element_id for f in model.flags if f.code == ELEMENT_FAILED) == sorted(r.id for r in model.roads)
+
+
+# ---------------------------------------------------------------- streets crossing at grade (D-151)
+
+
+def test_d151_streets_crossing_at_grade_get_one_intersection_area():
+    """Two through streets crossing at one level (a shared vector node, no link) meet in one area, seamed on all four legs."""
+    a = _road("ave", [("line", 300.0, 0.0)], -150.0, 0.0, 0.0, 6.0, 6.0, kind="crossing_street")
+    b = _road("st", [("line", 300.0, 0.0)], 20.0, -150.0, math.pi / 2.0 - 0.2, 5.0, 5.0, kind="crossing_street")
+    model = _model([a, b])
+    assert [(j.kind, sorted(j.road_ids)) for j in model.junctions] == [("intersection", sorted([a.id, b.id]))]
+    assert sorted(s.road_id for s in model.junctions[0].seams) == sorted([a.id, a.id, b.id, b.id])
+    assert not [f for f in model.flags if f.code in ("FR-SV-7:pavement_overlap", "FR-SG-3:crossing_overlap")], model.flags
+    assert junction_violations(model.junctions[0], {r.id: r for r in model.roads})[0] == []
+    _closed_ok(generate(model))
+
+    b.profile = Profile([VerticalElement(0.0, 300.0, Z + 7.0, 0.0, 0.0, TRUTH)])
+    assert _model([a, b]).junctions == []
+
+    # Two ramps crossing on one level at 35 degrees (Bellevue links 169303084 / 161930315) also meet in one area.
+    r1 = _road("r1", [("line", 300.0, 0.0)], -150.0, 0.0, 0.0, 4.0, 4.0)
+    r2 = _road("r2", [("line", 300.0, 0.0)], -150.0 * math.cos(0.61), -150.0 * math.sin(0.61), 0.61, 3.7, 3.7)
+    acute = _model([r1, r2])
+    assert [sorted(j.road_ids) for j in acute.junctions] == [sorted([r1.id, r2.id])]
+    assert not [f for f in acute.flags if f.code in ("FR-SV-7:pavement_overlap", "FR-SG-3:shared_skipped")], acute.flags
+
+
+def test_d152_two_road_ends_meeting_at_a_corner_get_one_area():
+    """A two-way avenue and a one-way street start at one node 65 degrees apart (Bellevue 116th Ave / NE 8th St)."""
+    av = _road("av", [("line", 200.0, 0.0)], 0.0, 0.0, math.pi / 2.0, 6.0, 6.0, kind="crossing_street")
+    st = _road("st", [("line", 200.0, 0.0)], 0.0, 0.0, math.pi / 2.0 - 1.13, 5.0, 5.0, kind="crossing_street")
+    model = _model([av, st])
+    assert [(j.kind, sorted(j.road_ids)) for j in model.junctions] == [("intersection", sorted([av.id, st.id]))]
+    assert not [f for f in model.flags if f.code.startswith("FR-SV-7")], model.flags
+    _closed_ok(generate(model))
+
+
+def test_d153_an_avenue_across_a_divided_street_regrows_against_both_halves():
+    """Two crossing nodes on the avenue merge; each half's interval, grown against the avenue only,
+    still ends inside the other half's pavement until the merged group is regrown (Bellevue NE 12th St)."""
+    c1 = _road("c1", [("line", 400.0, 0.0)], -200.0, 0.0, 0.0, 4.0, 4.0, kind="crossing_street")
+    tilt = math.atan2(7.0, 400.0)
+    c2 = _road("c2", [("line", 400.0, 0.0)], 200.0 * math.cos(tilt), 11.0, math.pi + tilt, 4.0, 4.0, kind="crossing_street")
+    av = _road("av", [("line", 300.0, 0.0)], 0.0, -150.0, math.pi / 2.0, 6.0, 6.0, kind="crossing_street")
+    model = _model([c1, c2, av])
+    assert [(j.kind, sorted(j.road_ids)) for j in model.junctions if j.kind != "shared"] == [("intersection", sorted([c1.id, c2.id, av.id]))]
+    bad = [f for f in model.flags if f.code in ("FR-SV-7:pavement_overlap", "FR-SG-3:skipped", "FR-SG-3:shared_skipped")]
+    assert not bad, bad
+    _closed_ok(generate(model))
+
+
+
+def test_d136_a_participant_running_back_into_its_area_beyond_its_interval_is_regrown():
+    """A participant's own pavement outside its interval inside the area (Bellevue NE 12th St halves) is found like a third road."""
+    import roader.complete.junctions as J
+
+    model = _merge_beside_a_road_end()
+    roads = {r.id: r for r in model.roads}
+    area = next(j for j in model.junctions if j.kind != "shared")
+    r = stable_id("rd", "scene", "r")
+    lo_r = min(s.s for s in area.seams if s.road_id == r)
+    intervals = {rid: (0.0, roads[rid].length) for rid in area.road_ids if rid != r}
+    intervals[r] = (lo_r + 30.0, roads[r].length)
+    J._set_spans(model)
+    hit = J._entering(roads, area, Polygon(area.outline, area.holes), intervals, {}, set())
+    assert hit is not None and hit[0] == r
+    assert hit[1][0] < lo_r + 30.0 - 5.0 and hit[1][1] == pytest.approx(roads[r].length)
