@@ -270,11 +270,18 @@ def _walls(
             if all(hi[1] >= lo[1] for lo, hi in pairwise(trial)):
                 cuts.add((tp, tq))
     order = sorted(cuts)
-    for lo, hi in pairwise(order):
-        if hi[1] < lo[1]:
-            raise ValueError(f"levels cross along the wall at ({pv.x[p]:.2f}, {pv.y[p]:.2f})")
-    index = {cut: k for k, cut in enumerate(order)}
+    if all(hi[1] >= lo[1] for lo, hi in pairwise(order)):
+        _emit_walls(p, q, order, list(zip(entries, ranges, strict=True)), faces, kinds, wall_edges, levels, pv)
+        return
+    # Levels of two bodies cross along the wall (they overlap there): no strip boundary can serve both,
+    # so each body closes its own wall between its bottom and top (D-093). The overlap stays visible to
+    # FR-SV-7; the shells stay closed.
+    for entry, (bot, top) in zip(entries, ranges, strict=True):
+        _emit_walls(p, q, [bot, top], [(entry, (bot, top))], faces, kinds, wall_edges, levels, pv)
 
+
+def _emit_walls(p, q, order, members, faces, kinds, wall_edges, levels: Levels, pv: PlanVertices) -> None:
+    index = {cut: k for k, cut in enumerate(order)}
     strips: list[list[tuple[Key, Key, Key]]] = []
     for lo, hi in pairwise(order):
         left = [(p, z) for z in levels.vals[p] if lo[0] <= z <= hi[0]]
@@ -288,7 +295,7 @@ def _walls(
 
         strips.append(ladder(left, right, shorter))  # type: ignore[arg-type]
 
-    for (n, a, b), (bot, top) in zip(entries, ranges, strict=True):
+    for (n, a, b), (bot, top) in members:
         dx, dy = pv.x[b] - pv.x[a], pv.y[b] - pv.y[a]
         for k in range(index[bot], index[top]):
             for tri in strips[k]:

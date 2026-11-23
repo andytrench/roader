@@ -75,3 +75,28 @@ def test_fr_sg_6_ground_line_crossing_a_body_top_keeps_the_wall_closed():
     mesh = result.meshes[0]
     assert mc.solid_problems(mesh) == [], mc.solid_problems(mesh)
     assert raw is not None
+
+
+def test_d093_crossing_levels_on_a_shared_wall_keep_both_shells_closed():
+    """Two bodies on either side of one wall whose tops cross along it: each closes its own wall."""
+    from roader.model.provenance import Source as Src
+    from roader.solids.assemble import Body, assemble
+    from roader.solids.grid import Cell, PlanVertices
+
+    from . import meshcheck as mc
+
+    pv = PlanVertices()
+    a0, a1, p, q, b1 = pv.add(0.0, 0.0), pv.add(0.0, 4.0), pv.add(2.0, 0.0), pv.add(2.0, 4.0), pv.add(4.0, 0.0)
+    b2 = pv.add(4.0, 4.0)
+    left = Cell([a0, p, q, a1], [(a0, p, q), (a0, q, a1)])
+    right = Cell([p, b1, b2, q], [(p, b1, b2), (p, b2, q)])
+    top_a = {a0: 1.0, a1: 2.0, p: 1.0, q: 2.0}
+    top_b = {p: 2.0, q: 1.0, b1: 2.0, b2: 1.0}
+    bodies = [
+        Body("a", "a", "L3", "pavement", "x", Src.RULE, [left], lambda _p: 0.0, lambda v: top_a[v], ground=False),
+        Body("b", "b", "L3", "pavement", "x", Src.RULE, [right], lambda _p: 0.5, lambda v: top_b[v], ground=False),
+    ]
+    result = assemble(bodies, pv, None)
+    assert len(result.meshes) == 2
+    for mesh in result.meshes:
+        assert mc.solid_problems(mesh) == [], (mesh.id, mc.solid_problems(mesh))
