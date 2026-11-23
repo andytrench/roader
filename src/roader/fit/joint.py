@@ -342,10 +342,10 @@ def _overlap_points(seam: Seam, roads: dict[str, Road], items: dict[str, JointRo
     """(child station, parent station, parent cross-slope height at the child's crown) where an unobserved child lies on its parent.
 
     From the seam inward every ``OVERLAP_STEP_M`` until the child's crown leaves the
-    parent's pavement (inset ``SEAM_INSET_M``), over the stretch from the seam with
-    no return bin of the child within ``OVERLAP_OWN_M`` (unobserved, or returns
-    outside the band of the child's own profile): there the child's crown height is
-    the parent's surface. From the first station with the child's own returns they decide.
+    parent's pavement (inset ``SEAM_INSET_M``), over the unobserved stretch of the
+    child that starts at the seam (inside one of its gaps, no return bin within
+    ``OVERLAP_OWN_M``): there the child's crown height is the parent's surface.
+    From the first station with the child's own returns they decide.
     """
     child, parent = roads[seam.child], roads[seam.parent]
     own = _bins_of(items[seam.child])[0]
@@ -358,7 +358,8 @@ def _overlap_points(seam: Seam, roads: dict[str, Road], items: dict[str, JointRo
         ps, pu = parent.alignment.project(x, y)
         if not (-xs.width_right(ps) + SEAM_INSET_M <= pu <= xs.width_left(ps) - SEAM_INSET_M) or not (0.0 < ps < parent.length):
             break
-        if len(own) and float(np.min(np.abs(own - s))) <= OVERLAP_OWN_M:
+        unobserved = any(a <= s <= b for a, b in items[seam.child].gaps)
+        if not unobserved or (len(own) and float(np.min(np.abs(own - s))) <= OVERLAP_OWN_M):
             break
         out.append((float(s), float(ps), _slope(parent, ps, pu) * pu))
     return out

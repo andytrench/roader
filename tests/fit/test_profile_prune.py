@@ -20,7 +20,7 @@ def test_fr_af_2_rolling_profile_keeps_its_curves():
     rng = np.random.default_rng(4)
     s = np.sort(rng.uniform(0.0, pr.length, 12000))
     z = np.array([pr.z(float(a)) for a in s]) + rng.normal(0.0, 0.03, s.size)
-    vert, rep, _bins = fp.fit_profile(s, z, pr.length, rules=RULES, road_class="motorway_link")
+    vert, _rep, _bins = fp.fit_profile(s, z, pr.length, rules=RULES, road_class="motorway_link")
     st = np.arange(0.0, pr.length, 5.0)
     err = np.abs(vert.z(st) - np.array([pr.z(float(a)) for a in st]))
     assert len(vert.pvi) >= 3 and float(np.max(err)) < 0.05, (vert.pvi, float(np.max(err)))
