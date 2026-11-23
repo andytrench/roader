@@ -107,22 +107,23 @@ class Alignment:
         x, y, heading, _k = self.evaluate(s)
         return x - u * math.sin(heading), y + u * math.cos(heading)
 
-    def project(self, x: float, y: float, step: float = 1.0) -> tuple[float, float]:
-        """Nearest station and signed offset (u positive left) of a plan point.
+    def _samples(self, step: float):
+        """(stations, KD-tree) of plan samples every ``step`` m, cached until an element changes (D-125)."""
+        from scipy.spatial import cKDTree
 
-        Stations are clamped to [0, length]; a point beyond an end gets the end
-        station and its distance along the end normal.
-        """
+        key = (step, tuple((id(e), e.s0, e.length, e.x0, e.y0, e.heading0, e.k0, e.k1) for e in self.elements))
+        cached = self.__dict__.get("_proj_cache")
+        if cached is None or cached[0] != key:
+            length = self.length
+            count = max(2, math.ceil(length / step) + 1)
+            stations = np.array([length * i / (count - 1) for i in range(count)])
+            tree = cKDTree(np.array([self.evaluate(float(s))[:2] for s in stations]))
+            cached = (key, stations, tree)
+            self.__dict__["_proj_cache"] = cached
+        return cached[1], cached[2]
+
+    def _refine(self, x: float, y: float, s: float) -> tuple[float, float]:
         length = self.length
-        count = max(2, math.ceil(length / step) + 1)
-        best_s, best_d = 0.0, math.inf
-        for i in range(count):
-            s = length * i / (count - 1)
-            px, py, _h, _k = self.evaluate(s)
-            d = (px - x) ** 2 + (py - y) ** 2
-            if d < best_d:
-                best_s, best_d = s, d
-        s = best_s
         for _ in range(8):
             px, py, heading, k = self.evaluate(s)
             tx, ty = math.cos(heading), math.sin(heading)
@@ -138,6 +139,35 @@ class Alignment:
                 break
         px, py, heading, _k = self.evaluate(s)
         return s, -(x - px) * math.sin(heading) + (y - py) * math.cos(heading)
+
+    def project(self, x: float, y: float, step: float = 1.0) -> tuple[float, float]:
+        """Nearest station and signed offset (u positive left) of a plan point.
+
+        Stations are clamped to [0, length]; a point beyond an end gets the end
+        station and its distance along the end normal. The nearest of the samples
+        every ``step`` m seeds Newton steps; the samples are cached on the alignment
+        (D-125), so repeated projections do not rescan the road.
+        """
+        stations, tree = self._samples(step)
+        _d, i = tree.query((x, y))
+        return self._refine(x, y, float(stations[int(i)]))
+
+    def project_many(self, xy, step: float = 1.0) -> tuple[np.ndarray, np.ndarray]:
+        """``project`` for an (N, 2) array of points: (stations, offsets)."""
+        xy = np.asarray(xy, dtype=np.float64).reshape(-1, 2)
+        stations, tree = self._samples(step)
+        _d, idx = tree.query(xy)
+        s_out, u_out = np.empty(len(xy)), np.empty(len(xy))
+        for k in range(len(xy)):
+            s_out[k], u_out[k] = self._refine(float(xy[k, 0]), float(xy[k, 1]), float(stations[int(idx[k])]))
+        return s_out, u_out
+
+    def near(self, xy, max_dist: float, step: float = 1.0) -> np.ndarray:
+        """Points whose nearest sample is within ``max_dist`` plus one sample spacing."""
+        stations, tree = self._samples(step)
+        spacing = float(stations[1] - stations[0])
+        d, _ = tree.query(np.asarray(xy, dtype=np.float64).reshape(-1, 2), distance_upper_bound=max_dist + spacing)
+        return np.isfinite(d)
 
 
 @dataclass

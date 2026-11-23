@@ -37,7 +37,6 @@ import math
 from dataclasses import dataclass, field
 
 import numpy as np
-from scipy.spatial import cKDTree
 
 from roader.fit import profile as fp
 from roader.model.geometry import Knot, Piecewise
@@ -98,43 +97,9 @@ class Seam:
     parent_u: float
 
 
-_PROJECTORS: dict[int, tuple] = {}
-PROJECT_STEP_M = 1.0
-
-
 def _project(road: Road, x: float, y: float) -> tuple[float, float]:
-    """``road.alignment.project``, seeded from a cached 1 m sample tree of the alignment and refined by Newton steps.
-
-    The alignment's own projection scans the whole road, which is slow on kilometre-long
-    stack roads; this one is exact to the same tolerance.
-    """
-    al = road.alignment
-    key = id(al)
-    cached = _PROJECTORS.get(key)
-    if cached is None or cached[0] is not al:
-        n = max(2, math.ceil(al.length / PROJECT_STEP_M) + 1)
-        st = np.linspace(0.0, al.length, n)
-        pts = np.array([al.evaluate(float(s))[:2] for s in st])
-        cached = (al, st, cKDTree(pts))
-        _PROJECTORS[key] = cached
-    _al, st, tree = cached
-    _d, i = tree.query([x, y])
-    s = float(st[i])
-    lateral = 0.0
-    for _ in range(8):
-        px, py, h, k = al.evaluate(s)
-        tx, ty = math.cos(h), math.sin(h)
-        dx, dy = x - px, y - py
-        along, lateral = dx * tx + dy * ty, -dx * ty + dy * tx
-        denom = 1.0 - k * lateral
-        if abs(denom) < 1e-6:
-            break
-        ds = along / denom
-        s = min(max(s + ds, 0.0), al.length)
-        if abs(ds) < 1e-9:
-            break
-    px, py, h, _k = al.evaluate(s)
-    return s, -(x - px) * math.sin(h) + (y - py) * math.cos(h)
+    """``road.alignment.project``: the alignment's cached exact projector (D-088, D-125)."""
+    return road.alignment.project(x, y)
 
 
 def seam_of(link: Link, roads: dict[str, Road]) -> Seam:
@@ -700,11 +665,7 @@ def joint_fit(items: list[JointRoad], links: list[Link], crossings: list[Crossin
     ``FR-AF-3:infeasible`` when a component's constraints cannot all hold, and the
     rule overrides of the refitted elements (FR-AF-4).
     """
-    _PROJECTORS.clear()
-    try:
-        return _joint_fit(items, links, crossings, rules)
-    finally:
-        _PROJECTORS.clear()
+    return _joint_fit(items, links, crossings, rules)
 
 
 def _joint_fit(items: list[JointRoad], links: list[Link], crossings: list[Crossing], rules: RuleBook) -> list[Flag]:
