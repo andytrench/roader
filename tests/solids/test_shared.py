@@ -358,3 +358,19 @@ def test_d092_realtime_uv_on_partly_trimmed_gore_fill():
     rt = generate(model, profile="realtime")
     result = check_uv_stretch([m for m in rt if m.closed])
     assert result.passed, result.violations
+
+
+def test_d130_seam_patch_takes_the_road_slopes_at_the_seam_not_past_a_nearby_knot():
+    """A cross-slope knot 5 cm past a seam: the patch's slope rates are the road's at the seam on the junction side (AC-H4, D-130)."""
+    from roader.complete.junctions import _patch
+    from roader.model.geometry import Knot, Piecewise
+
+    road = diverge_model().roads[0]
+    s = 248.80
+    knots = [Knot(0.0, -0.02, TRUTH), Knot(s + 0.05, 0.005, TRUTH), Knot(s + 20.0, 0.02, TRUTH)]
+    road.cross_section.slope_left = Piecewise(knots)
+    seam = _patch(road, s, 1)
+    before = (0.005 + 0.02) / (s + 0.05)
+    assert seam.slope_left_rate == pytest.approx(before, rel=1e-6)
+    behind = _patch(road, s + 0.10, -1)  # looking back across the knot from beyond it
+    assert behind.slope_left_rate == pytest.approx((0.02 - 0.005) / 19.95, rel=1e-6)

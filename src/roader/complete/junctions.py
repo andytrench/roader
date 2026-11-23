@@ -82,7 +82,7 @@ OUTLINE_CHORD_M = 0.01
 FAN_TOE_M = 60.0
 INTERSECTION_ANGLE = math.radians(45.0)
 STEP_FLAG_M = 0.05  # participants disagreeing by more at the node are flagged (FR-AF-3)
-DERIV_STEP_M = 0.5
+DERIV_STEP_M = 1e-3  # one-sided rates at the seam itself, not across a knot just past it (D-130)
 GORE_OUTSIDE_FRACTION = 0.99
 # A gore closure joins two seam rows that cleared each other by about GORE_GAP_M; a longer
 # chord would cut across the outside of a curve, not a gore.
@@ -1531,7 +1531,7 @@ def _gore_closed(path, start, end, union: Polygon, keep_out=()) -> list[tuple[fl
 
 
 def _patch(road: Road, s: float, side: int) -> JunctionSeam:
-    """Road surface at s lifted into a seam patch; derivatives taken on the junction side (D-046)."""
+    """Road surface at s lifted into a seam patch; derivatives taken at s on the junction side (D-046, D-130)."""
     xs = road.cross_section
     toward = 1.0 if side >= 0 else -1.0
     h = DERIV_STEP_M

@@ -4,7 +4,9 @@ Topology comes from the input vectors: a road end within ``TOPO_M`` of another
 road's input centerline is a junction (OSM ways share the node). The road that
 ends there is the *child*; the road it leaves or joins is the *parent*, chosen
 by kind (mainline before ramp and connector before crossing street), so a ramp
-always hangs off its mainline. Between roads of one kind the parent is the one
+always hangs off its mainline. A ramp or connector ending on a crossing street
+is an at-grade terminal: the street is its parent, after a mainline but before
+another ramp ending at the same node (D-124). Between roads of one kind the parent is the one
 whose interior holds the node, or the longer one when both end there.
 
 Roads are fitted parents first (``fit_network``), and a child's alignment end is
@@ -44,6 +46,7 @@ TOPO_M = 2.0  # input-vector distance that makes a junction
 SEAM_PAVEMENT_PAD_M = 0.5
 JUNCTION_DZ_M = 1.0  # linked roads crossing in plan by less than this are the junction overlap, not a grade separation
 RANK = {"mainline": 0, "ramp": 1, "connector": 1, "crossing_street": 2}
+TERMINAL_RANK = 0.5
 PIN_HEADING_MAX = math.radians(25.0)
 HEADING_REACH_M = 20.0
 
@@ -78,7 +81,9 @@ def junctions(seeds: list[RoadSeed]) -> list[Junction]:
                     continue
                 at_end = min(point.distance(p) for p in ends[parent.id]) <= TOPO_M
                 rc, rp = _rank(child.kind), _rank(parent.kind)
-                if rp > rc:
+                if rc == RANK["ramp"] and parent.kind == "crossing_street":
+                    rp = TERMINAL_RANK  # an at-grade ramp terminal: the street ranks after mainlines, before ramps (D-124)
+                elif rp > rc:
                     continue
                 if rp == rc and at_end and (parent.line.length, child.id) < (child.line.length, parent.id):
                     continue

@@ -34,20 +34,14 @@ HEAVY_REASON = "heavy catalogue scene (about a minute): set ROADER_CATALOGUE=all
 
 # (scene, gate) -> "track: what fails today". (scene, None) covers every gate (the scene does not get that far).
 KNOWN: dict[tuple[str, str | None], str] = {
-    ("diamond", "AC-H1"): "terminals: the exit and entry ways chained through the terminal node pass through the street pavement (FR-SV-7)",
-    ("spui", "AC-H1"): "decks: parapets of the ramps and the wide street deck pass through each other where the ramps meet it",
-    ("spui", "AC-H2"): "decks: ramps meeting the street at grade on its deck become crossings over it",
-    ("spui", "AC-H3"): "decks: the false ramp-over-street crossings have no clearance; rays start inside parapets",
+    ("spui", "AC-H4"): "decks: ramps ending on the street's wide deck ride it end to end (D-076 shared span never clears sideways), so no terminal area is built and their links meet the street's own surface",
     ("spui", "AC-A1"): "decks: surface RMS 0.8 m where the ramps join the wide deck",
-    ("parclo", "AC-H1"): "terminals: loop merging onto the street (no street parent, D-051) overlaps its pavement (FR-SV-7)",
-    ("parclo", "AC-H4"): "terminals: seam of the loop joining the street off by 2 cm and 0.25 % grade",
-    ("parclo", "AC-A1"): "terminals: surface RMS 0.18 m around the loop joining the street",
+    ("spui", "AC-A5"): "decks: the ramps riding the wide street deck get no structure of their own, and the street deck is not matched to the truth",
     ("cloverleaf", "AC-H1"): "decks: embankment from the I-88 deck end self-intersects beside the loop gore",
     ("cloverleaf", "AC-A5"): "decks: I-88 deck end 3 m off beside the diverging loop",
     ("directional", "AC-H1"): "decks: embankment from an I-88 deck end self-intersects beside the flyover",
     ("directional", "AC-A5"): "decks: stacked-level deck ends 20-26 m off (flyover over the I-88 deck)",
     ("spui", "FR-EX-1"): "decks: a pier column falls outside its cap on a ramp deck at the wide street deck; the ramp is swept with square structures",
-    ("spui", "AC-A5"): "decks: the wide street deck and the entry-ramp decks are not found as their own structures; deck ends 50 m off",
     ("trumpet", "FR-EX-1"): "parallel: where the semi-directional and the outer ramp share their first metres, a junction seam is off the outline, station lines cross and the terrain footprint breaks",
     ("trumpet", "AC-H1"): "parallel: pavements of the semi-directional and the junction area at the shared stem end pass through each other",
     ("trumpet", "AC-H2"): "parallel: the semi-directional is reported crossing over the outer ramp it shares pavement with",

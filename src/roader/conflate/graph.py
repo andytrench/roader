@@ -72,8 +72,8 @@ def _street_key(edge: VectorEdge) -> tuple[str, str]:
     return (tags.get("name") or tags.get("ref") or "", tags.get("highway", ""))
 
 
-def _chain(start: int, edges: list[VectorEdge], members: set[int], same) -> list[int]:
-    """Edges reachable from start through coincident endpoints with heading continuity."""
+def _chain(start: int, edges: list[VectorEdge], members: set[int], same, stops: np.ndarray | None = None) -> list[int]:
+    """Edges reachable from start through coincident endpoints with heading continuity, never through ``stops``."""
     order = [start]
     used = {start}
     for direction in (1, -1):
@@ -81,6 +81,8 @@ def _chain(start: int, edges: list[VectorEdge], members: set[int], same) -> list
         while True:
             end = coords[-1] if direction == 1 else coords[0]
             end_heading = _heading(coords[-2], coords[-1]) if direction == 1 else _heading(coords[1], coords[0])
+            if stops is not None and len(stops) and np.min(np.hypot(*(stops - end).T)) <= JOIN_M:
+                break
             best = None
             for j in sorted(members - used):
                 if not same(edges[j], edges[start]):
@@ -171,11 +173,14 @@ def select_roads(edges: list[VectorEdge], extent: shapely.Geometry | None = None
     groups: list[list[int]] = []
     assigned: set[int] = set()
     non_core = set(range(len(edges))) - core
+    # Ramp ways meeting at a node of a non-limited-access way end there at an at-grade terminal (D-123).
+    street_nodes = np.vstack([np.asarray(edges[i].coords, dtype=np.float64) for i in sorted(non_core)]) if non_core else np.empty((0, 2))
     for i in sorted(core | crossing):
         if i in assigned:
             continue
         members, same = (core, same_core) if i in core else (non_core, same_street)
-        chain = _chain(i, edges, members - assigned, same)
+        stops = street_nodes if edges[i].tags.get("highway", "").endswith("_link") else None
+        chain = _chain(i, edges, members - assigned, same, stops)
         assigned.update(chain)
         groups.append(chain)
 

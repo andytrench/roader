@@ -17,6 +17,9 @@ still load:
   station where that road's surface meets the area.
 - ``JunctionArea.surface_z(x, y) -> float``: top of pavement inside the area
   (NaN or an exception outside it).
+
+A link whose seam point lies inside an at-grade intersection area of both its
+roads is checked on the area's seams only (D-128): neither road is rendered there.
 """
 
 from __future__ import annotations
@@ -228,12 +231,35 @@ def curvature_violations(road: Road) -> list[Violation]:
     return out
 
 
+def _inside_intersection(link: Link, roads: Mapping[str, Road], junctions) -> bool:
+    """The link's seam point lies in an at-grade intersection area of both its roads (D-128).
+
+    Neither road is rendered there: they meet the area along its own seams, which
+    ``junction_violations`` checks, so the link has no surface seam of its own.
+    """
+    src = roads.get(link.from_road)
+    if src is None or link.to_road not in roads:
+        return False
+    from_s = getattr(link, "from_s", None)
+    s = float(from_s) if from_s is not None else (src.length if link.from_end == "end" else 0.0)
+    point = shapely.Point(src.alignment.offset_point(s, 0.0))
+    for j in junctions:
+        if getattr(j, "kind", "") != "intersection" or not {link.from_road, link.to_road} <= set(j.road_ids):
+            continue
+        outline = list(getattr(j, "outline", []) or [])
+        if len(outline) >= 3 and shapely.Polygon(outline, getattr(j, "holes", None) or None).covers(point):
+            return True
+    return False
+
+
 def seam_violations(model: RoadModel) -> tuple[list[Violation], int]:
     """Every link and junction-area seam in the model; returns (violations, samples)."""
     roads = {r.id: r for r in model.roads}
     out: list[Violation] = []
     n = 0
     for link in model.links:
+        if _inside_intersection(link, roads, model.junctions):
+            continue
         v, k = link_violations(link, roads)
         out.extend(v)
         n += k

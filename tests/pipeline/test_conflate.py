@@ -45,6 +45,39 @@ def test_fr_vc_1_two_way_street_drawn_in_mixed_directions_chains_without_doublin
     assert np.all(np.diff(x) > 0) or np.all(np.diff(x) < 0)
 
 
+def _terminal_edges(through_street: bool) -> list[VectorEdge]:
+    """An exit way ending on a street node and an entry way leaving it straight on (a diamond terminal)."""
+    link = {"highway": "motorway_link", "oneway": "yes"}
+    edges = [
+        VectorEdge("osm", "fwy", np.array([[-300.0, -40.0], [300.0, -40.0]]), {"highway": "motorway", "ref": "I 1", "oneway": "yes"}),
+        VectorEdge("osm", "exit", np.array([[-200.0, -30.0], [-100.0, -5.0], [0.0, 0.0]]), dict(link)),
+        VectorEdge("osm", "entry", np.array([[0.0, 0.0], [100.0, -5.0], [200.0, -30.0]]), dict(link)),
+    ]
+    street = np.array([[0.0, -200.0], [0.0, 0.0], [0.0, 200.0]]) if through_street else np.array([[30.0, -200.0], [30.0, 200.0]])
+    edges.append(VectorEdge("osm", "street", street, {"highway": "primary", "name": "Route 1"}))
+    return edges
+
+
+def test_fr_vc_1_ramp_ways_break_at_a_street_node_d123():
+    """Ramp ways meeting at a node of a crossing street are two ramps ending at a terminal, not one road through it (D-123)."""
+    ramps = sorted((s for s in select_roads(_terminal_edges(True)) if s.kind == "ramp"), key=lambda s: s.vector_refs[0].feature_id)
+    assert [[r.feature_id for r in s.vector_refs] for s in ramps] == [["entry"], ["exit"]]
+    # Away from a street node the same two ways are still one ramp.
+    ramps = [s for s in select_roads(_terminal_edges(False)) if s.kind == "ramp"]
+    assert len(ramps) == 1 and len(ramps[0].vector_refs) == 2
+
+
+def test_fr_af_3_a_ramp_ending_on_a_street_node_is_its_child_d124():
+    """A street is the parent of a ramp end on it, ahead of another ramp ending at the same node (D-124, revises D-051)."""
+    from roader.fit.links import junctions
+
+    seeds = select_roads(_terminal_edges(True))
+    names = {s.id: s.vector_refs[0].feature_id for s in seeds}
+    got = sorted((names[j.child], j.end, names[j.parent]) for j in junctions(seeds))
+    assert ("entry", "start", "street") in got and ("exit", "end", "street") in got
+    assert not any(names[j.parent] in ("exit", "entry") for j in junctions(seeds))
+
+
 def test_fr_vc_2_lower_roads_are_occluded_under_the_deck(model):
     for fid in ("eb", "wb"):
         road = by_feature(model, fid)
@@ -107,3 +140,29 @@ def test_fr_cr_3_chained_crossings_share_one_structure(model):
     st = model.structures[0]
     assert {c.structure_id for c in model.crossings} == {st.id}
     assert sorted(st.crossed_roads) == sorted(c.lower_road for c in model.crossings)
+
+
+def test_fr_vc_2_track_crosses_a_gap_on_a_crest_curve_d129():
+    """A 40 m hole in the returns on a crest curve (a D-018 holdout block, parclo street) does not end the track (D-129)."""
+    from types import SimpleNamespace
+
+    from roader.conflate.track import track_line
+
+    s = np.arange(0.0, 300.0, 0.5)
+    g0, g1, a, b = 0.065, -0.065, 100.0, 175.0  # crest curve between a and b
+    z = np.where(s < a, 100.0 + g0 * s, np.where(s > b, 100.0 + g0 * a + 0.5 * (g0 + g1) * (b - a) + g1 * (s - b),
+                                                  100.0 + g0 * a + g0 * (s - a) + 0.5 * (g1 - g0) / (b - a) * (s - a) ** 2))
+    keep = (s < 130.0) | (s > 170.0)
+    xs, zs = np.repeat(s[keep], 3), np.repeat(z[keep], 3)
+    ys = np.tile([-1.0, 0.0, 1.0], keep.sum())
+    n = len(xs)
+    layers = SimpleNamespace(
+        smooth=np.ones(n, bool), sheet=np.zeros(n, np.int64), z=zs,
+        center_xy=lambda idx=None: np.column_stack([xs, ys]) if idx is None else np.column_stack([xs[idx], ys[idx]]),
+    )
+    ev = SimpleNamespace(layers=layers, layer_label=np.zeros(n, np.int64), layer_prob=np.ones(n),
+                         cell_top=lambda xy, radius=0: np.full(len(xy), np.nan))
+    tr = track_line(Polyline(np.array([[0.0, 0.0], [300.0, 0.0]])), ev)
+    beyond = tr.s > 175.0
+    assert np.all(tr.kind[beyond] == "observed")
+    assert np.nanmax(np.abs(tr.z[beyond] - np.interp(tr.s[beyond], s, z))) < 0.05

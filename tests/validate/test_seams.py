@@ -67,6 +67,7 @@ class PlaneJunction:
     grade: float = 0.0
     crown: float = 0.02
     x_end: float = 300.0
+    kind: str = "merge"
 
     def surface_z(self, x: float, y: float) -> float:
         return MAINLINE_Z + self.dz + self.grade * (x - self.x_end) - self.crown * abs(y + MEDIAN_HALF)
@@ -222,6 +223,27 @@ def test_junction_mismatch_fails(model, kw, word):
     violations, _n = junction_violations(junction, {r.id: r for r in model.roads})
     eb = model.roads[0]
     assert any(word in v.message and eb.id in v.message for v in violations), violations
+
+
+def test_ac_h4_terminal_link_inside_an_intersection_area_is_checked_on_its_seams_d128(model):
+    """A ramp ending square on a street at grade meets the L6 intersection area, not the street's own surface (D-128).
+
+    Inside the area neither road is rendered, so the link's own seam (the ramp's end
+    line across the street) is not a surface seam; the area's seams are checked.
+    """
+    eb = model.roads[0]
+    x, y = eb.alignment.offset_point(150.0, 0.0)
+    ramp = _road("terminal", x, y - 30.0, math.pi / 2.0, MAINLINE_Z, kind="ramp")
+    ramp.alignment = Alignment([AlignElement("line", 0.0, 30.0, x, y - 30.0, math.pi / 2.0, 0.0, 0.0, TRUTH)])
+    model.roads.append(ramp)
+    link = SeamLink("lk_t", ramp.id, "end", eb.id, "start", "merge", from_s=30.0, to_s=150.0)
+    model.links.append(link)
+    assert any(v.element_id == "lk_t" for v in check_continuity(model).violations)
+    area = PlaneJunction("jn_t", [eb.id, ramp.id], [(x - 8.0, y - 8.0), (x + 8.0, y - 8.0), (x + 8.0, y + 8.0), (x - 8.0, y + 8.0)], TRUTH, kind="intersection")
+    model.junctions.append(area)
+    assert not any(v.element_id == "lk_t" for v in check_continuity(model).violations)
+    area.kind = "merge"  # a merge area does not replace its link's seam
+    assert any(v.element_id == "lk_t" for v in check_continuity(model).violations)
 
 
 def test_junction_side_from_outline_at_road_start(model):

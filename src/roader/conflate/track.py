@@ -28,6 +28,8 @@ TOL_PER_M = 0.04  # extra height tolerance per meter since the last accepted sta
 CANDIDATE_P = 0.3
 OCCLUDER_DZ_M = 2.0  # returns this far above the expected surface mean something is in the way
 MIN_INTERVAL_M = 4.0
+CURVE_GAP_M = 6.0  # beyond this gap a station no straight prediction reaches is tried on a curve
+CURVE_MIN_STATIONS = 8
 
 
 @dataclass
@@ -139,6 +141,10 @@ def track_line(line: Polyline, ev: Evidence, *, search_m: float = SEARCH_M, step
             pred, gap = _predict(stations, z_out, i, direction)
             tol = TOL_BASE_M + TOL_PER_M * gap
             options = [c for c in clusters[i] if abs(c[0] - pred) <= tol]
+            if not options and clusters[i] and gap > CURVE_GAP_M:
+                # Across a gap on a vertical curve a straight extrapolation runs off the surface (D-129).
+                pred = _predict(stations, z_out, i, direction, degree=2)[0]
+                options = [c for c in clusters[i] if abs(c[0] - pred) <= tol]
             if options:
                 options.sort(key=lambda c: (abs(c[0] - pred), c[1]))
                 z_out[i], sheet_out[i] = options[0][0], options[0][1]
@@ -172,8 +178,8 @@ def _longest_run_center(mask: np.ndarray) -> int | None:
     return best_start + best_len // 2
 
 
-def _predict(stations: np.ndarray, z: np.ndarray, i: int, direction: int) -> tuple[float, float]:
-    """Linear prediction of the surface at station i from accepted stations behind it."""
+def _predict(stations: np.ndarray, z: np.ndarray, i: int, direction: int, degree: int = 1) -> tuple[float, float]:
+    """Linear (or, with enough stations, quadratic) prediction of the surface at station i from accepted stations behind it."""
     if direction == 1:
         prev = np.flatnonzero(np.isfinite(z[:i]))
     else:
@@ -181,6 +187,9 @@ def _predict(stations: np.ndarray, z: np.ndarray, i: int, direction: int) -> tup
     last = prev[-1] if direction == 1 else prev[0]
     gap = abs(stations[i] - stations[last])
     window = prev[np.abs(stations[prev] - stations[last]) <= PREDICT_WINDOW_M]
+    if degree == 2 and len(window) >= CURVE_MIN_STATIONS:
+        c = np.polyfit(stations[window] - stations[last], z[window], 2)
+        return float(np.polyval(c, stations[i] - stations[last])), float(gap)
     if len(window) >= 3:
         a, b = np.polyfit(stations[window], z[window], 1)
         return float(a * stations[i] + b), float(gap)
