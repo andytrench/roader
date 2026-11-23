@@ -61,7 +61,6 @@ SEAM_LATERAL_M = 1.0
 BAND_M = 0.15  # surface band around the profile for the returns used (as in roader.fit.road)
 DIFF_M = 0.05
 REG = 1e-6  # ties unobserved parameters to their independent values
-BIG = 1e10  # weight of a scaled, normalized constraint row
 INDEPENDENT_TOL = 1e-7
 CONSISTENT_TOL = 1e-6
 CONSTRAINT_TOL = 1e-5
@@ -321,19 +320,35 @@ def _assemble(ids, verts, rows):
 
 
 def _admit(c: np.ndarray, d: np.ndarray) -> list[int]:
-    """Rows kept in order: each is independent of those before it, or redundant and consistent with them."""
+    """Rows kept in order: each is independent of those before it, or redundant and consistent with them.
+
+    Incremental Gram-Schmidt over the normalized rows, carrying each basis vector's
+    right-hand side, so a dependent row's implied value is read off directly.
+    """
     kept: list[int] = []
+    basis: list[np.ndarray] = []
+    brhs: list[float] = []
     for r in range(len(c)):
         norm = float(np.linalg.norm(c[r]))
         if norm == 0.0:
             continue
         row, rhs = c[r] / norm, d[r] / norm
-        if kept:
-            k = c[kept] / np.linalg.norm(c[kept], axis=1)[:, None]
-            dk = d[kept] / np.linalg.norm(c[kept], axis=1)
-            alpha, *_ = np.linalg.lstsq(k.T, row, rcond=None)
-            if np.linalg.norm(row - k.T @ alpha) <= INDEPENDENT_TOL and abs(rhs - float(alpha @ dk)) > CONSISTENT_TOL:
+        if basis:
+            q = np.array(basis)
+            proj = q @ row
+            rest = row - q.T @ proj
+            rest = rest - q.T @ (q @ rest)
+            left = float(np.linalg.norm(rest))
+            implied = float(proj @ np.array(brhs))
+        else:
+            rest, left, implied = row, 1.0, 0.0
+        if left <= INDEPENDENT_TOL:
+            if abs(rhs - implied) > CONSISTENT_TOL:
                 continue
+            kept.append(r)
+            continue
+        basis.append(rest / left)
+        brhs.append((rhs - implied) / left)
         kept.append(r)
     return kept
 
@@ -378,45 +393,56 @@ def _overlap_rows(seam: Seam, points, verts: dict[str, fp._Vert]):
 def _solve(items: dict[str, JointRoad], verts: dict[str, fp._Vert], rows: list, soft: list = ()):
     """Equality-constrained robust least squares over the component.
 
-    Constraint rows enter with a weight ``BIG`` after scaling, so they hold to far
-    below the AC-H4 tolerances while nothing can blow up. Returns (params per
-    road, worst constraint residual).
+    The returns of each road touch only its own parameters, so the normal matrix is
+    built road by road and the constraints are solved exactly with it as one small
+    KKT system (redundant consistent rows are handled by least squares). Returns
+    (params per road, worst constraint residual).
     """
     ids = sorted(items)
     off, n, c, d = _assemble(ids, verts, rows)
     x0 = np.concatenate([_params(verts[i]) for i in ids])
-    blocks = [_data(items[i], verts[i]) for i in ids]
-    a = np.zeros((sum(len(b[1]) for b in blocks), n))
-    zb = np.concatenate([b[1] for b in blocks])
-    wb = np.concatenate([b[2] for b in blocks])
-    r0 = 0
-    for i, b in zip(ids, blocks, strict=True):
-        a[r0 : r0 + len(b[1]), off[i] : off[i] + b[0].shape[1]] = b[0]
-        r0 += len(b[1])
+    blocks = []
+    for i in ids:
+        a_i, z_i, w_i, _s = _data(items[i], verts[i])
+        blocks.append((slice(off[i], off[i] + a_i.shape[1]), a_i, z_i, w_i))
     if soft:
         extra = np.zeros((len(soft), n))
         for r, (coef, _rhs) in enumerate(soft):
             for rid, vec in coef.items():
                 extra[r, off[rid] : off[rid] + len(vec)] += vec
-        a = np.vstack([a, extra])
-        zb = np.concatenate([zb, [rhs for _c, rhs in soft]])
-        wb = np.concatenate([wb, np.full(len(soft), OVERLAP_WEIGHT)])
+        blocks.append((slice(0, n), extra, np.array([rhs for _c, rhs in soft]), np.full(len(soft), OVERLAP_WEIGHT)))
     # Columns are scaled so stations in the hundreds of meters do not swamp z0.
-    scale = np.maximum(np.sqrt(np.sum(a**2, axis=0)), 1.0)
-    a_s, c_s = a / scale, c / scale
+    sq = np.zeros(n)
+    for cols, a_i, _z, _w in blocks:
+        sq[cols] += np.sum(a_i**2, axis=0)
+    scale = np.maximum(np.sqrt(sq), 1.0)
+    c_s = c / scale
     norms = np.maximum(np.linalg.norm(c_s, axis=1), 1e-30)
     c_s, d_s = c_s / norms[:, None], d / norms
     y0 = x0 * scale
-    # Row multipliers: squared, they are the soft L1 IRLS weights of roader.fit.profile._inner.
-    w = np.sqrt(wb)
+    scaled = [(cols, a_i / scale[cols], z_i, w_i) for cols, a_i, z_i, w_i in blocks]
+    # Squared row weights: the soft L1 IRLS weights of roader.fit.profile._inner.
+    wt = [w_i.copy() for _cols, _a, _z, w_i in scaled]
     x = x0.copy()
+    m = len(c_s)
     for _ in range(IRLS_STEPS):
-        lhs = np.vstack([a_s * w[:, None], math.sqrt(REG) * np.eye(n), math.sqrt(BIG) * c_s])
-        rhs = np.concatenate([w * zb, math.sqrt(REG) * y0, math.sqrt(BIG) * d_s])
-        y, *_ = np.linalg.lstsq(lhs, rhs, rcond=None)
+        h = REG * np.eye(n)
+        g = REG * y0
+        for (cols, a_i, z_i, _w), w2 in zip(scaled, wt, strict=True):
+            aw = a_i * w2[:, None]
+            h[cols, cols] += a_i.T @ aw
+            g[cols] += aw.T @ z_i
+        kkt = np.zeros((n + m, n + m))
+        kkt[:n, :n] = h
+        kkt[:n, n:] = c_s.T
+        kkt[n:, :n] = c_s
+        sol, *_ = np.linalg.lstsq(kkt, np.concatenate([g, d_s]), rcond=None)
+        y = sol[:n]
         x = y / scale
-        res = a @ x - zb
-        w = np.sqrt(wb) / (1.0 + (res / fp.F_SCALE_M) ** 2) ** 0.25
+        wt = []
+        for (cols, a_i, z_i, w_i), (_c2, _a2, _z2, wb_i) in zip(scaled, blocks, strict=True):
+            res = a_i @ y[cols] - z_i
+            wt.append(wb_i / np.sqrt(1.0 + (res / fp.F_SCALE_M) ** 2))
     resid = float(np.max(np.abs(c @ x - d))) if len(rows) else 0.0
     return {i: x[off[i] : off[i] + len(verts[i].grades) + 1] for i in ids}, resid
 
