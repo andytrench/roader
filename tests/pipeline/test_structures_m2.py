@@ -530,3 +530,21 @@ def test_fr_st_5_rule_depth_leaves_the_vertical_clearance_over_every_road_spanne
     assert depth == pytest.approx(8.4 - 4.877) and flag == "FR-ST-5:depth_limited_by_clearance:8.40m_below"
     assert clearance_limited_depth(1.5, [(8.4, 4.877)], 0.2) == (1.5, None)  # already clear
     assert clearance_limited_depth(2.0, [(3.0, 4.877), (0.02, 4.3)], 0.2) == (2.0, None)  # no room under it: not a road it spans
+
+
+def test_fr_oc_3_cap_bottom_is_the_lowest_soffit_under_any_skew_the_solids_may_draw():
+    from roader.complete.terrain import cap_bottom, cap_lines
+
+    xs = SimpleNamespace(width_left=lambda s: 5.0, width_right=lambda s: 5.0)
+    road = SimpleNamespace(cross_section=xs, surface_z=lambda s, u: 100.0 + 0.05 * s + 0.06 * u)
+    deck = SimpleNamespace(depth_m=2.0, overhang_m=1.0)
+    st = SimpleNamespace(deck=deck)
+    sp = SimpleNamespace(station=50.0, skew_rad=math.radians(60.0), cap_depth_m=1.2, cap_width_m=3.0)
+    t = math.tan(sp.skew_rad)
+    # Lowest corner: the right deck edge (u = -6 m), where the skewed line reaches back to s = 50 - 6 t.
+    assert cap_bottom(road, st, sp) == pytest.approx(100.0 + 0.05 * (50.0 - 6.0 * t) - 0.36 - 3.2)
+    ss, uu = cap_lines(road, st, sp)
+    assert uu.min() == pytest.approx(-6.0) and uu.max() == pytest.approx(6.0)
+    assert ss.min() == pytest.approx(50.0 - 6.0 * t) and ss.max() == pytest.approx(50.0 + 6.0 * t)
+    assert np.all((ss - 50.0) * uu >= -1e-9) and np.all(np.abs(ss - 50.0) <= t * np.abs(uu) + 1e-9)  # between square and t
+    assert np.any(np.isclose(ss, 50.0) & np.isclose(uu, 6.0))  # square is among the skews drawn

@@ -42,6 +42,7 @@ LOWER_REACH_CELLS = 3.0  # interpolated nodes this many cells beyond a pavement 
 LOWER_MARGIN_M = 0.1  # terrain below a slab underside or cap bottom by at least this
 CAP_CLEARANCE_M = 0.3
 FOOTING_MARGIN_M = 0.05
+SKEW_FAN = 5
 
 MEASURED, GAP, UNDER_STRUCTURE, UNDER_ROAD, LOWERED = 0, 1, 2, 3, 4
 
@@ -210,6 +211,20 @@ def complete_terrain(points: PointSet, model: RoadModel, rules: RuleBook, cell: 
         low = z[idx] > limit
         z[idx[low]] = limit[low]
         code[idx[low]] = LOWERED
+        # Each cap is level at its lowest soffit, which a superelevated or skewed deck takes
+        # below the centre line's: hold the ground under it below that level.
+        for sp in st.supports:
+            if sp.kind != "pier":
+                continue
+            t = math.tan(sp.skew_rad)
+            h = 0.5 * sp.cap_width_m + 1.5 * cell
+            ds = s - sp.station
+            under = (ds >= min(0.0, t) * u - h) & (ds <= max(0.0, t) * u + h) & (u <= _pw(xs.width_left, s) + pad) & (u >= -_pw(xs.width_right, s) - pad)
+            idx = np.flatnonzero(under)
+            limit = cap_bottom(road, st, sp) - CAP_CLEARANCE_M
+            low = idx[z[idx] > limit]
+            z[low] = limit
+            code[low] = LOWERED
 
     n_meas = int((code == MEASURED).sum())
     prov = Provenance(
@@ -243,6 +258,27 @@ def terrain_grid(patch: TerrainPatch) -> Grid:
     return Grid(patch.origin_x, patch.origin_y, patch.cell_m, patch.nx, patch.ny, np.asarray(patch.z, dtype=np.float64).reshape(patch.ny, patch.nx))
 
 
+def _fan(sp) -> np.ndarray:
+    """Support-line slopes ds/du the solids may draw: from square to the support's own (D-109 rounds toward square)."""
+    return np.linspace(0.0, math.tan(sp.skew_rad), SKEW_FAN)
+
+
+def cap_lines(road, st, sp, pad: float = 0.0, step: float = 0.5) -> tuple[np.ndarray, np.ndarray]:
+    """(s, u) along a pier's support line across the deck, for every slope in ``_fan``."""
+    xs = road.cross_section
+    lo = -(xs.width_right(sp.station) + st.deck.overhang_m + pad)
+    hi = xs.width_left(sp.station) + st.deck.overhang_m + pad
+    u = np.linspace(lo, hi, max(2, math.ceil((hi - lo) / step) + 1))
+    t = _fan(sp)
+    return (sp.station + t[:, None] * u[None, :]).ravel(), np.broadcast_to(u, (t.size, u.size)).ravel()
+
+
+def cap_bottom(road, st, sp) -> float:
+    """Underside of a pier cap as the solids build it: the lowest soffit on its line, less the cap depth (FR-OC-3)."""
+    ss, uu = cap_lines(road, st, sp)
+    return min(road.surface_z(float(a), float(b)) for a, b in zip(ss, uu, strict=True)) - st.deck.depth_m - sp.cap_depth_m
+
+
 def seat_supports(model: RoadModel, rules: RuleBook) -> None:
     """Footings below the completed terrain everywhere under the support block (FR-OC-3)."""
     if model.terrain is None:
@@ -261,9 +297,8 @@ def seat_supports(model: RoadModel, rules: RuleBook) -> None:
                 a, b = sp.station - 0.5 * sp.cap_width_m, sp.station + 0.5 * sp.cap_width_m
             half_l = xs.width_left(sp.station) + st.deck.overhang_m + 2.0
             half_r = xs.width_right(sp.station) + st.deck.overhang_m + 2.0
-            ss, uu = np.meshgrid(np.linspace(a, b, 5), np.arange(-half_r, half_l + 1e-9, 0.5))
-            ss, uu = ss.ravel(), uu.ravel()
-            ss = ss + uu * math.tan(sp.skew_rad)
+            ss, uu, tt = np.meshgrid(np.linspace(a, b, 5), np.arange(-half_r, half_l + 1e-9, 0.5), _fan(sp))
+            ss, uu = (ss + uu * tt).ravel(), uu.ravel()
             lowest = float(np.min(grid.bilinear(line.offset_point(ss, uu))))
             target = lowest - foot - FOOTING_MARGIN_M
             if sp.footing_z > target:
