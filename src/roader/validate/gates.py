@@ -20,7 +20,7 @@ import numpy as np
 
 from roader.model.mesh import Mesh
 from roader.model.provenance import Provenance, Source
-from roader.model.schema import Road, RoadModel
+from roader.model.schema import ELEMENT_FAILED, Road, RoadModel
 from roader.validate import lod
 from roader.validate._align import Projector
 from roader.validate._geom import points_strictly_inside, vertical_hits, xy_tree
@@ -407,6 +407,26 @@ def check_provenance(model: RoadModel, meshes: Sequence[Mesh]) -> GateResult:
     return result
 
 
+# ---------------------------------------------------------------- FR-EX-1 degraded elements
+
+
+def check_degraded(model: RoadModel) -> GateResult | None:
+    """FR-EX-1: elements replaced or dropped because building them raised (D-119) hold the unit.
+
+    None when the model carries no ``ELEMENT_FAILED`` flag, so complete units report as before.
+    """
+    flags = sorted((f for f in model.flags if f.code == ELEMENT_FAILED), key=lambda f: (f.element_id, f.req, f.message))
+    if not flags:
+        return None
+    return GateResult(
+        "FR-EX-1",
+        passed=False,
+        hard=True,
+        metrics={"n_elements": float(len({f.element_id for f in flags}))},
+        violations=[Violation(f.req, f.element_id, f.message) for f in flags],
+    )
+
+
 # ---------------------------------------------------------------- report
 
 
@@ -436,6 +456,9 @@ def run_gates(
     AC-P4 then run on level 0, otherwise on ``meshes``.
     """
     report = GateReport(unit_id=model.unit.unit_id)
+    degraded = check_degraded(model)
+    if degraded is not None:
+        report.results.append(degraded)
     report.results.append(check_solids(meshes, seams=seams, val3dity_exe=val3dity_exe, profile=profile, min_embed_m=min_embed_m))
     report.results.append(check_crossing_order(model, crossings_ref))
     report.results.append(check_voids(model, meshes))

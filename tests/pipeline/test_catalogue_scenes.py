@@ -27,7 +27,7 @@ import pytest
 from roader.validate.val3dity import find_val3dity
 from tests.pipeline import scenes as S
 
-GATES = ("AC-H1", "AC-H2", "AC-H3", "AC-H4", "AC-H5", "AC-H6", "AC-A1", "AC-A4", "AC-A5")
+GATES = ("FR-EX-1", "AC-H1", "AC-H2", "AC-H3", "AC-H4", "AC-H5", "AC-H6", "AC-A1", "AC-A4", "AC-A5")
 FAST = frozenset({"simple_overpass", "twin_different_elevations", "stack"})
 FULL = os.environ.get("ROADER_CATALOGUE", "").strip().lower() == "all"
 HEAVY_REASON = "heavy catalogue scene (about a minute): set ROADER_CATALOGUE=all"
@@ -81,7 +81,7 @@ def _cases():
 
 @pytest.mark.parametrize(("name", "gate"), list(_cases()))
 def test_section_9_gates_on_catalogue_scene(name, gate):
-    """AC-H1..AC-H6 hard gates, AC-A1 (held-out returns), AC-A4 (crossing dz) and AC-A5 (deck ends) per scene type."""
+    """FR-EX-1 (no element replaced or dropped), AC-H1..AC-H6, AC-A1 (held-out returns), AC-A4 (crossing dz), AC-A5 (deck ends)."""
     out = outcome(name)
     if out.error:
         pytest.fail(f"{out.stage} raised: {out.error}")
@@ -93,6 +93,9 @@ def test_section_9_gates_on_catalogue_scene(name, gate):
             pytest.skip("no structure in this scene")
         assert not out.missing_structures, f"truth structures with no model structure: {out.missing_structures}"
     result = out.gates.get(gate)
+    if gate == "FR-EX-1":
+        assert result is None, _messages(result)  # every element built (D-119)
+        return
     assert result is not None, f"{gate} did not run: no model crossing or structure matched the truth"
     if gate == "AC-H1":
         assert result.metrics.get("n_native_violations") == 0.0, _messages(result)

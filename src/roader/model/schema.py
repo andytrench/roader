@@ -72,6 +72,10 @@ class Flag:
     message: str
 
 
+# An element replaced or dropped because building it raised (FR-EX-1, D-119): the unit is held.
+ELEMENT_FAILED = "FR-EX-1:element_failed"
+
+
 # ---------------------------------------------------------------- L0 network
 
 

@@ -110,6 +110,18 @@ def skew_at(knots: list[SkewKnot], s: float) -> float:
     return knots[-1].t
 
 
+def end_limited(t: float, s: float, length: float, umax: float) -> float:
+    """Skew squared off toward the road's ends, so no station line leaves the road (FR-SG-2, D-118).
+
+    A deck end at (or its skew ramp past) a road end would put the line s0 + t u outside
+    [0, length] within the lateral reach. |t| is capped at the distance to the nearer end
+    over RAMP_FACTOR * umax, which ramps to 0 at the end no faster than a skew ramp, so
+    neighbouring lines never cross.
+    """
+    lim = max(min(s, length - s), 0.0) / (RAMP_FACTOR * umax)
+    return max(-lim, min(t, lim))
+
+
 def merge_breakpoints(points: list[tuple[float, int]], length: float) -> list[float]:
     """Sorted breakpoints; any closer than STATION_MERGE_M collapse to the highest priority one."""
     pts = sorted((min(max(s, 0.0), length), prio) for s, prio in points if -STATION_MERGE_M <= s <= length + STATION_MERGE_M)

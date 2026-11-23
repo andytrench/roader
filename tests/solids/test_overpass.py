@@ -332,3 +332,30 @@ def test_triangle_budget_report_fr_as_2(model, meshes, capsys):
         for m in meshes:
             print(f"  {m.id:42s} {m.part:12s} {len(m.faces):7d}")
         print(f"  overpass (structure parts): {overpass} triangles")
+
+
+@pytest.mark.parametrize("end", ["start", "end", "at_end"])
+def test_skewed_deck_at_a_road_end_stays_on_the_road_fr_sg_2_fr_st_4(end):
+    """A skewed deck end at (or its skew ramp past) the road's end: station lines square off inside the road (D-118).
+
+    ``at_end``: the deck ends on the road end, its station a rounding step past the summed element lengths.
+    """
+    m = overpass_model()
+    over, st = m.roads[2], m.structures[0]
+    length = over.length
+    if end == "start":
+        st.s_start = st.supports[0].station = 0.5
+        for b in over.cross_section.barriers:
+            b.s0 = 0.5
+        m.side_slopes = [s for s in m.side_slopes if not (s.road_id == over.id and s.s0 == 0.0)]
+    else:
+        s_end = length - 0.5 if end == "end" else length + 1e-7
+        st.s_end = st.supports[-1].station = s_end
+        for b in over.cross_section.barriers:
+            b.s1 = s_end
+        m.side_slopes = [s for s in m.side_slopes if not (s.road_id == over.id and s.s1 == length)]
+    over.support = []
+    meshes = generate(m)
+    for mesh in _closed(meshes):
+        assert not mc.solid_problems(mesh), (mesh.id, mc.solid_problems(mesh))
+    assert any(x.part == "deck" for x in meshes)

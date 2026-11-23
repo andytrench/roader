@@ -66,7 +66,7 @@ from roader.fit.section import barriers_from_evidence
 from roader.io.points import PointSet
 from roader.io.vectors import VectorEdge
 from roader.model.provenance import Provenance, Source
-from roader.model.schema import Flag, Frame, RoadModel, UnitRecord
+from roader.model.schema import ELEMENT_FAILED, Flag, Frame, RoadModel, UnitRecord
 from roader.model.serialize import dumps, loads
 from roader.rules import RuleBook
 from roader.structures import attach_shared, infer_structure, parapet_fill, twin_joints
@@ -169,11 +169,19 @@ def run_pipeline(
     for f in fits:
         ranges = [(e.s_start, e.s_end) for e in extents if e.road_id == f.road.id]
         xs = f.road.cross_section
-        barriers[f.road.id] = barriers_from_evidence(f.road.id, f.line, ev, xs.width_left, xs.width_right, structure_ranges=ranges, rules=rules)
+        try:
+            barriers[f.road.id] = barriers_from_evidence(f.road.id, f.line, ev, xs.width_left, xs.width_right, structure_ranges=ranges, rules=rules)
+        except Exception as exc:  # noqa: BLE001 - one road's barriers never abort the unit (FR-EX-1, D-119)
+            barriers[f.road.id] = []
+            flags.append(element_failed(f.road.id, "FR-RS-4", "no measured barriers on the road", exc))
 
     structures = []
     for e in extents:
-        res = infer_structure(e, by_id[e.road_id], crossings, by_id, ev, rules, drops[e.road_id], barriers[e.road_id])
+        try:
+            res = infer_structure(e, by_id[e.road_id], crossings, by_id, ev, rules, drops[e.road_id], barriers[e.road_id])
+        except Exception as exc:  # noqa: BLE001 - one structure never aborts the unit (FR-EX-1, D-119)
+            flags.append(element_failed(e.road_id, "FR-ST-2", f"no structure for the {e.method} span s={e.s_start:.1f}-{e.s_end:.1f}", exc))
+            continue
         if e.method == "rule":
             res.structure.prov.source = Source.RULE
             res.structure.prov.rule_id = "clearance.lateral.support"
@@ -197,7 +205,10 @@ def run_pipeline(
 
     slopes = []
     for f in fits:
-        slopes.extend(side_slopes(f, structures, rules, strip_factor))
+        try:
+            slopes.extend(side_slopes(f, structures, rules, strip_factor))
+        except Exception as exc:  # noqa: BLE001 - one road's earthwork never aborts the unit (FR-EX-1, D-119)
+            flags.append(element_failed(f.road.id, "FR-OC-3", "no side slopes on the road", exc))
 
     unit = copy.deepcopy(unit)
     for rec in unit.lidar:
@@ -235,6 +246,11 @@ def run_pipeline(
     # from its native file render byte-identical exports (AC-H5).
     model = loads(dumps(model))
     return PipelineResult(model, ev, fits, measures, extents, candidates, completions)
+
+
+def element_failed(element_id: str, req: str, what: str, exc: BaseException) -> Flag:
+    """FR-EX-1 flag for an element left out because building it raised; holds the unit (D-119)."""
+    return Flag(ELEMENT_FAILED, element_id, req, f"{what}; {type(exc).__name__}: {exc}")
 
 
 def road_summary(road) -> Provenance:

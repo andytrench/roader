@@ -1186,6 +1186,8 @@ def mesh_hashes(meshes) -> dict[str, str]:
 def run_scene(scene: Scene, *, spacing: float = 0.6, seed: int = 7, profiles: tuple[str, ...] = ("analytic",), gates: bool = True, val3dity_exe: str | None = None) -> Outcome:
     """Points and vectors of ``scene`` through ``run_pipeline`` (D-018 holdout), solids and every section 9 gate.
 
+    Solids are rendered tolerantly (FR-EX-1, D-119): an element that cannot be built is
+    replaced or dropped, flagged on the model and reported by the FR-EX-1 gate.
     Solids are rendered twice, from the model and from its canonical reload; AC-H5 compares
     the two renderings mesh by mesh (``mesh_hashes``) instead of writing exports. With
     ``gates=False`` only the pipeline and the solids run. Exceptions are caught and returned
@@ -1193,6 +1195,7 @@ def run_scene(scene: Scene, *, spacing: float = 0.6, seed: int = 7, profiles: tu
     """
     import time
 
+    from roader.export.run import with_failures
     from roader.io import from_synthetic
     from roader.model.serialize import dumps, loads
     from roader.pipeline import holdout_for, run_pipeline
@@ -1224,8 +1227,11 @@ def run_scene(scene: Scene, *, spacing: float = 0.6, seed: int = 7, profiles: tu
         t0 = time.perf_counter()
         stage = f"solids ({profile})"
         try:
-            meshes = generate(model, profile=profile)
-            again = generate(loads(dumps(model)), profile=profile)
+            failures: list = []
+            meshes = generate(model, profile=profile, failures=failures)
+            again = generate(loads(dumps(model)), profile=profile, failures=[])
+            if failures:
+                model = out.model = with_failures(model, failures)
             if not gates:
                 out.seconds[profile] = time.perf_counter() - t0
                 continue
@@ -1236,7 +1242,7 @@ def run_scene(scene: Scene, *, spacing: float = 0.6, seed: int = 7, profiles: tu
             return out
         out.seconds[profile] = time.perf_counter() - t0
         for r in report.results:
-            if profile == "analytic" or r.gate.startswith("AC-H1"):
+            if profile == "analytic" or r.gate.startswith("AC-H1") or r.gate == "FR-EX-1":
                 out.gates[r.gate] = r
         if profile == "analytic":
             out.gates["AC-H5"] = compare_runs(mesh_hashes(meshes), mesh_hashes(again))

@@ -24,6 +24,7 @@ import numpy as np
 
 from roader.model.mesh import Mesh
 from roader.model.provenance import Source
+from roader.solids.failure import ElementFailure, element
 from roader.solids.grid import Cell, PlanVertices, Tri, ladder
 from roader.solids.terrain import TerrainSampler
 
@@ -143,28 +144,29 @@ def assemble(bodies: list[Body], pv: PlanVertices, sampler: TerrainSampler | Non
     own = [shared if conforming else Levels() for _ in bodies]
     terrain: dict[int, float] = {}
     for n, body in enumerate(bodies):
-        levels = own[n]
-        verts, bottom_only = _body_vertices(body)
-        for p in verts + bottom_only:
-            zb = body.bottom(p)
-            zt = body.top(p) if p not in bottom_only else zb
-            if not (math.isfinite(zb) and math.isfinite(zt)):
-                raise ValueError(f"{body.mesh_id}: non-finite level at ({pv.x[p]:.2f}, {pv.y[p]:.2f})")
-            if zt < zb - 1e-9:
-                raise ValueError(f"{body.mesh_id}: top below bottom at ({pv.x[p]:.2f}, {pv.y[p]:.2f})")
-            body.zb[p], body.zt[p] = zb, max(zt, zb)
-            levels.add(p, zb)
-            levels.add(p, body.zt[p])
-            if sampler is not None and p not in terrain:
-                terrain[p] = sampler(pv.x[p], pv.y[p])
-        if body.ground is None:
-            below = [body.zb[p] < terrain[p] for p in verts] if sampler is not None else [False]
-            if any(below) and not all(below):
-                raise ValueError(f"{body.mesh_id}: bottom crosses the terrain; set footing below ground")
-            body.ground = all(below)
-        if sampler is not None and (conforming or body.ground):
+        with element(body.element_id):
+            levels = own[n]
+            verts, bottom_only = _body_vertices(body)
             for p in verts + bottom_only:
-                levels.add(p, terrain[p])
+                zb = body.bottom(p)
+                zt = body.top(p) if p not in bottom_only else zb
+                if not (math.isfinite(zb) and math.isfinite(zt)):
+                    raise ValueError(f"{body.mesh_id}: non-finite level at ({pv.x[p]:.2f}, {pv.y[p]:.2f})")
+                if zt < zb - 1e-9:
+                    raise ValueError(f"{body.mesh_id}: top below bottom at ({pv.x[p]:.2f}, {pv.y[p]:.2f})")
+                body.zb[p], body.zt[p] = zb, max(zt, zb)
+                levels.add(p, zb)
+                levels.add(p, body.zt[p])
+                if sampler is not None and p not in terrain:
+                    terrain[p] = sampler(pv.x[p], pv.y[p])
+            if body.ground is None:
+                below = [body.zb[p] < terrain[p] for p in verts] if sampler is not None else [False]
+                if any(below) and not all(below):
+                    raise ValueError(f"{body.mesh_id}: bottom crosses the terrain; set footing below ground")
+                body.ground = all(below)
+            if sampler is not None and (conforming or body.ground):
+                for p in verts + bottom_only:
+                    levels.add(p, terrain[p])
     for levels in {id(lv): lv for lv in own}.values():
         levels.finalize()
     for n, body in enumerate(bodies):
@@ -183,7 +185,7 @@ def assemble(bodies: list[Body], pv: PlanVertices, sampler: TerrainSampler | Non
         for cell in body.cells:
             for a, b, c in cell.tris:
                 if zt[a] == zb[a] and zt[b] == zb[b] and zt[c] == zb[c]:
-                    raise ValueError(f"{body.mesh_id}: zero thickness over a whole triangle")
+                    raise ElementFailure(body.element_id, ValueError(f"{body.mesh_id}: zero thickness over a whole triangle"))
                 out.append(((a, zt[a]), (b, zt[b]), (c, zt[c])))
                 kind.append(TOP)
                 if body.bottom_tris is None:

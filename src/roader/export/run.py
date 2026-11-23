@@ -7,6 +7,7 @@ section 9 gate, and routes the unit through the publish gate (FR-EX-1).
 
 from __future__ import annotations
 
+import dataclasses
 import tempfile
 from collections.abc import Mapping, Sequence
 from pathlib import Path
@@ -16,7 +17,7 @@ import yaml
 
 from roader.export.publish import PUBLISHED, write_unit
 from roader.model.mesh import Mesh
-from roader.model.schema import RoadModel
+from roader.model.schema import Flag, RoadModel
 from roader.model.serialize import dumps, loads
 from roader.solids import LOD_CHORD_TOL, generate
 from roader.validate.gates import run_gates
@@ -40,6 +41,18 @@ def load_crossing_reference(path: str | Path) -> list[dict[str, Any]]:
     return out
 
 
+def with_failures(model: RoadModel, failures: list[Flag]) -> RoadModel:
+    """The model with element-failure flags added once each (by code, element, requirement), in canonical order."""
+    seen = {(f.code, f.element_id, f.req) for f in model.flags}
+    flags = list(model.flags)
+    for f in failures:
+        key = (f.code, f.element_id, f.req)
+        if key not in seen:
+            seen.add(key)
+            flags.append(f)
+    return dataclasses.replace(model, flags=sorted(flags, key=lambda f: (f.req, f.code, f.element_id, f.message)))
+
+
 def export_model(
     model: RoadModel,
     out_dir: str | Path,
@@ -59,17 +72,22 @@ def export_model(
     written into the glTF and USD files, with the main rendering as level 0.
     """
 
+    failures: list[Flag] = []
+
     def render(run_model: RoadModel) -> tuple[list[Mesh], dict[int, list[Mesh]] | None]:
-        main = generate(run_model, chord_tol_m=chord_tol_m, profile=profile)
+        # Tolerant (FR-EX-1, D-119): an element that cannot be built is replaced or dropped and flagged.
+        main = generate(run_model, chord_tol_m=chord_tol_m, profile=profile, failures=failures)
         if not lods:
             return main, None
         chain = {0: main}
         for level, tol in LOD_CHORD_TOL.items():
             if level > 0:
-                chain[level] = generate(run_model, chord_tol_m=tol, profile=profile)
+                chain[level] = generate(run_model, chord_tol_m=tol, profile=profile, failures=failures)
         return main, chain
 
     meshes, chain = render(model)
+    if failures:
+        model = with_failures(model, failures)
     with tempfile.TemporaryDirectory() as scratch:
         runs = []
         for name, run_model in (("a", model), ("b", loads(dumps(model)))):

@@ -34,6 +34,7 @@ from roader.solids.bodies import (
     mesh_id,
     pavement_bottom,
 )
+from roader.solids.failure import element
 from roader.solids.grid import Cell, PlanVertices
 from roader.solids.stations import STATION_MERGE_M
 from roader.solids.terrain import TerrainSampler
@@ -161,7 +162,10 @@ class JunctionPlan:
         """Area bodies; ``realtime`` builds them as the road bodies are in that profile (D-047):
         the slab embeds into its fill, the fill into the ground, and both outlines are inset."""
         areas = sorted(self.model.junctions, key=lambda j: j.id)
-        outlines = [self._outline(jn) for jn in areas]
+        outlines = []
+        for jn in areas:
+            with element(jn.id):
+                outlines.append(self._outline(jn))
         users: dict[int, list[JunctionArea]] = {}
         for jn, (ring, holes, exact) in zip(areas, outlines, strict=True):
             for p in [*ring, *(q for h in holes for q in h)]:
@@ -176,7 +180,8 @@ class JunctionPlan:
                 common[p] = (top, top - max(j.thickness_at(pv.x[p], pv.y[p]) for j in jns))
         out: list[Body] = []
         for jn, (ring, holes, exact) in zip(areas, outlines, strict=True):
-            out.extend(self._junction(jn, ring, holes, {**common, **exact}, sampler, realtime))
+            with element(jn.id):
+                out.extend(self._junction(jn, ring, holes, {**common, **exact}, sampler, realtime))
         return out
 
     def trim_fills(self, bodies: list[Body]) -> list[Body]:

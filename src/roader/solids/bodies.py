@@ -25,6 +25,7 @@ from roader.solids.stations import (
     STATION_MERGE_M,
     STRUCTURE_TOL_M,
     StationLine,
+    end_limited,
     merge_breakpoints,
     skew_at,
     skew_knots,
@@ -190,7 +191,8 @@ def road_bodies(
     for st in structures:
         if st.kind != "bridge":
             raise NotImplementedError(f"structure {st.id}: kind {st.kind!r} is not generated in milestone 1")
-        if not 0.0 <= st.s_start < st.s_end <= length:
+        # Stations are rounded on construction (D-056): an end on the road end may pass the summed lengths by a rounding step.
+        if not -STATION_MERGE_M <= st.s_start < st.s_end <= length + STATION_MERGE_M:
             raise ValueError(f"structure {st.id}: span outside road {road.id}")
     spans = [(st.s_start, st.s_end) for st in structures]
     # FR-CR-3: where this road rides another road's deck, that deck is its surface.
@@ -298,7 +300,7 @@ def road_bodies(
         return 1.25 * near[1.0] + 1.0, 1.25 * near[-1.0] + 1.0
     knots = skew_knots(structures, umax)
     base = merge_breakpoints(bps + [(k.s, PRIORITY_OTHER) for k in knots if k.ramp], length)
-    station_lines = [StationLine(s, skew_at(knots, s)) for s in stations(road, base, tol, umax, knots, spans, sides)]
+    station_lines = [StationLine(s, end_limited(skew_at(knots, s), s, length, umax)) for s in stations(road, base, tol, umax, knots, spans, sides)]
     grid = RoadGrid(road, lines, station_lines, pv)
 
     def at(f: Callable[[float, float], float]) -> Callable[[int], float]:
@@ -444,7 +446,7 @@ def _pier(
 
     ring = chain_ring(boundary_edges(cells))
     outline = Polygon([(pv.x[p], pv.y[p]) for p in ring])
-    t = skew_at(knots, sp.station)
+    t = grid.sl[grid.index(sp.station)].t
     i = grid.index(sp.station)
     u_right, u_left = pv.u[grid.vid[(i, keys[0])]], pv.u[grid.vid[(i, keys[1])]]
     n = sp.n_columns
