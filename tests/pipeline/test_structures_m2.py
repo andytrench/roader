@@ -420,6 +420,16 @@ def test_deck_prefilter_keeps_every_point_the_projection_would_keep():
     assert want and want <= set(_near(fit, xy, 40.0, 90.0, 30.0).tolist())
 
 
+def test_vectorized_surface_matches_the_road_surface():
+    from roader.structures.infer import _surface
+
+    road = twin_model().roads[0]
+    s = np.linspace(-20.0, road.length + 20.0, 401)
+    u = np.linspace(-8.0, 8.0, 401)
+    want = [road.surface_z(float(a), float(b)) for a, b in zip(s, u, strict=True)]
+    assert np.allclose(_surface(road, s, u), want, atol=1e-9)
+
+
 def test_fr_cr_3_ramp_without_a_run_of_its_own_still_shares_the_deck():
     """A loop leaving 9 m before the deck end has too short a deck-class run for a structure;
     its first metres still ride the parent's deck (Woburn NE loop off I-93 northbound)."""

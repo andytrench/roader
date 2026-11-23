@@ -34,6 +34,7 @@ from roader.model.schema import Barrier, Crossing, DeckSpec, Flag, Structure, Su
 from roader.model.serialize import stable_id
 from roader.rules import RuleBook, era_of
 from roader.structures.held_skew import capped
+from roader.validate.accuracy import _pw
 
 OVERHANG_BAND_M = 3.0
 DECK_LEVEL_BELOW_M = 0.3
@@ -117,6 +118,26 @@ def observed_piers(
     return kept
 
 
+def _profile_z(profile, s: np.ndarray) -> np.ndarray:
+    """``Profile.z`` for many stations, the end grades continued beyond either end."""
+    s = np.asarray(s, dtype=np.float64)
+    els = profile.elements
+    ends = np.array([e.s0 + e.length for e in els])
+    k = np.minimum(np.searchsorted(ends, s, side="left"), len(els) - 1)
+    s0, length = np.array([e.s0 for e in els])[k], np.array([e.length for e in els])[k]
+    z0, g0, g1 = (np.array([getattr(e, n) for e in els])[k] for n in ("z0", "g0", "g1"))
+    t = s - s0
+    inside = np.clip(t, 0.0, length)
+    return z0 + g0 * inside + 0.5 * (g1 - g0) * inside * inside / length + (g0 + (g1 - g0) * inside / length) * (t - inside)
+
+
+def _surface(road, s: np.ndarray, u: np.ndarray) -> np.ndarray:
+    """``Road.surface_z`` for many points."""
+    xs = road.cross_section
+    slope = np.where(u >= 0.0, _pw(xs.slope_left, s), _pw(xs.slope_right, s))
+    return _profile_z(road.profile, s) + slope * u
+
+
 def _near(upper: RoadFit, xy: np.ndarray, s0: float, s1: float, max_dist: float) -> np.ndarray:
     """Indices of points in the plan box of the carried line over [s0, s1] widened by ``max_dist``.
 
@@ -149,21 +170,21 @@ def _pier_returns(
     if idx.size == 0:
         return []
     z = ev.xyz[idx, 2]
-    wl = np.array([xs.width_left(float(v)) for v in s]) + overhang + PIER_EDGE_PAD_M
-    wr = np.array([xs.width_right(float(v)) for v in s]) + overhang + PIER_EDGE_PAD_M
+    wl = _pw(xs.width_left, s) + overhang + PIER_EDGE_PAD_M
+    wr = _pw(xs.width_right, s) + overhang + PIER_EDGE_PAD_M
     sc = s - t * u
     under = (u <= wl) & (u >= -wr) & (sc >= extent.s_start) & (sc <= extent.s_end)
     s, u, z = s[under], u[under], z[under]
     if s.size == 0:
         return []
-    top = np.array([road.surface_z(float(a), float(b)) for a, b in zip(s, u, strict=True)])
+    top = _surface(road, s, u)
     on_lower = np.zeros(s.size, dtype=bool)
     xy = ev.xyz[idx[under], :2]
     for fit, _z in lowers:
         sl, ul, okl = fit.line.project(xy, max_dist=30.0)
         lxs = fit.road.cross_section
-        lw = np.array([lxs.width_left(float(v)) for v in sl]) + LOWER_PAD_M
-        rw = np.array([lxs.width_right(float(v)) for v in sl]) + LOWER_PAD_M
+        lw = _pw(lxs.width_left, sl) + LOWER_PAD_M
+        rw = _pw(lxs.width_right, sl) + LOWER_PAD_M
         on_lower |= okl & (ul <= lw) & (ul >= -rw)
     ground = top - min(zl for _f, zl in lowers)
     return observed_piers(s, u, top - z, on_lower, ground, (extent.s_start, extent.s_end), t)
@@ -202,16 +223,17 @@ def _footprint_on(
         for v in np.linspace(across[0], across[1], max(3, math.ceil(across[1] - across[0]) + 1)):
             lines.append(shapely.LineString(upper.line.offset_point(s_up, np.full(s_up.size, v))))
     for sign, piece in ((1.0, xs.width_left), (-1.0, xs.width_right)):
-        u = np.array([sign * (piece(float(s)) + clearance) for s in s_lo])
+        u = sign * (_pw(piece, s_lo) + clearance)
         edge = lower.line.offset_point(s_lo, u)
         if len(edge) < 2:
             continue
+        hits = []
         for line in lines:
             inter = shapely.LineString(edge).intersection(line)
-            for g in getattr(inter, "geoms", [inter]):
-                if isinstance(g, shapely.Point):
-                    s, v, _ok = upper.line.project(np.array([[g.x, g.y]]))
-                    stations.append(float(s[0] - t * v[0]))
+            hits.extend((g.x, g.y) for g in getattr(inter, "geoms", [inter]) if isinstance(g, shapely.Point))
+        if hits:
+            s, v, _ok = upper.line.project(np.array(hits))
+            stations.extend((s - t * v).tolist())
     if len(stations) < 2:
         half = (xs.width_left(c.lower_s) + xs.width_right(c.lower_s) + 2 * clearance) / 2.0 / max(math.cos(c.skew_rad), 0.2)
         return c.upper_s - half, c.upper_s + half
@@ -227,13 +249,13 @@ def _overhang(upper: RoadFit, ev: Evidence, s0: float, s1: float) -> float | Non
     if keep.size < 50:
         return None
     s, u, z = s[keep], u[keep], ev.xyz[near[keep], 2]
-    pz = np.array([road.profile.z(float(v)) for v in s])
+    pz = _profile_z(road.profile, s)
     level = (z >= pz - 1.0 - DECK_LEVEL_BELOW_M) & (z <= pz + 1.0 + DECK_LEVEL_ABOVE_M)
     out = []
+    surf = _surface(road, s, u)
     for sign, piece in ((1.0, road.cross_section.width_left), (-1.0, road.cross_section.width_right)):
-        w = np.array([piece(float(v)) for v in s])
+        w = _pw(piece, s)
         d = sign * u - w
-        surf = np.array([road.surface_z(float(a), float(b)) for a, b in zip(s, u, strict=True)])
         m = level & (d > 0.0) & (d <= OVERHANG_BAND_M) & (z >= surf - DECK_LEVEL_BELOW_M) & (z <= surf + DECK_LEVEL_ABOVE_M)
         if m.sum() < 20:
             continue
@@ -270,9 +292,9 @@ def measured_depth(upper: RoadFit, ev: Evidence, s0: float, s1: float, overhang:
     s, u, z = s[keep], u[keep], ev.xyz[near[keep], 2]
     drops, stations = [], []
     for sign, piece in ((1.0, road.cross_section.width_left), (-1.0, road.cross_section.width_right)):
-        edge = np.array([piece(float(v)) for v in s]) + overhang
+        edge = _pw(piece, s) + overhang
         band = np.abs(sign * u - edge) <= FASCIA_BAND_M
-        dz = np.array([road.profile.z(float(v)) for v in s[band]]) - z[band]
+        dz = _profile_z(road.profile, s[band]) - z[band]
         keep = (dz >= FASCIA_TOP_M) & (dz <= FASCIA_BOTTOM_M)
         drops.append(dz[keep])
         stations.append(s[band][keep])
