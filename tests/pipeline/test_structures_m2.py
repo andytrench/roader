@@ -409,6 +409,17 @@ def test_fr_st_3_lower_pavement_measured_along_the_whole_support_line():
             assert abs(u_l) > 5.0 - 1e-6
 
 
+def test_deck_prefilter_keeps_every_point_the_projection_would_keep():
+    from roader.structures.infer import _near
+
+    model = twin_model()
+    fit = _fit_of(model.road(model.structures[0].carried_road))
+    xy = np.random.default_rng(7).uniform(-400.0, 400.0, (20000, 2))
+    s, _u, ok = fit.line.project(xy, max_dist=30.0)
+    want = set(np.flatnonzero(ok & (s >= 40.0) & (s <= 90.0)).tolist())
+    assert want and want <= set(_near(fit, xy, 40.0, 90.0, 30.0).tolist())
+
+
 def test_fr_cr_3_ramp_without_a_run_of_its_own_still_shares_the_deck():
     """A loop leaving 9 m before the deck end has too short a deck-class run for a structure;
     its first metres still ride the parent's deck (Woburn NE loop off I-93 northbound)."""

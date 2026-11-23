@@ -117,6 +117,22 @@ def observed_piers(
     return kept
 
 
+def _near(upper: RoadFit, xy: np.ndarray, s0: float, s1: float, max_dist: float) -> np.ndarray:
+    """Indices of points in the plan box of the carried line over [s0, s1] widened by ``max_dist``.
+
+    Every point ``line.project`` would place on [s0, s1] within ``max_dist`` is in the
+    box, so projecting only these gives the same result without touching the whole unit.
+    """
+    line = upper.line
+    k = np.flatnonzero((line.s >= s0) & (line.s <= s1))
+    if k.size == 0:
+        k = np.array([int(np.searchsorted(line.s, s0))])
+    k = np.arange(max(int(k[0]) - 1, 0), min(int(k[-1]) + 2, len(line.xy)))
+    reach = max_dist + float(line.seg_len.max())
+    lo, hi = line.xy[k].min(axis=0) - reach, line.xy[k].max(axis=0) + reach
+    return np.flatnonzero((xy[:, 0] >= lo[0]) & (xy[:, 0] <= hi[0]) & (xy[:, 1] >= lo[1]) & (xy[:, 1] <= hi[1]))
+
+
 def _pier_returns(
     upper: RoadFit, ev: Evidence, extent: StructureExtent, overhang: float, lowers: list[tuple[RoadFit, float]], t: float
 ) -> list[ObservedPier]:
@@ -126,11 +142,13 @@ def _pier_returns(
     road = upper.road
     xs = road.cross_section
     pad = abs(t) * (max(k.value for k in xs.width_left.knots) + overhang) + 2.0
-    s, u, ok = upper.line.project(ev.xyz[:, :2], max_dist=40.0)
-    idx = np.flatnonzero(ok & (s >= extent.s_start - pad) & (s <= extent.s_end + pad))
+    near = _near(upper, ev.xyz[:, :2], extent.s_start - pad, extent.s_end + pad, 40.0)
+    s, u, ok = upper.line.project(ev.xyz[near, :2], max_dist=40.0)
+    keep = np.flatnonzero(ok & (s >= extent.s_start - pad) & (s <= extent.s_end + pad))
+    s, u, idx = s[keep], u[keep], near[keep]
     if idx.size == 0:
         return []
-    s, u, z = s[idx], u[idx], ev.xyz[idx, 2]
+    z = ev.xyz[idx, 2]
     wl = np.array([xs.width_left(float(v)) for v in s]) + overhang + PIER_EDGE_PAD_M
     wr = np.array([xs.width_right(float(v)) for v in s]) + overhang + PIER_EDGE_PAD_M
     sc = s - t * u
@@ -203,12 +221,12 @@ def _footprint_on(
 def _overhang(upper: RoadFit, ev: Evidence, s0: float, s1: float) -> float | None:
     """Median outer extent of deck-level returns beyond the pavement edge, both sides."""
     road = upper.road
-    xy = ev.xyz[:, :2]
-    s, u, ok = upper.line.project(xy, max_dist=30.0)
-    idx = np.flatnonzero(ok & (s >= s0) & (s <= s1))
-    if idx.size < 50:
+    near = _near(upper, ev.xyz[:, :2], s0, s1, 30.0)
+    s, u, ok = upper.line.project(ev.xyz[near, :2], max_dist=30.0)
+    keep = np.flatnonzero(ok & (s >= s0) & (s <= s1))
+    if keep.size < 50:
         return None
-    s, u, z = s[idx], u[idx], ev.xyz[idx, 2]
+    s, u, z = s[keep], u[keep], ev.xyz[near[keep], 2]
     pz = np.array([road.profile.z(float(v)) for v in s])
     level = (z >= pz - 1.0 - DECK_LEVEL_BELOW_M) & (z <= pz + 1.0 + DECK_LEVEL_ABOVE_M)
     out = []
@@ -244,11 +262,12 @@ def measured_depth(upper: RoadFit, ev: Evidence, s0: float, s1: float, overhang:
     at least FASCIA_COVERAGE of the span in 2 m bins with FASCIA_MIN_POINTS in all.
     """
     road = upper.road
-    s, u, ok = upper.line.project(ev.xyz[:, :2], max_dist=30.0)
-    idx = np.flatnonzero(ok & (s >= s0 + 2.0) & (s <= s1 - 2.0))
-    if idx.size == 0:
+    near = _near(upper, ev.xyz[:, :2], s0 + 2.0, s1 - 2.0, 30.0)
+    s, u, ok = upper.line.project(ev.xyz[near, :2], max_dist=30.0)
+    keep = np.flatnonzero(ok & (s >= s0 + 2.0) & (s <= s1 - 2.0))
+    if keep.size == 0:
         return None, 0, 0.0
-    s, u, z = s[idx], u[idx], ev.xyz[idx, 2]
+    s, u, z = s[keep], u[keep], ev.xyz[near[keep], 2]
     drops, stations = [], []
     for sign, piece in ((1.0, road.cross_section.width_left), (-1.0, road.cross_section.width_right)):
         edge = np.array([piece(float(v)) for v in s]) + overhang
