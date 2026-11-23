@@ -241,3 +241,22 @@ def test_fr_sg_2_only_the_inside_of_a_curve_can_fold():
         max_step(road, a, b, 0.01, far, lambda _a, _b: (far, 10.0))
     with pytest.raises(ValueError, match="centre of curvature"):
         max_step(road, a, b, 0.01, far)
+
+
+def test_fr_sg_2_a_width_kink_refines_only_the_station_lines_that_meet_its_side():
+    """Skewed lines s0 + t u meet a left-edge kink only from u >= 0 (AC-P4, D-122).
+
+    Refining every line within the full skew reach also refined the lines on the far
+    side of the road, which at Woburn cut a 25 m embankment into 0.2 m needles.
+    """
+    from roader.solids.stations import SkewKnot, stations
+
+    road = curved_model().roads[0]  # left width kink at s = 140 (0.025 m/m)
+    t, umax, tol = 0.15, 30.0, 0.01
+    knots = [SkewKnot(0.0, t, False), SkewKnot(road.length, t, False)]
+    out = np.array(stations(road, [120.0, 130.0, 140.0, 150.0, 160.0], tol, umax, knots))
+    fine = 4.0 * tol / 0.025
+    meets = np.diff(out[(out >= 130.0) & (out <= 140.0)])  # left-side lines reach s = 140 from here
+    behind = np.diff(out[(out >= 140.0) & (out <= 150.0)])  # these cross s = 140 only on the right side
+    assert meets.max() <= fine + 1e-9
+    assert behind.max() > fine

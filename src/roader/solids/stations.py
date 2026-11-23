@@ -197,21 +197,28 @@ def skew_offsets(road: Road, structure: Structure, side: str, tol: float) -> lis
     return [sign * full * k / n for k in range(1, n) if full * k / n < narrow - SKEW_LINE_EDGE_M]
 
 
-def kinks(road: Road, umax: float) -> list[tuple[float, float]]:
-    """Stations where an edge or surface line changes slope, with the size of the change (m/m).
+def kinks(road: Road, umax: float) -> list[tuple[float, float, float, float]]:
+    """Stations where an edge or surface line changes slope: (s, size of the change in m/m, u range).
 
     A skewed station line meets these kinks away from a vertex except on the reference
     line, so spacing near them is limited instead (chord error <= jump * spacing / 4).
+    A kink bends only the lines on its own side of the reference line: a width kink the
+    edge and everything outside it, a cross-slope kink that side's surface (D-122).
     """
     xs = road.cross_section
     out = []
-    for pw, scale in ((xs.width_left, 1.0), (xs.width_right, 1.0), (xs.slope_left, umax), (xs.slope_right, umax)):
+    for pw, scale, lo, hi in (
+        (xs.width_left, 1.0, 0.0, umax),
+        (xs.width_right, 1.0, -umax, 0.0),
+        (xs.slope_left, umax, 0.0, umax),
+        (xs.slope_right, umax, -umax, 0.0),
+    ):
         knots = pw.knots
         rates = [0.0] + [(b.value - a.value) / (b.s - a.s) for a, b in pairwise(knots)] + [0.0]
         for k, knot in enumerate(knots):
             jump = abs(rates[k + 1] - rates[k]) * scale
             if jump > 1e-12:
-                out.append((knot.s, jump))
+                out.append((knot.s, jump, lo, hi))
     return out
 
 
@@ -232,15 +239,17 @@ def stations(
     """
     skewed = [k for k in knots if k.t != 0.0]
     kinked = kinks(road, umax) if skewed else []
-    reach = max((abs(k.t) for k in skewed), default=0.0) * umax
     out = [breakpoints[0]]
     for a, b in pairwise(breakpoints):
         mid = 0.5 * (a + b)
         tol_ab = min(tol, STRUCTURE_TOL_M) if any(s0 <= mid <= s1 for s0, s1 in spans) else tol
         step = max_step(road, a, b, tol_ab, umax, sides)
-        if skewed and (abs(skew_at(knots, a)) > 0.0 or abs(skew_at(knots, b)) > 0.0):
-            for s, jump in kinked:
-                if a - reach <= s <= b + reach:
+        ta, tb = skew_at(knots, a), skew_at(knots, b)
+        if skewed and (abs(ta) > 0.0 or abs(tb) > 0.0):
+            for s, jump, lo, hi in kinked:
+                # Lines s0 + t u over (a, b) meet the kink's side between these stations.
+                ends = [s0 + t * u for s0, t in ((a, ta), (b, tb), (a, tb), (b, ta)) for u in (lo, hi)]
+                if min(ends) < s < max(ends):
                     step = min(step, 4.0 * tol_ab / jump)
         n = max(1, math.ceil((b - a) / step - 1e-9))
         out.extend(a + (b - a) * k / n for k in range(1, n))
