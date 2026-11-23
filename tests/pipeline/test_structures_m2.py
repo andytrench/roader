@@ -100,6 +100,22 @@ def test_fr_cr_3_overlapping_twin_pavements_still_give_disjoint_decks(overlappin
     assert result.passed, [v.message for v in result.violations]
 
 
+def test_fr_cr_3_roads_overlapping_by_more_than_a_fit_error_are_not_trimmed_as_twins(monkeypatch):
+    """Dallas stack: viaducts converging at a merge overlap by up to 16 m; trimming would cut a
+    deck past its own centerline. Beyond TWIN_MAX_OVERLAP_M they are converging roads, not twins."""
+    import tests.pipeline.twin_scene as scene
+    from roader.structures.shared import TWIN_MAX_OVERLAP_M
+
+    monkeypatch.setattr(scene, "CENTRE_GAP", 2.0 * HALF - (TWIN_MAX_OVERLAP_M + 2.0))
+    model = scene.twin_model()
+    flags = twin_joints(model.structures, {r.id: r for r in model.roads}, model.crossings)
+    for st in model.structures:
+        assert st.deck.overhang("left") == pytest.approx(OVERHANG)
+        assert any(b.side == "left" for b in model.road(st.carried_road).cross_section.barriers)
+    assert sorted(f.element_id for f in flags if f.code == "FR-CR-3:converging_decks") == sorted(st.id for st in model.structures)
+    assert not [f for f in flags if f.code == "FR-CR-3:twin_joint"]
+
+
 def test_ac_h3_rays_under_a_twin_deck_reach_its_own_soffit(twins):
     model, _flags, meshes = twins
     result = check_voids(model, meshes)

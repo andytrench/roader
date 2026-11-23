@@ -32,6 +32,8 @@ TWIN_MAX_DZ_M = 1.0  # deck tops this close in height at the joint
 TWIN_PARALLEL = math.cos(math.radians(35.0))
 TWIN_REACH_M = 40.0
 JOINT_GAP_M = 0.02  # open longitudinal joint between twin decks; touching decks from two road grids cannot conform
+TWIN_MAX_OVERLAP_M = 4.0  # fitted twin pavements overlap by a fit error at most; more is two roads converging
+TWIN_EDGE_KEEP_M = 1.0  # a trimmed deck edge stays this far outside its road's reference line
 CLEAR_STEP_M = 0.5
 CLEAR_TOL_M = 1e-3
 FOOTPRINT_STEP_M = 1.0
@@ -73,6 +75,12 @@ def _barrier_reach(road: Road, st: Structure, side: str) -> float:
         (b.offset_m + b.base_width_m for b in road.cross_section.barriers if b.side == side and b.s0 < st.s_end and b.s1 > st.s_start),
         default=0.0,
     )
+
+
+def _narrowest(road: Road, st: Structure, side: str) -> float:
+    piece = _width(road, side)
+    ss = np.append(np.arange(st.s_start, st.s_end, TWIN_STEP_M), st.s_end)
+    return float(np.interp(ss, [k.s for k in piece.knots], [k.value for k in piece.knots]).min())
 
 
 def _end_slope(st: Structure, near: float) -> float:
@@ -144,6 +152,12 @@ def twin_joints(structures: list[Structure], roads: dict[str, Road], crossings: 
             )
             if pavement >= used:
                 continue  # the decks never meet
+            if pavement < -TWIN_MAX_OVERLAP_M:
+                for st, other in ((a, b), (b, a)):
+                    flags.append(
+                        Flag("FR-CR-3:converging_decks", st.id, "FR-CR-3", f"pavements of {st.id} and {other.id} overlap by {-pavement:.2f} m over the decks: roads converging, not twin carriageways; decks left as they are")
+                    )
+                continue
             dropped = 0
             for road, st, side in ((ra, a, side_a), (rb, b, side_b)):
                 keep = [
@@ -156,8 +170,8 @@ def twin_joints(structures: list[Structure], roads: dict[str, Road], crossings: 
             gap = min(_gaps(a, ra, side_a, b, rb, side_b, _barrier_reach(ra, a, side_a), _barrier_reach(rb, b, side_b), samples))
             # Negative when the fitted pavements overlap: the decks stop short of their pavement edges.
             half = (gap - JOINT_GAP_M) / 2.0
-            for st, side in ((a, side_a), (b, side_b)):
-                value = min(st.deck.overhang(side), half)
+            for st, side, road in ((a, side_a, ra), (b, side_b, rb)):
+                value = max(min(st.deck.overhang(side), half), TWIN_EDGE_KEEP_M - _narrowest(road, st, side))
                 if side == "left":
                     st.deck.overhang_left_m = value
                 else:
