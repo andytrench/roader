@@ -177,6 +177,10 @@ def check_voids(
     ``soffit_tol_m``. Meshes produced by the lower road itself (its id, its
     barriers, or a junction area that includes it, D-097) are ignored. Crossings under a structure in ``skip_structures`` (one
     replaced by its coarsest proxy, FR-AS-1) are not tested.
+
+    Stacked levels (D-140): where another deck that also crosses the lower road passes
+    between it and this deck, the ray stops at that deck's soffit, the soffit immediately
+    above the road; the void above that deck is tested by its own crossing with this one.
     """
     gate = "AC-H3"
     result = GateResult(gate, passed=True, hard=True)
@@ -218,7 +222,8 @@ def check_voids(
         own = {lower.id, *(b.id for b in lower.cross_section.barriers), *(a.id for a in model.junctions if lower.id in a.road_ids)}
         pi, ti, z = vertical_hits(tri, xy, tree=tree)
         mine = np.array([meshes[o].element_id in own for o in owner[ti]], dtype=bool)
-        hit = ~mine & (z > z_low[pi] + floor_m) & (z < soffit[pi] - soffit_tol_m)
+        ceiling = _lowest_soffit(model, c, lower, xy, z_low + floor_m, soffit)
+        hit = ~mine & (z > z_low[pi] + floor_m) & (z < ceiling[pi] - soffit_tol_m)
         if hit.any():
             ids = sorted({meshes[o].id for o in owner[ti[hit]]})
             result.violations.append(
@@ -239,6 +244,34 @@ def check_voids(
     result.metrics = {"n_rays": float(n_rays), "min_clearance_m": min_clear if n_rays else math.nan}
     result.passed = not result.violations
     return result
+
+
+def _lowest_soffit(model: RoadModel, c, lower: Road, xy: np.ndarray, floor: np.ndarray, soffit: np.ndarray) -> np.ndarray:
+    """Per ray, the soffit immediately above the lower road: this deck's, or a lower deck that also crosses the road (D-140)."""
+    ceiling = soffit.copy()
+    for other in model.crossings:
+        if other.id == c.id or other.lower_road != lower.id or not other.structure_id or other.upper_road == c.upper_road:
+            continue
+        st = model.structure(other.structure_id)
+        mid = model.road(other.upper_road)
+        sm, um = Projector(mid.alignment).project(xy)
+        half_l = np.array([_deck_half(mid, st, "left", float(s)) for s in sm])
+        half_r = np.array([_deck_half(mid, st, "right", float(s)) for s in sm])
+        under = (sm >= st.s_start) & (sm <= st.s_end) & (um <= half_l) & (um >= -half_r)
+        if not under.any():
+            continue
+        z = np.full(len(xy), np.inf)
+        z[under] = np.array([mid.surface_z(float(s), float(u)) for s, u in zip(sm[under], um[under], strict=True)]) - st.deck.depth_m
+        lower_deck = (z > floor) & (z < ceiling)
+        ceiling[lower_deck] = z[lower_deck]
+    return ceiling
+
+
+def _deck_half(road: Road, st, side: str, s: float) -> float:
+    """Deck edge offset as the solids build it: the pavement or the parapets standing on the deck, whichever is wider, plus the overhang."""
+    width = road.cross_section.width_left(s) if side == "left" else road.cross_section.width_right(s)
+    zone = max((b.offset_m + b.base_width_m for b in road.cross_section.barriers if b.side == side and b.s0 < st.s_end and b.s1 > st.s_start), default=0.0)
+    return max(width, zone) + st.deck.overhang(side)
 
 
 def _lower_samples(c, st, upper: Road, lower: Road, step: float, lateral: float) -> tuple[np.ndarray, np.ndarray]:

@@ -45,7 +45,6 @@ KNOWN: dict[tuple[str, str | None], str] = {
     ("trumpet", "AC-H2"): "parallel: the semi-directional is reported crossing over the outer ramp it shares pavement with",
     ("trumpet", "AC-H3"): "parallel: the false semi-over-outer-ramp crossing has no clearance; rays start inside parapets",
     ("trumpet", "AC-A5"): "decks: loop deck end 44 m past the truth end where it lands beside the stem",
-    ("stack", "AC-H3"): "decks: rays under the level-1 crossings hit the level-2 deck and its parapet (stacked levels)",
 }
 
 
@@ -140,3 +139,38 @@ def test_fr_vc_1_scene_ways_chain_into_their_roads(name):
     expected = {S.model_name(r) for r in scene.model.roads}
     assert {s.name for s in seeds} <= expected
     assert {ref.feature_id.split(":")[0] for s in seeds for ref in s.vector_refs} == {r.vector_refs[0].feature_id for r in scene.model.roads}
+
+
+def _box(mesh_id: str, centre, half: float, z0: float, z1: float):
+    from roader.model.mesh import Mesh
+
+    x, y = centre
+    v = np.array([[x + dx, y + dy, z] for z in (z0, z1) for dx, dy in ((-half, -half), (half, -half), (half, half), (-half, half))])
+    f = [(0, 2, 1), (0, 3, 2), (4, 5, 6), (4, 6, 7), (0, 1, 5), (0, 5, 4), (1, 2, 6), (1, 6, 5), (2, 3, 7), (2, 7, 6), (3, 0, 4), (3, 4, 7)]
+    return Mesh(mesh_id, mesh_id.split(":")[0], "L5", "pier_column", "concrete", "rule", v, f)
+
+
+@pytest.mark.skipif("stack" not in FAST and not FULL, reason=HEAVY_REASON)
+def test_ac_h3_stacked_voids_are_each_tested_to_the_soffit_above(name="stack"):
+    """D-140: a ray stops at the soffit immediately above the lower road, and every void of the stack is still tested."""
+    from roader.solids import generate
+    from roader.validate.gates import check_voids
+
+    out = outcome(name)
+    if out.error:
+        pytest.skip(f"stack did not run: {out.error}")
+    model = out.model
+    meshes = generate(model)
+    assert check_voids(model, meshes).passed
+    by_name = {r.id: r.name for r in model.roads}
+    under = next(c for c in model.crossings if by_name[c.upper_road] == "motorway_link l1" and by_name[c.lower_road] == "I-99 eastbound")
+    between = next(c for c in model.crossings if by_name[c.upper_road] == "motorway_link l2" and by_name[c.lower_road] == "motorway_link l1")
+    lower = model.road(under.lower_road)
+    z = lower.surface_z(*lower.alignment.project(under.x, under.y))
+    low_box = _box("intruder_low:pier_column", (under.x, under.y), 0.6, z + 1.0, z + 2.0)
+    mid = model.road(between.lower_road)
+    zm = mid.surface_z(*mid.alignment.project(between.x, between.y))
+    high_box = _box("intruder_high:pier_column", (between.x, between.y), 0.6, zm + 2.0, zm + 3.0)
+    for box, cx in ((low_box, under), (high_box, between)):
+        r = check_voids(model, [*meshes, box])
+        assert any(v.element_id == cx.id and box.id in v.message for v in r.violations), [v.message for v in r.violations]
