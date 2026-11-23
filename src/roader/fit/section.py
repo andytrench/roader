@@ -11,6 +11,7 @@ the rule library and tagged as rule-sourced.
 from __future__ import annotations
 
 import math
+import weakref
 from dataclasses import dataclass
 
 import numpy as np
@@ -39,6 +40,7 @@ SLOPE_KNOT_M = 40.0
 SLOPE_TOL = 0.003
 SLOPE_PRIOR_WEIGHT = 5.0  # pulls thinly observed knots toward the crown rule, in units of points
 BARRIER_REACH_M = 3.0  # raised features up to this far beyond a pavement edge belong to it
+BARRIER_SEARCH_M = 40.0
 BARRIER_INSIDE_M = 1.0
 MIN_BARRIER_M = 6.0
 CURB_MAX_M = 0.35  # raised features no taller than this are curbs or raised walkways
@@ -206,12 +208,13 @@ def barriers_from_evidence(
     out = []
     base_w, base_prov = rules.fill("parapet.base_width", era=era)
     top_w, _ = rules.fill("parapet.top_width", era=era)
-    for feat in ev.features:
-        if feat.kind != "linear":
-            continue
+    lo = alignment_line.xy.min(axis=0) - BARRIER_SEARCH_M
+    hi = alignment_line.xy.max(axis=0) + BARRIER_SEARCH_M
+    for feat, pts in _linear_features(ev):
         # Point positions, not cell centers: the inner face is the nearest returns.
-        pts = ev.xyz[np.isin(ev.point_layer, feat.layer_idx), :2]
-        s, u, ok = alignment_line.project(pts, max_dist=40.0)
+        if not len(pts) or np.any(pts.max(axis=0) < lo) or np.any(pts.min(axis=0) > hi):
+            continue
+        s, u, ok = alignment_line.project(pts, max_dist=BARRIER_SEARCH_M)
         if ok.sum() < 3:
             continue
         s, u = s[ok], u[ok]
@@ -252,6 +255,28 @@ def barriers_from_evidence(
                 )
             )
     return _merge_barriers(out)
+
+
+_FEATURE_POINTS: list = []  # [(weakref to evidence, [(feature, xy)])]: every road of a unit reads the same evidence
+
+
+def _linear_features(ev: Evidence) -> list:
+    """(feature, point xy) of every linear feature, gathered once per evidence set."""
+    if _FEATURE_POINTS and _FEATURE_POINTS[0][0]() is ev:
+        return _FEATURE_POINTS[0][1]
+    order = np.argsort(ev.point_layer, kind="stable")
+    layers = ev.point_layer[order]
+    out = []
+    for feat in ev.features:
+        if feat.kind != "linear":
+            continue
+        idx = np.unique(np.asarray(feat.layer_idx))
+        a = np.searchsorted(layers, idx, side="left")
+        b = np.searchsorted(layers, idx, side="right")
+        rows = np.concatenate([order[i:j] for i, j in zip(a, b, strict=True)]) if len(idx) else np.zeros(0, dtype=np.int64)
+        out.append((feat, ev.xyz[np.sort(rows), :2]))
+    _FEATURE_POINTS[:] = [(weakref.ref(ev), out)]
+    return out
 
 
 def _merge_barriers(items: list[Barrier]) -> list[Barrier]:
