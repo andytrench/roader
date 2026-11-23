@@ -324,3 +324,14 @@ def test_fr_sv_5_seam_row_wins_over_a_near_outline_vertex():
     jn.outline.insert(k + 1, (x + 1e-6, y))
     meshes = generate(dataclasses.replace(model, terrain=None, side_slopes=[]))
     _closed_ok(meshes)
+
+
+def test_d090_split_tip_left_inside_a_neighbour_is_dropped():
+    """A vertex the 1 cm snap leaves 1.6 cm inside the neighbouring region is removed (Woburn 13e5/1dda tip)."""
+    from roader.complete.junctions import _unpoke
+
+    a = [(0.0, 0.0), (10.0, 0.0), (10.0, 4.0), (5.0, 4.016), (0.0, 4.0)]
+    b = [(0.0, 4.0), (10.0, 4.0), (10.0, 8.0), (0.0, 8.0)]
+    out = _unpoke([a, b], [(0, -1), (1, -1)], set())
+    assert (5.0, 4.016) not in out[0] and out[1] == b
+    assert Polygon(out[0]).intersection(Polygon(out[1])).area == 0.0
