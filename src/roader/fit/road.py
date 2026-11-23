@@ -60,6 +60,8 @@ REGISTER_MAX_M = 6.0  # a registered centerline further than this from the input
 GUARD_MARGIN_M = 10.0
 HINT_STEP_M = 10.0
 HINT_WEIGHT = 0.3
+REFIT_CAP_M = 1.0
+REFIT_SLACK_M = 0.002  # a refit may cost this much RMS for its fewer elements
 
 
 @dataclass
@@ -228,12 +230,15 @@ def fit_road(seed: RoadSeed, ev: Evidence, rules: RuleBook, *, strip_factor: flo
         pz = vert.z(lp.s)
         slope = np.where(lp.u >= 0, np.interp(lp.s, *slopes_l), np.interp(lp.s, *slopes_r))
         band = SURFACE_BAND_M + 0.02 * np.abs(lp.u)
-        sel = inside & (np.abs(lp.z - (pz + slope * lp.u)) <= band)
+        # Returns near the tracked sheet stay in even where the last profile has drifted
+        # off it, so a stiff profile cannot shed the returns that would correct it.
+        on_sheet = np.abs(lp.z - (zt + slope * lp.u)) <= band
+        sel = inside & ((np.abs(lp.z - (pz + slope * lp.u)) <= band) | on_sheet)
         slopes_l, slopes_r, slope_rms = fit_cross_slopes(lp.s[sel], lp.u[sel], lp.z[sel] - pz[sel], length, gaps, crown)
         slope = np.where(lp.u >= 0, np.interp(lp.s, *slopes_l), np.interp(lp.s, *slopes_r))
         zc = lp.z - slope * lp.u
-        sel = inside & (np.abs(zc - pz) <= band)
-        fitted = _fit_profile(lp.s[sel], zc[sel], length, rules, seed.road_class) or fitted
+        sel = inside & ((np.abs(zc - pz) <= band) | (np.abs(zc - zt) <= band))
+        fitted = _better_profile(_fit_profile(lp.s[sel], zc[sel], length, rules, seed.road_class), fitted, lp.s[sel], zc[sel])
     s_pts, z_pts = lp.s[sel], zc[sel]
     surface = (lp.s[sel].copy(), lp.u[sel].copy(), lp.z[sel].copy())
 
@@ -318,6 +323,24 @@ def fit_road(seed: RoadSeed, ev: Evidence, rules: RuleBook, *, strip_factor: flo
         if iv.kind == "unsupported":
             flags.append(Flag("FR-VC-2:unsupported", seed.id, "FR-VC-2", f"no supporting sheet over s={iv.s0:.1f}-{iv.s1:.1f}"))
     return RoadFit(seed, road, aline, track, prof, lp, edges, vert, flags, gaps, surface, strip_factor, pflags)
+
+
+def _better_profile(new, old, s: np.ndarray, z: np.ndarray):
+    """The refit, unless it follows these returns worse than the profile it would replace (FR-AF-2).
+
+    A refit starts its PVI search afresh and can settle in a poorer chain (curves at
+    the edges of an unobserved stretch, then removed); the earlier profile is kept then.
+    """
+    if new is None:
+        return old
+    if old is None:
+        return new
+
+    def rms(fit):
+        r = np.clip(z - fit[0].z(s), -REFIT_CAP_M, REFIT_CAP_M)
+        return float(np.sqrt(np.mean(r**2))) if r.size else 0.0
+
+    return new if rms(new) <= rms(old) + REFIT_SLACK_M else old
 
 
 def _fit_profile(s, z, length, rules, road_class):

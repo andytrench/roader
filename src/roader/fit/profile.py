@@ -260,7 +260,8 @@ def fit_profile(
         changed = False
         n = len(v.pvi)
         dg = np.abs(np.diff(v.grades))
-        obs = [_observed_fraction(p - 0.5 * L, p + 0.5 * L, sb) for p, L in zip(v.pvi, v.lengths, strict=True)]
+        # Over the part of each curve on the road: beyond its ends is not an unobserved gap.
+        obs = [_observed_fraction(max(p - 0.5 * L, 0.0), min(p + 0.5 * L, length), sb) for p, L in zip(v.pvi, v.lengths, strict=True)]
         invented = [k for k in range(n) if obs[k] < MIN_CURVE_OBSERVED]
         if invented:
             v, cost = _fit(_remove(v, invented[0]), sb, zb, wb, length, rules, road_class)
