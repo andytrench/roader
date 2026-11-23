@@ -16,6 +16,7 @@ data/pilot/**
 data/cache/
 data/areas/
 data/fixtures/
+data/catalogue/
 cache/
 *.laz
 *.las
