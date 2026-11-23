@@ -48,7 +48,6 @@ KNOWN: dict[tuple[str, str | None], str] = {
     ("parclo", "AC-A5"): "terminals: street deck stretched 54 m by the false crossing with the loop",
     ("cloverleaf", "AC-H1"): "decks: embankment from the I-88 deck end self-intersects beside the loop gore",
     ("cloverleaf", "AC-A5"): "decks: I-88 deck end 3 m off beside the diverging loop",
-    ("trumpet", None): "robust: solids raise 'skewed station line leaves the road' at a ramp start on the stem end",
     ("directional", "AC-H1"): "decks: embankment from an I-88 deck end self-intersects beside the flyover",
     ("directional", "AC-A5"): "decks: stacked-level deck ends 20-26 m off (flyover over the I-88 deck)",
     ("cd_braided", "AC-H4"): "parallel: junction seam where the C-D road rejoins the mainline off by 0.18 % grade",
@@ -56,7 +55,6 @@ KNOWN: dict[tuple[str, str | None], str] = {
     ("viaduct", "AC-A1"): "decks: surface RMS 1.0 m on the viaduct that never rejoins the ground",
     ("viaduct", "AC-A4"): "decks: crossing dz 0.15-0.43 m low under the viaduct",
     ("viaduct", "AC-A5"): "decks: viaduct deck ends 10-26 m off",
-    ("stack", None): "robust: solids raise 'skewed station line leaves the road' on a stacked level ramp",
 }
 
 
@@ -137,3 +135,17 @@ def test_ac_h2_scene_reference_and_vectors_follow_osm(name):
         for s in (0.0, road.length):
             p = np.array(road.alignment.offset_point(s, 0.0))
             assert np.min(np.hypot(*(ends - p).T)) < 1e-6, (name, road.name, s)
+
+
+@pytest.mark.parametrize("name", list(S.SCENES))
+def test_fr_vc_1_scene_ways_chain_into_their_roads(name):
+    """The vector graph makes one road per truth road, or joins ramps that meet end to end (FR-VC-1); never a stray piece."""
+    from roader.conflate.graph import data_extent, select_roads
+    from roader.io import from_synthetic
+
+    scene = S.SCENES[name]()
+    pts = from_synthetic(S.scene_points(scene, spacing=1.5, vehicles=0))
+    seeds = select_roads(S.scene_vectors(scene), data_extent(pts.xyz[:, :2]))
+    expected = {S.model_name(r) for r in scene.model.roads}
+    assert {s.name for s in seeds} <= expected
+    assert {ref.feature_id.split(":")[0] for s in seeds for ref in s.vector_refs} == {r.vector_refs[0].feature_id for r in scene.model.roads}

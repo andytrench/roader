@@ -727,7 +727,11 @@ def scene_vectors(scene: Scene, seed: int = 3, bias: float = 1.0, noise: float =
         pins = sorted({0.0, road.length, *(float(v) for v in ps[ok])})
         decks = sorted((st.s_start, st.s_end, st.id) for st in m.structures if st.carried_road == road.id)
         cuts = [v for a, b, _ in decks for v in (a, b)]
-        s = np.unique(np.concatenate([np.linspace(0.0, road.length, max(2, math.ceil(road.length / step) + 1)), pins, cuts]))
+        fixed = np.array(sorted({*pins, *cuts}))
+        regular = np.linspace(0.0, road.length, max(2, math.ceil(road.length / step) + 1))
+        # No vertex a few cm from a split or shared node: its noisy heading would break chaining (FR-VC-1).
+        regular = regular[np.min(np.abs(regular[:, None] - fixed[None, :]), axis=1) >= 0.4 * step]
+        s = np.unique(np.concatenate([regular, fixed]))
         off = bias * np.sin(s / 90.0 + rng.uniform(0.0, 2.0 * math.pi)) + rng.normal(0.0, noise, len(s))
         dist = np.min(np.abs(s[:, None] - np.array(pins)[None, :]), axis=1)
         off *= np.clip(dist / pin_m, 0.0, 1.0)
