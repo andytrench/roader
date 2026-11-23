@@ -653,7 +653,7 @@ def _build_junctions(model: RoadModel) -> tuple[list[JunctionArea], list[Flag]]:
             continue
         kept.append(area)
     areas = kept
-    shared, shared_flags = _shared(model, roads, full, areas, zone_map)
+    shared, shared_flags, areas = _shared(model, roads, full, areas, zone_map)
     flags.extend(shared_flags)
     placed = [Polygon(a.outline, a.holes) for a in [*areas, *shared]]
     for node in stuck:
@@ -1170,7 +1170,12 @@ def _stations_of(road: Road, geom: Polygon) -> tuple[float, float]:
 
 
 def _shared(model: RoadModel, roads: dict[str, Road], full: dict[str, Polygon], areas: list[JunctionArea], zone_map):
-    """Shared areas for same-level pavement overlaps outside every junction area (D-070)."""
+    """Shared areas for same-level pavement overlaps outside every junction area (D-070).
+
+    Returns the shared areas, flags and the junction areas, whose outlines take the
+    vertices of shared regions that start at their seams (D-154).
+    """
+    by_id = {a.id: a for a in areas}
     flags: list[Flag] = []
     covered = shapely.union_all([Polygon(a.outline, a.holes) for a in areas]) if areas else Polygon()
     stretches: list[_Stretch] = []
@@ -1197,10 +1202,10 @@ def _shared(model: RoadModel, roads: dict[str, Road], full: dict[str, Polygon], 
     for group in _stretch_groups(stretches):
         names = sorted({r for st in group for r in (st.a, st.b)})
         try:
-            built, problem = _shared_group(model, roads, group, zone_map, covered, midway=True)
+            built, problem = _shared_group(model, roads, group, zone_map, covered, by_id, midway=True)
             if problem and "outline" in problem:
                 # Near-touching split vertices: give each overlap wholly to the narrower road instead.
-                built, fallback = _shared_group(model, roads, group, zone_map, covered, midway=False)
+                built, fallback = _shared_group(model, roads, group, zone_map, covered, by_id, midway=False)
                 if not fallback:
                     flags.append(Flag("FR-SG-3:shared_to_narrower", names[0], "FR-SG-3",
                                       f"shared pavement of {names} could not be split midway ({problem}); the narrower road keeps it"))
@@ -1211,14 +1216,18 @@ def _shared(model: RoadModel, roads: dict[str, Road], full: dict[str, Polygon], 
         if problem:
             flags.append(Flag("FR-SG-3:shared_skipped", names[0], "FR-SG-3", f"shared pavement of {names} not split: {problem}"))
             continue
-        out.extend(built)
+        for a in built:
+            if a.id in by_id:
+                by_id[a.id] = a
+            else:
+                out.append(a)
         for st in group:
             area = sum(p.area for p in st.pieces)
             flags.append(Flag("FR-SG-3:shared_split", st.a, "FR-SG-3",
                               f"{st.a} and {st.b} share {area:.1f} m2 of pavement ({st.a} {st.iv[st.a][0]:.1f}-{st.iv[st.a][1]:.1f}, "
                               f"{st.b} {st.iv[st.b][0]:.1f}-{st.iv[st.b][1]:.1f}); split between them"))
             flags.extend(_shared_step(roads, st))
-    return out, flags
+    return out, flags, [by_id[a.id] for a in areas]
 
 
 def _stretch(roads, full, a: str, b: str, piece: Polygon, flags: list[Flag]) -> _Stretch | None:
@@ -1278,15 +1287,25 @@ def _merged_intervals(ivs: list[tuple[float, float]]) -> list[tuple[float, float
     return [(lo, hi) for lo, hi in out]
 
 
-def _shared_group(model, roads, group: list[_Stretch], zone_map, covered, *, midway: bool) -> tuple[list[JunctionArea], str]:
+def _shared_group(model, roads, group: list[_Stretch], zone_map, covered, by_id, *, midway: bool) -> tuple[list[JunctionArea], str]:
     """Regions of one group of shared stretches; intervals keep off decks and carried spans (D-073, D-095)."""
     names = sorted({r for st in group for r in (st.a, st.b)})
     per_road: dict[str, list[tuple[float, float]]] = {r: _merged_intervals([st.iv[r] for st in group if r in st.iv]) for r in names}
     keys_iv: list[tuple[str, tuple[float, float]]] = []
+    touched: list[str] = []  # junction areas a stretch starts or ends at (D-154)
     for r, ivs in per_road.items():
         for lo, hi in ivs:
-            if any(lo < z[1] and z[0] < hi for _jid, z in zone_map.get(r, [])):
-                return [], f"interval {lo:.1f}-{hi:.1f} on {r} meets a junction area"
+            for jid, (z0, z1) in sorted(zone_map.get(r, []), key=lambda item: (item[1][0], item[0])):
+                if not (lo < z1 and z0 < hi):
+                    continue
+                # A junction area over one end of the stretch: the region starts at the area's seam row on r.
+                if z0 <= lo < z1 < hi and z1 < roads[r].length:
+                    lo = z1
+                elif lo < z0 < hi <= z1 and z0 > 0.0:
+                    hi = z0
+                else:
+                    return [], f"interval {lo:.1f}-{hi:.1f} on {r} meets a junction area"
+                touched.append(jid)
             # A deck or a span the road rides on another road splits the interval; its ends there
             # are a skewed deck-end seam or no seam at all.
             for p0, p1 in _pieces(r, lo, hi):
@@ -1313,10 +1332,14 @@ def _shared_group(model, roads, group: list[_Stretch], zone_map, covered, *, mid
                 qa, qb = _split_piece(ra, rb, piece, midway)
                 given[ka].append(qb)
                 given[kb].append(qa)
+    touched = sorted(set(touched))
+    beside = shapely.union_all([Polygon(by_id[j].outline, by_id[j].holes) for j in touched]) if touched else Polygon()
     regions: list[tuple[str, float, float, Polygon]] = []
     for key in keys:
         r, (lo, hi) = key
         parts = [g for g in given[key] if not g.is_empty]
+        if not beside.is_empty and fps[key].intersects(beside):
+            parts.append(beside)  # a partner beside a stretch that starts at an area stops at its outline (D-154)
         region = fps[key].difference(shapely.union_all(parts)) if parts else fps[key]
         region = _largest(region)
         if region is None:
@@ -1336,9 +1359,14 @@ def _shared_group(model, roads, group: list[_Stretch], zone_map, covered, *, mid
             if 0.0 < s < roads[r].length:
                 rows.update(_round_xy(p) for p in _seam_row_pts(roads[r], s))
 
+    for j in touched:
+        for sm in by_id[j].seams:
+            rows.update(_round_xy(p) for p in _seam_row_pts(roads[sm.road_id], sm.s))
+
     rings: list[list[tuple[float, float]]] = []
     index: list[tuple[int, int]] = []  # (region, hole index or -1) per ring
-    for k, (_r, _lo, _hi, poly) in enumerate(regions):
+    polys = [poly for _r, _lo, _hi, poly in regions] + [orient(Polygon(by_id[j].outline, by_id[j].holes), 1.0) for j in touched]
+    for k, poly in enumerate(polys):
         rings.append([tuple(map(float, p)) for p in poly.exterior.coords[:-1]])
         index.append((k, -1))
         for h, hole in enumerate(poly.interiors):
@@ -1346,6 +1374,20 @@ def _shared_group(model, roads, group: list[_Stretch], zone_map, covered, *, mid
             index.append((k, h))
     rings = _unpoke(_conform(_snap_rings(rings, rows)), index, rows)
     out = []
+    for k, j in enumerate(touched, start=len(regions)):
+        # The area keeps its shape and seam rows; it only takes the regions' vertices on its outline (D-021).
+        jn = by_id[j]
+        outline = next(rg for rg, (kk, h) in zip(rings, index, strict=True) if kk == k and h == -1)
+        holes = [rg for rg, (kk, h) in zip(rings, index, strict=True) if kk == k and h >= 0 and len(set(rg)) >= 3]
+        poly = Polygon(outline, holes)
+        if not poly.is_valid or abs(poly.area - Polygon(jn.outline, jn.holes).area) > 1e-3:
+            return [], f"outline of {j} changes where a shared stretch starts at it"
+        for sm in jn.seams:
+            problem = _check_rows(roads[sm.road_id], [(sm.s, sm.side)], outline)
+            if problem:
+                return [], f"{problem} of {j}"
+        out.append(dataclasses.replace(jn, outline=[(float(x), float(y)) for x, y in outline],
+                                       holes=[[(float(x), float(y)) for x, y in h] for h in holes]))
     for k, (r, lo, hi, _poly) in enumerate(regions):
         outline = next(rg for rg, (kk, h) in zip(rings, index, strict=True) if kk == k and h == -1)
         holes = [rg for rg, (kk, h) in zip(rings, index, strict=True) if kk == k and h >= 0 and len(set(rg)) >= 3]

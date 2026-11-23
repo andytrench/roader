@@ -166,6 +166,16 @@ class JunctionPlan:
         for jn in areas:
             with element(jn.id):
                 outlines.append(self._outline(jn))
+        pv = self.pv
+        # A seam vertex of one area on another's outline (a shared stretch starting at the seam, D-154)
+        # is one vertex: the other uses the seam's grid vertex and its top and underside.
+        seam_vertex = {(round(pv.x[p], 6), round(pv.y[p], 6)): p for _r, _h, exact in outlines for p in exact}
+        seam_z = {p: zz for _r, _h, exact in outlines for p, zz in exact.items()}
+
+        def same(p: int) -> int:
+            return seam_vertex.get((round(pv.x[p], 6), round(pv.y[p], 6)), p)
+
+        outlines = [([same(p) for p in ring], [[same(p) for p in h] for h in holes], exact) for ring, holes, exact in outlines]
         users: dict[int, list[JunctionArea]] = {}
         for jn, (ring, holes, exact) in zip(areas, outlines, strict=True):
             for p in [*ring, *(q for h in holes for q in h)]:
@@ -173,9 +183,10 @@ class JunctionPlan:
                     users.setdefault(p, []).append(jn)
         # Where areas touch (a shared split, D-070) both use one top and one underside, so their walls conform.
         common: dict[int, tuple[float, float]] = {}
-        pv = self.pv
         for p, jns in users.items():
-            if len(jns) > 1:
+            if p in seam_z:
+                common[p] = seam_z[p]
+            elif len(jns) > 1:
                 top = sum(j.lifted_z(pv.x[p], pv.y[p]) for j in jns) / len(jns)
                 common[p] = (top, top - max(j.thickness_at(pv.x[p], pv.y[p]) for j in jns))
         out: list[Body] = []

@@ -556,3 +556,48 @@ def test_d136_a_participant_running_back_into_its_area_beyond_its_interval_is_re
     hit = J._entering(roads, area, Polygon(area.outline, area.holes), intervals, {}, set())
     assert hit is not None and hit[0] == r
     assert hit[1][0] < lo_r + 30.0 - 5.0 and hit[1][1] == pytest.approx(roads[r].length)
+
+
+# ---------------------------------------------------------------- a shared stretch starting at an area's seam (D-154)
+
+
+def _on_plane(road: Road, y: float, dz: float = 0.0) -> Road:
+    """Put a road ``dz`` over the plane of a crowned mainline's right half (z = Z - 0.02 |y|, y < 0)."""
+    from roader.model.geometry import constant
+
+    road.profile = Profile([VerticalElement(0.0, road.length, Z + 0.02 * y + dz, 0.0, 0.0, TRUTH)])
+    road.cross_section.slope_left = constant(0.02, TRUTH)
+    road.cross_section.slope_right = constant(0.02, TRUTH)
+    return road
+
+
+def _ramp_beside_after_diverge() -> RoadModel:
+    """Ramp R diverges from A, then overlaps mainline B's edge by 1 m to its end (Bellevue link 995574460 beside I-405 NB).
+
+    A and R are fitted 8 cm over B's surface there, as at Bellevue."""
+    b = _road("b", [("line", 400.0, 0.0)], -100.0, 0.0, 0.0, 5.5, 5.5, kind="mainline")
+    a = _on_plane(_road("a", [("line", 240.0, 0.0), ("arc", 150.0, -1.0 / 200.0)], -300.0, -9.5, 0.0, 3.0, 3.0), -9.5, 0.08)
+    r = _on_plane(_road("r", [("line", 260.0, 0.0)], -60.0, -7.5, 0.0, 3.0, 3.0), -7.5, 0.08)
+    links = [Link(stable_id("lk", a.id, r.id), a.id, "end", r.id, "start", "diverge", from_s=240.0, prov=RULE)]
+    return _model([a, b, r], links=links)
+
+
+def test_d154_a_ramp_riding_beside_a_road_after_its_diverge_shares_from_the_area_seam():
+    """R never clears B, so B cannot join the diverge area (D-136); the R/B stretch starts at the area's seam on R,
+    B's region stops at the area's outline and the area takes the regions' vertices there."""
+    model = _ramp_beside_after_diverge()
+    roads = {r.id: r for r in model.roads}
+    a, b, r = (stable_id("rd", "scene", n) for n in ("a", "b", "r"))
+    area = next(j for j in model.junctions if j.kind != "shared")
+    assert sorted(area.road_ids) == sorted([a, r])
+    shared = {j.road_ids[0]: j for j in model.junctions if j.kind == "shared"}
+    assert set(shared) == {b, r}, [(j.kind, j.road_ids) for j in model.junctions]
+    seam_r = next(s.s for s in area.seams if s.road_id == r)
+    assert [s.s for s in shared[r].seams if s.side > 0] == [pytest.approx(seam_r)]
+    bad = [f for f in model.flags if f.code in ("FR-SV-7:pavement_overlap", "FR-SG-3:shared_skipped", "FR-SG-3:overlap")]
+    assert not bad, bad
+    polys = [Polygon(j.outline, j.holes) for j in model.junctions]
+    assert all(p.is_valid for p in polys)
+    assert all(polys[i].intersection(polys[j]).area < 1e-4 for i in range(len(polys)) for j in range(i + 1, len(polys)))
+    assert junction_violations(area, roads)[0] == []
+    _closed_ok(generate(model))
