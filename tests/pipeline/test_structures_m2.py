@@ -405,7 +405,7 @@ def test_fr_st_3_lower_pavement_measured_along_the_whole_support_line():
     assert a < a0 - 0.3 and b > b0 + 0.3
     for q in (a - 0.05, b + 0.05):  # a support line just outside the interval clears the pavement everywhere
         for u in np.linspace(*across, 28):
-            s_l, u_l = lower.alignment.project(*upper.alignment.offset_point(q + t * u, float(u)))
+            _s, u_l = lower.alignment.project(*upper.alignment.offset_point(q + t * u, float(u)))
             assert abs(u_l) > 5.0 - 1e-6
 
 
