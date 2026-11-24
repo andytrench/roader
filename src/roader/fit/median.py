@@ -377,26 +377,35 @@ def split_twin_medians(fits, xyz: np.ndarray) -> list[Flag]:
     line midway between them, less ``SPLIT_MARGIN_M``. Widths short of the cap are
     kept. Each changed side is flagged.
     """
-    every = list(fits)
-    fits = sorted([f for f in fits if f.road.oneway and f.road.kind == "mainline"], key=lambda f: f.road.id)
-    caps: dict[str, dict[int, list[tuple[np.ndarray, np.ndarray]]]] = {}
-    for a, b in itertools.permutations(fits, 2):
-        res = _caps(a, b, xyz, [f for f in every if f is not a and f is not b])
-        if res is not None:
-            side, st, cap = res
-            caps.setdefault(a.road.id, {}).setdefault(side, []).append((st, cap))
+    caps = _twin_caps(list(fits), xyz)
     flags = []
-    for f in fits:
+    for f in sorted(fits, key=lambda f: f.road.id):
         for side, parts in sorted(caps.get(f.road.id, {}).items()):
-            if _apply(f.road, side, parts):
+            if _apply(f.road, side, parts, "FR-XS-4:median_split"):
                 msg = f"{'left' if side > 0 else 'right'} width capped at the median of its twin carriageway"
                 flags.append(Flag("FR-XS-4:median_split", f.road.id, "FR-XS-4", msg))
                 f.flags.append(flags[-1])
     return flags
 
 
-def _caps(a, b, xyz: np.ndarray, others=()):
-    """(facing side of a, stations, cap) where b runs alongside a; None when it never does."""
+def _twin_caps(every, xyz: np.ndarray, touching: bool = False) -> dict[str, dict[int, list[tuple[np.ndarray, np.ndarray]]]]:
+    fits = sorted([f for f in every if f.road.oneway and f.road.kind == "mainline"], key=lambda f: f.road.id)
+    caps: dict[str, dict[int, list[tuple[np.ndarray, np.ndarray]]]] = {}
+    for a, b in itertools.permutations(fits, 2):
+        res = _caps(a, b, xyz, [f for f in every if f is not a and f is not b], touching)
+        if res is not None:
+            side, st, cap = res
+            caps.setdefault(a.road.id, {}).setdefault(side, []).append((st, cap))
+    return caps
+
+
+def _caps(a, b, xyz: np.ndarray, others=(), touching: bool = False):
+    """(facing side of a, stations, cap) where b runs alongside a; None when it never does.
+
+    ``touching``: the midline also caps inner edges that already meet there (within
+    twice ``SPLIT_MARGIN_M`` plus ``SPLIT_TOL_M``), so a model already split
+    reproduces the cap it was split at (the D-103 reference).
+    """
     ra, rb, la, lb = a.road, b.road, a.line, b.line
     st = np.arange(0.0, ra.length, SPLIT_STEP_M)
     pa = la.point(st)
@@ -420,7 +429,8 @@ def _caps(a, b, xyz: np.ndarray, others=()):
     side_b = 1 if np.median(np.nan_to_num(ub)[near]) > 0 else -1
     wb = _width(rb, side_b, sb)
     edge_b = dist - wb  # b's inner edge, measured from a's line toward b
-    cap = np.where(wa > edge_b, 0.5 * (wa + edge_b) - SPLIT_MARGIN_M, np.inf)
+    meet = edge_b - (2.0 * SPLIT_MARGIN_M + SPLIT_TOL_M if touching else 0.0)
+    cap = np.where(wa > meet, 0.5 * (wa + edge_b) - SPLIT_MARGIN_M, np.inf)
     if len(xyz):
         lo, hi = la.xy.min(axis=0) - TWIN_REACH_M, la.xy.max(axis=0) + TWIN_REACH_M
         box = np.all((xyz[:, :2] >= lo) & (xyz[:, :2] <= hi), axis=1)
@@ -513,7 +523,19 @@ def _width(road: Road, side: int, s: np.ndarray) -> np.ndarray:
     return np.interp(s, [k.s for k in pw.knots], [k.value for k in pw.knots])
 
 
-def _apply(road: Road, side: int, parts) -> bool:
+def cap_at(parts, st: np.ndarray) -> np.ndarray:
+    """The least of the caps ``parts`` [(stations, cap)] at stations ``st``; inf where none applies."""
+    cap = np.full(len(st), np.inf)
+    for s_c, c in parts:
+        fin = np.isfinite(c)
+        if fin.sum() < 2:
+            continue
+        inside = (st >= s_c[fin][0]) & (st <= s_c[fin][-1])
+        cap = np.where(inside, np.minimum(cap, np.interp(st, s_c[fin], c[fin])), cap)
+    return np.maximum(cap, 0.0)
+
+
+def _apply(road: Road, side: int, parts, code: str) -> bool:
     """Width on ``side`` = min(width, caps); True when it changed by more than SPLIT_TOL_M anywhere."""
     from roader.fit.piecewise import simplify
     from roader.model.geometry import Knot, Piecewise
@@ -523,22 +545,23 @@ def _apply(road: Road, side: int, parts) -> bool:
     st = np.unique(np.concatenate([np.arange(0.0, road.length, SPLIT_STEP_M), [road.length], [k.s for k in pw.knots]]))
     st = st[(st >= 0.0) & (st <= road.length)]
     old = _width(road, side, st)
-    cap = np.full(len(st), np.inf)
-    for s_c, c in parts:
-        fin = np.isfinite(c)
-        if fin.sum() < 2:
-            continue
-        inside = (st >= s_c[fin][0]) & (st <= s_c[fin][-1])
-        cap = np.where(inside, np.minimum(cap, np.interp(st, s_c[fin], c[fin])), cap)
-    new = np.minimum(old, np.maximum(cap, 0.0))
+    new = np.minimum(old, cap_at(parts, st))
     if float(np.max(old - new)) <= SPLIT_TOL_M:
         return False
     kn, vals = simplify(st, new, SIMPLIFY_TOL_M)
     base = pw.knots[0].prov
-    prov = Provenance(base.source, base.confidence, rms_m=base.rms_m, n_points=base.n_points, observed_fraction=base.observed_fraction, flags=[*base.flags, "FR-XS-4:median_split"])
+    prov = Provenance(base.source, base.confidence, rms_m=base.rms_m, n_points=base.n_points, observed_fraction=base.observed_fraction, flags=[*base.flags, code])
     piece = Piecewise([Knot(float(k), float(v), prov) for k, v in zip(kn, vals, strict=True)])
     if side > 0:
         xs.width_left = piece
     else:
         xs.width_right = piece
     return True
+
+
+def reference_caps(roads: list[Road], xyz: np.ndarray) -> dict[str, dict[int, list[tuple[np.ndarray, np.ndarray]]]]:
+    """AC-A3 reference caps per road and side: the fit's twin median caps (D-103), from the model."""
+    from types import SimpleNamespace
+
+    items = [SimpleNamespace(road=r, line=Polyline.from_alignment(r.alignment)) for r in roads]
+    return _twin_caps(items, xyz, touching=True)

@@ -66,7 +66,7 @@ from roader.fit.links import (
     fit_network,
     least_half_width,
 )
-from roader.fit.median import classify_medians, split_divided
+from roader.fit.median import cap_at, classify_medians, reference_caps, split_divided
 from roader.fit.road import RoadFit, fit_road
 from roader.fit.section import barriers_from_evidence
 from roader.io.points import PointSet
@@ -525,6 +525,18 @@ def _least_half_width(road, rules) -> float:
     return 0.5 * max(lanes, 1) * rules.get("lane.width", road_class=road.road_class).low
 
 
+def _clamp_edges(st, left, right, caps: dict, limits) -> tuple[np.ndarray, np.ndarray]:
+    """Edges found past a cap end at it (D-103); then those past a neighbour limit are dropped (D-068)."""
+    cap_l, cap_r = cap_at(caps.get(1, []), st), cap_at(caps.get(-1, []), st)
+    left = np.where(left > cap_l, cap_l, left)
+    right = np.where(-right > cap_r, -cap_r, right)
+    if limits is not None:
+        left_max, right_max = limits(st)
+        left = np.where(left > left_max, np.nan, left)
+        right = np.where(-right > right_max, np.nan, right)
+    return left, right
+
+
 def measure_edges(model: RoadModel, points: PointSet, holdout: np.ndarray | None = None) -> list[dict]:
     """AC-A3 reference: pavement edges measured across each model road.
 
@@ -541,6 +553,11 @@ def measure_edges(model: RoadModel, points: PointSet, holdout: np.ndarray | None
     lines = [Polyline.from_alignment(r.alignment) for r in model.roads]
     halves = [_least_half_width(r, rules) for r in model.roads]
     ev = build_evidence(points, [ln.xy for ln in lines])
+    # D-103: the search stops where the fit's edge does, at a twin's median cap.
+    fit_pts = ~np.asarray(ev.transient, dtype=bool)
+    if holdout is not None and len(holdout) == len(fit_pts):
+        fit_pts &= ~np.asarray(holdout, dtype=bool)
+    caps = reference_caps(model.roads, ev.xyz[fit_pts])
     out = []
     for k, (road, line) in enumerate(zip(model.roads, lines, strict=True)):
         tr = track_line(line, ev)
@@ -549,7 +566,9 @@ def measure_edges(model: RoadModel, points: PointSet, holdout: np.ndarray | None
             continue
         # D-068: the same neighbour limits as the fit (D-063), so a reference edge never lies on another road.
         neighbours = [Neighbour(lines[j], halves[j]) for j in range(len(lines)) if j != k]
-        prof = cross_profiles(lp, tr.z_at, line.length, limits=corridor_limits(line, neighbours))
+        prof = cross_profiles(lp, tr.z_at, line.length)
+        left, right = _clamp_edges(prof.s, prof.left, prof.right, caps.get(road.id, {}), corridor_limits(line, neighbours))
+        prof = dataclasses.replace(prof, left=left, right=right)
         valid = prof.valid & (prof.n > 0)
         for side, values in (("left", prof.left), ("right", prof.right)):
             for s, u in zip(prof.s[valid], values[valid], strict=True):
