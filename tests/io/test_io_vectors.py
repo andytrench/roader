@@ -1,4 +1,4 @@
-"""Vector reading: FR-IN-5, FR-IN-7, spec section 1 scope."""
+"""Vector reading: FR-IN-5, FR-IN-7, spec section 1 scope, D-160 paths."""
 
 import json
 
@@ -13,7 +13,7 @@ from roader.io import (
     read_vectors,
     unit_frame,
 )
-from roader.io.vectors import VectorEdge
+from roader.io.vectors import VectorEdge, is_path, path_in_scope
 
 LON, LAT = -71.8161, 42.38906
 DLAT = 1.0 / 111045.0  # about 1 m
@@ -103,3 +103,64 @@ def test_scope_limited_access_classes():
     assert not is_limited_access({"highway": "primary", "motorroad": "yes"})
     plain = [VectorEdge("osm", "1", np.array([[0.0, 0.0], [1.0, 0.0]]), {"highway": "trunk"})]
     assert in_scope(plain) == []
+
+
+def _edge(fid, coords, **tags):
+    return VectorEdge("osm", fid, np.asarray(coords, dtype=np.float64), dict(tags))
+
+
+MOTORWAY = _edge("1", [[-300.0, 0.0], [300.0, 0.0]], highway="motorway")
+
+
+def test_d_160_path_classes():
+    for highway in ("footway", "cycleway", "path", "pedestrian", "steps", "bridleway", "corridor"):
+        assert is_path({"highway": highway})
+    for highway in ("motorway", "secondary", "residential", "service", "track", "living_street"):
+        assert not is_path({"highway": highway})
+    assert path_in_scope({"highway": "footway", "bridge": "yes"})
+    assert path_in_scope({"highway": "cycleway", "bridge": "viaduct"})
+    assert not path_in_scope({"highway": "footway"})
+    assert not path_in_scope({"highway": "footway", "bridge": "no"})
+    assert not path_in_scope({"highway": "footway", "bridge": "yes", "footway": "sidewalk"})
+    assert not path_in_scope({"highway": "footway", "bridge": "yes", "footway": "crossing"})
+
+
+def test_d_160_fr_in_5_paths_under_or_beside_a_motorway_are_dropped():
+    edges = [
+        MOTORWAY,
+        _edge("2", [[0.0, -50.0], [0.0, 50.0]], highway="footway", tunnel="yes"),  # under
+        _edge("3", [[-300.0, 20.0], [300.0, 20.0]], highway="cycleway"),  # beside
+        _edge("4", [[-300.0, -20.0], [300.0, -20.0]], highway="path", bridge="no"),
+        _edge("5", [[10.0, -50.0], [10.0, 50.0]], highway="steps", layer="-1"),
+    ]
+    assert [e.feature_id for e in in_scope(edges)] == ["1"]
+
+
+def test_d_160_footway_on_its_own_bridge_is_kept():
+    edges = [
+        MOTORWAY,
+        _edge("2", [[0.0, -50.0], [0.0, 50.0]], highway="footway", bridge="yes", layer="1"),
+        _edge("3", [[30.0, -50.0], [30.0, 50.0]], highway="cycleway", bridge="viaduct"),
+        _edge("4", [[0.0, 400.0], [0.0, 500.0]], highway="footway", bridge="yes"),  # beyond the buffer
+    ]
+    assert [e.feature_id for e in in_scope(edges)] == ["1", "2", "3"]
+
+
+def test_d_160_bridged_sidewalk_and_crossing_are_dropped():
+    edges = [
+        MOTORWAY,
+        _edge("2", [[0.0, -50.0], [0.0, 50.0]], highway="footway", footway="sidewalk", bridge="yes", layer="1"),
+        _edge("3", [[5.0, -50.0], [5.0, 50.0]], highway="footway", footway="crossing", bridge="yes"),
+    ]
+    assert [e.feature_id for e in in_scope(edges)] == ["1"]
+
+
+def test_d_160_non_path_classes_unchanged():
+    edges = [
+        MOTORWAY,
+        _edge("2", [[0.0, -50.0], [0.0, 50.0]], highway="secondary", bridge="yes", layer="1"),
+        _edge("3", [[-300.0, 20.0], [300.0, 20.0]], highway="service"),
+        _edge("4", [[20.0, -50.0], [20.0, 50.0]], highway="residential", tunnel="yes"),
+        _edge("5", [[40.0, -50.0], [40.0, 50.0]], highway="service", footway="sidewalk"),
+    ]
+    assert [e.feature_id for e in in_scope(edges)] == ["1", "2", "3", "4", "5"]

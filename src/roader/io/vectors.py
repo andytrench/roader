@@ -85,8 +85,25 @@ def is_limited_access(tags: Mapping[str, str]) -> bool:
     return highway == "trunk" and (tags.get("motorroad") == "yes" or tags.get("expressway") == "yes")
 
 
+PATH_CLASSES = frozenset({"footway", "cycleway", "path", "pedestrian", "steps", "bridleway", "corridor"})
+
+
+def is_path(tags: Mapping[str, str]) -> bool:
+    """Footways, cycleways and the other non-motorised ``highway`` classes (D-160)."""
+    return tags.get("highway", "") in PATH_CLASSES
+
+
+def path_in_scope(tags: Mapping[str, str]) -> bool:
+    """A path on its own bridge: ``bridge`` other than ``no``, not a sidewalk or crossing (D-160)."""
+    bridged = tags.get("bridge", "no") not in ("", "no")
+    return bridged and tags.get("footway") not in ("sidewalk", "crossing")
+
+
 def in_scope(edges: list[VectorEdge], buffer_m: float = 150.0) -> list[VectorEdge]:
-    """Limited-access edges plus every edge crossing or within ``buffer_m`` of one (spec section 1)."""
+    """Limited-access edges plus every edge crossing or within ``buffer_m`` of one (spec section 1).
+
+    Paths count only on their own bridges (D-160).
+    """
     lines = [shapely.LineString(e.coords) for e in edges]
     core = [i for i, e in enumerate(edges) if is_limited_access(e.tags)]
     if not core:
@@ -94,7 +111,7 @@ def in_scope(edges: list[VectorEdge], buffer_m: float = 150.0) -> list[VectorEdg
     tree = shapely.STRtree([lines[i] for i in core])
     keep = set(core)
     for i, line in enumerate(lines):
-        if i in keep:
+        if i in keep or (is_path(edges[i].tags) and not path_in_scope(edges[i].tags)):
             continue
         if tree.query(line, predicate="dwithin", distance=buffer_m).size:
             keep.add(i)
