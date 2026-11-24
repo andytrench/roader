@@ -18,7 +18,7 @@ import numpy as np
 import shapely
 
 from roader.conflate.polyline import Polyline
-from roader.io.vectors import VectorEdge, is_limited_access
+from roader.io.vectors import VectorEdge, is_limited_access, is_path, path_in_scope
 from roader.model.schema import VectorRef
 from roader.model.serialize import stable_id
 
@@ -154,8 +154,8 @@ def _kind(tags: dict[str, str]) -> str:
 
 
 def select_roads(edges: list[VectorEdge], extent: shapely.Geometry | None = None) -> list[RoadSeed]:
-    """Roads of the unit model, ordered by id (FR-PL-3)."""
-    edges = sorted(edges, key=lambda e: (e.source, e.feature_id))
+    """Roads of the unit model, ordered by id (FR-PL-3). Paths count only on their own bridges (D-160)."""
+    edges = sorted((e for e in edges if not is_path(e.tags) or path_in_scope(e.tags)), key=lambda e: (e.source, e.feature_id))
     lines = [shapely.LineString(e.coords) for e in edges]
     core = {i for i, e in enumerate(edges) if is_limited_access(e.tags)}
     crossing = {i for i in range(len(edges)) if i not in core and any(lines[i].crosses(lines[c]) for c in core)}

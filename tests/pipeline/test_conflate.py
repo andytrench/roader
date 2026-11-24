@@ -67,6 +67,18 @@ def test_fr_vc_1_ramp_ways_break_at_a_street_node_d123():
     assert len(ramps) == 1 and len(ramps[0].vector_refs) == 2
 
 
+def test_d_160_fr_in_5_only_paths_on_their_own_bridges_are_selected():
+    fwy = VectorEdge("osm", "fwy", np.array([[-300.0, 0.0], [300.0, 0.0]]), {"highway": "motorway", "ref": "I 1", "oneway": "yes"})
+    paths = [
+        VectorEdge("osm", "under", np.array([[0.0, -100.0], [0.0, 100.0]]), {"highway": "footway", "tunnel": "yes"}),
+        VectorEdge("osm", "bridge", np.array([[60.0, -100.0], [60.0, 100.0]]), {"highway": "footway", "bridge": "yes", "layer": "1"}),
+        VectorEdge("osm", "sidewalk", np.array([[120.0, -100.0], [120.0, 100.0]]),
+                   {"highway": "footway", "footway": "sidewalk", "bridge": "yes", "layer": "1"}),
+    ]
+    picked = sorted(r.feature_id for s in select_roads([fwy, *paths]) for r in s.vector_refs)
+    assert picked == ["bridge", "fwy"]
+
+
 def test_fr_af_3_a_ramp_ending_on_a_street_node_is_its_child_d124():
     """A street is the parent of a ramp end on it, ahead of another ramp ending at the same node (D-124, revises D-051)."""
     from roader.fit.links import junctions
