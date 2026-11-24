@@ -84,6 +84,21 @@ def _squared(model: RoadModel, road_id: str) -> RoadModel:
     return dataclasses.replace(model, structures=structures)
 
 
+def _retried(road, model: RoadModel, plan: JunctionPlan, sampler, chord_tol_m: float, pv: PlanVertices, realtime: bool, bodies: list, notes: list[Flag]) -> bool:
+    """Retry a road whose grid fails at full skew before its structures are squared (D-161):
+    first with embankment toes pulled in (D-156), then also with the skew limited near steep toes."""
+    for tier in (1, 2):
+        flags: list[Flag] = []
+        try:
+            swept = road_bodies(model, plan.road(road), sampler, chord_tol_m, pv, realtime=realtime, limits=flags, tier=tier)
+        except Exception:  # noqa: BLE001, S112
+            continue
+        bodies.extend(plan.clip(swept))
+        notes.extend(flags)
+        return True
+    return False
+
+
 def _generate(model: RoadModel, chord_tol_m: float, profile: str, failures: list[Flag] | None, dropped: set[str], squared: set[str]) -> list[Mesh]:
     """One rendering; elements in ``dropped`` are left out, roads in ``squared`` swept with square structures."""
     realtime = profile == "realtime"
@@ -103,6 +118,8 @@ def _generate(model: RoadModel, chord_tol_m: float, profile: str, failures: list
                 raise
             if road.id in squared or not any(st.carried_road == road.id for st in model.structures):
                 raise ElementFailure(road.id, exc) from exc
+            if _retried(road, model, plan, sampler, chord_tol_m, pv, realtime, bodies, notes):
+                continue
             try:
                 bodies.extend(plan.clip(road_bodies(_squared(model, road.id), plan.road(road), sampler, chord_tol_m, pv, realtime=realtime, limits=notes)))
             except Exception as again:  # noqa: BLE001

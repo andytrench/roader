@@ -373,10 +373,13 @@ def road_bodies(
     *,
     realtime: bool = False,
     limits: list[Flag] | None = None,
+    tier: int = 0,
 ) -> list[Body]:
     """Bodies of one road. ``realtime`` switches to the real-time profile's levels and insets.
 
     ``limits`` collects a flag wherever the model's geometry had to be limited to be swept (D-141).
+    ``tier`` is the retry step for a road whose grid fails at full skew (D-161): 1 pulls embankment
+    toes in (D-156), 2 also limits the skew near steep toes.
     """
     xs = road.cross_section
     embed = REALTIME_EMBED_M if realtime else 0.0
@@ -469,6 +472,7 @@ def road_bodies(
 
     fills: list[tuple[SideSlope, float, list[tuple[float, float]]]] = []
     tmax = max((abs(math.tan(sp.skew_rad)) for st in structures for sp in st.supports), default=0.0)
+    pulled: list[str] = []
     for ss in model.side_slopes:
         if ss.road_id != road.id or ss.kind == "none":
             continue
@@ -482,10 +486,11 @@ def road_bodies(
         pieces = subtract(max(ss.s0, 0.0), min(ss.s1, length), carried)
         for k, (a, b) in enumerate(pieces):
             toe = _toe(road, sign, ss.ratio, sampler, ss.id)
-            if tmax > 0.0:
+            if tier >= 1 and tmax > 0.0:
                 width = xs.width_left if sign > 0 else xs.width_right
 
                 def note(pull: float, ss=ss, a=a, b=b) -> None:
+                    pulled.append(ss.id)
                     if limits is not None:
                         limits.append(Flag(
                             "FR-SG-2:toe_limited", ss.id, "FR-SG-2",
@@ -495,6 +500,8 @@ def road_bodies(
                 toe = _toe_limited(toe, width, a, b, length, tmax, note)
             lines.append(ULine(f"toe:{ss.id}:{k}", toe, a, b))
         fills.append((ss, sign, pieces))
+    if tier == 1 and not pulled:
+        raise ValueError(f"road {road.id}: no embankment toe to pull in (D-156)")
 
     lines = _fold_limited(road, lines, limits)
     for line in lines:
@@ -528,17 +535,12 @@ def road_bodies(
     knots = skew_knots(structures, umax)
     base = merge_breakpoints(bps + [(k.s, PRIORITY_OTHER) for k in knots if k.ramp], length)
     sweep = stations(road, base, tol, umax, knots, spans, sides)
-    station_lines, _ = _skew_field(road, structures, lines, knots, sweep, umax, base, sides, toe_limited=False)
-    try:
-        grid = RoadGrid(road, lines, station_lines, pv)
-    except ValueError:
-        # D-161: before the road falls back to square structures, limit the skew near steep toes.
-        station_lines, flags = _skew_field(road, structures, lines, knots, sweep, umax, base, sides, toe_limited=True)
-        if not flags:
-            raise
-        grid = RoadGrid(road, lines, station_lines, pv)
-        if limits is not None:
-            limits.extend(flags)
+    station_lines, flags = _skew_field(road, structures, lines, knots, sweep, umax, base, sides, toe_limited=tier >= 2)
+    if tier >= 2 and not flags:
+        raise ValueError(f"road {road.id}: no toe skew limit applies (D-161)")
+    grid = RoadGrid(road, lines, station_lines, pv)
+    if limits is not None:
+        limits.extend(flags)
 
     def at(f: Callable[[float, float], float]) -> Callable[[int], float]:
         return lambda p: f(pv.s[p], pv.u[p])

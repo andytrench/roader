@@ -323,7 +323,10 @@ def test_fr_sg_2_a_57_degree_deck_over_a_steep_toe_is_swept_skewed_and_flagged()
     notes = []
     meshes = generate(m, chord_tol_m=TOL, failures=notes)
     assert [f for f in notes if f.code == "FR-EX-1:element_failed"] == []
-    assert {(f.code, f.element_id) for f in notes} == {("FR-SG-2:skew_limited", "st_curve")}
+    # D-161 retry chain: toes pulled in alone (D-156) do not hold, so the skew is limited as well.
+    assert {(f.code, f.element_id) for f in notes} == {
+        ("FR-SG-2:toe_limited", "ss_l"), ("FR-SG-2:toe_limited", "ss_r"), ("FR-SG-2:skew_limited", "st_curve"),
+    }
     assert all(mc.solid_problems(x) == [] for x in meshes if x.closed)
     assert TOE_SKEW_MAX == 0.5
     road = m.roads[0]
