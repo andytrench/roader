@@ -367,7 +367,7 @@ SPLIT_TOL_M = 0.15
 SIMPLIFY_TOL_M = 0.02
 
 
-def split_twin_medians(fits, xyz: np.ndarray) -> list[Flag]:
+def split_twin_medians(fits, xyz: np.ndarray, linked=frozenset()) -> list[Flag]:
     """No inner edge of twin one-way mainlines passes their median (FR-XS-1, FR-XS-4, D-063).
 
     For every pair of one-way mainlines running alongside within the D-075 envelope,
@@ -377,8 +377,11 @@ def split_twin_medians(fits, xyz: np.ndarray) -> list[Flag]:
     the median. Where there is none and the two inner edges overlap, the cap is the
     line midway between them, less ``SPLIT_MARGIN_M``. Widths short of the cap are
     kept. Each changed side is flagged.
+
+    D-165: every pair of one-way roads, ramps included, except pairs in ``linked``
+    ((road id, road id) both ways), which share a taper boundary instead (D-104).
     """
-    caps = _twin_caps(list(fits), xyz)
+    caps = _twin_caps(list(fits), xyz, linked=linked)
     flags = []
     for f in sorted(fits, key=lambda f: f.road.id):
         for side, parts in sorted(caps.get(f.road.id, {}).items()):
@@ -389,10 +392,12 @@ def split_twin_medians(fits, xyz: np.ndarray) -> list[Flag]:
     return flags
 
 
-def _twin_caps(every, xyz: np.ndarray, touching: bool = False) -> dict[str, dict[int, list[tuple[np.ndarray, np.ndarray]]]]:
-    fits = sorted([f for f in every if f.road.oneway and f.road.kind == "mainline"], key=lambda f: f.road.id)
+def _twin_caps(every, xyz: np.ndarray, touching: bool = False, linked=frozenset()) -> dict[str, dict[int, list[tuple[np.ndarray, np.ndarray]]]]:
+    fits = sorted([f for f in every if f.road.oneway], key=lambda f: f.road.id)
     caps: dict[str, dict[int, list[tuple[np.ndarray, np.ndarray]]]] = {}
     for a, b in itertools.permutations(fits, 2):
+        if (a.road.id, b.road.id) in linked:
+            continue
         res = _caps(a, b, xyz, [f for f in every if f is not a and f is not b], touching)
         if res is not None:
             side, st, cap = res
@@ -647,7 +652,8 @@ def reference_caps(roads: list[Road], links, xyz: np.ndarray, decks: dict | None
     from types import SimpleNamespace
 
     items = [SimpleNamespace(road=r, line=Polyline.from_alignment(r.alignment)) for r in roads]
-    caps = _twin_caps(items, xyz, touching=True)
+    linked = {pair for lk in links for pair in ((lk.from_road, lk.to_road), (lk.to_road, lk.from_road))}
+    caps = _twin_caps(items, xyz, touching=True, linked=linked)
     by = {it.road.id: it for it in items}
     for lk in links:
         if lk.kind not in ("diverge", "merge"):

@@ -175,7 +175,7 @@ def fit_network(
             pool.close()
     fits = [fitted[s.id] for s in seeds]
     # Twin carriageways stop at their median (L3, FR-XS-4): with every road fitted, so both inner edges are known.
-    split_twin_medians(fits, ev.xyz[~np.asarray(ev.transient, dtype=bool)])
+    split_twin_medians(fits, ev.xyz[~np.asarray(ev.transient, dtype=bool)], linked_pairs(fits, js))
     return fits, js
 
 
@@ -228,6 +228,16 @@ class _Pool:
     def close(self) -> None:
         self.ex.shutdown()
         shutil.rmtree(self.dir, ignore_errors=True)
+
+
+def linked_pairs(fits: list[RoadFit], js: list[Junction]) -> set[tuple[str, str]]:
+    """(road id, road id) both ways for every junction the model links (``_link``), as ``find_links`` will."""
+    by = {f.road.id: f.road for f in fits}
+    out = set()
+    for j in js:
+        if j.parent in by and j.child in by and _link(by[j.child], j.end, by[j.parent], j.at_parent_end)[0] is not None:
+            out |= {(j.parent, j.child), (j.child, j.parent)}
+    return out
 
 
 def bound_tapers(fits: list[RoadFit], js: list[Junction], decks: dict | None = None) -> list[Flag]:

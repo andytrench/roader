@@ -153,3 +153,42 @@ def test_fr_xs_1_another_roads_pavement_between_the_twins_is_not_a_barrier():
     split_twin_medians(fits, deck)
     y_eb, y_wb = _inner_y(fits)
     assert -0.1 < y_eb < 0.0 and 0.0 < y_wb < 0.1
+
+
+# ---------------------------------------------------------------- D-165: every pair of one-way roads
+
+
+def _as_ramps(fits):
+    for f in fits:
+        f.road.kind, f.road.road_class = "ramp", "motorway_link"
+    return fits
+
+
+def test_fr_xs_1_parallel_one_way_ramps_split_at_the_midline():
+    """D-165: two unlinked one-way ramps sharing a slab never overlap (FR-XS-1, FR-XS-4)."""
+    from roader.fit.median import split_twin_medians
+
+    fits = _as_ramps(_overlapping(9.0))
+    flags = split_twin_medians(fits, np.zeros((0, 3)))
+    y_eb, y_wb = _inner_y(fits)
+    assert -0.1 < y_eb < 0.0 and 0.0 < y_wb < 0.1
+    assert any(f.code == "FR-XS-4:median_split" for f in flags)
+
+
+def test_fr_xs_1_linked_roads_are_not_split_as_twins():
+    """D-165: a linked pair shares its boundary by D-104, not by the twin split."""
+    from roader.fit.median import split_twin_medians
+
+    fits = _as_ramps(_overlapping(9.0))
+    ids = (fits[0].road.id, fits[1].road.id)
+    assert split_twin_medians(fits, np.zeros((0, 3)), linked={ids, ids[::-1]}) == []
+    assert fits[0].road.cross_section.width_left(300.0) == pytest.approx(9.0)
+
+
+def test_fr_xs_4_a_two_way_street_is_not_a_twin():
+    from roader.fit.median import split_twin_medians
+
+    fits = _overlapping(9.0)
+    for f in fits:
+        f.road.oneway, f.road.kind = False, "crossing_street"
+    assert split_twin_medians(fits, np.zeros((0, 3))) == []
