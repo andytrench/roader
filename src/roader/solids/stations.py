@@ -125,33 +125,34 @@ def end_limited(t: float, s: float, length: float, umax: float) -> float:
     return max(-lim, min(t, lim))
 
 
-def toe_skew_limit(samples: list[tuple[float, float, float]], sweep: list[float], umax: float, tmax: float) -> list[float]:
+def toe_skew_limit(samples: list[tuple[float, float, float, float, float]], sweep: list[float], reach: list[float], tmax: float) -> list[float]:
     """Largest |t| each station line in ``sweep`` may take near steep embankment toes (FR-SG-2, D-161).
 
-    ``samples``: (station, |du/ds|, |u|) along the active toes. A line s0 + t u meets a toe
-    at s0 + t u_toe; where |t| |du/ds| nears 1 that intersection is ill conditioned and
-    jumps between rows. A line with |t| <= L meets the toe only within L |u| of s0, so a
-    sample bounds L by max(TOE_SKEW_MAX / rate, |s0 - station| / |u|). The bounds then grow
-    along the road no faster than a skew ramp, so neighbouring lines never cross.
+    ``samples``: (station, |du/ds|, |u|, s0, s1) along the toes, each active on the rows in
+    [s0, s1]. A line s0 + t u meets a toe at s0 + t u_toe; where |t| |du/ds| nears 1 that
+    intersection is ill conditioned and jumps between rows. A line with |t| <= L meets the
+    toe only within L |u| of s0, so a sample bounds L on the rows where its toe is active by
+    max(TOE_SKEW_MAX / rate, |s0 - station| / |u|). ``reach[k]``: lateral reach of the lines
+    between rows k and k + 1. The bounds grow from row to row no faster than a skew ramp
+    over that reach, so neighbouring lines never cross.
     """
     caps = [math.inf] * len(sweep)
-    for s, rate, u in samples:
+    for s, rate, u, a, b in samples:
         cap = TOE_SKEW_MAX / rate
         if cap >= tmax or u <= 0.0:
             continue
-        reach = tmax * u
-        for k in range(bisect.bisect_left(sweep, s - reach), bisect.bisect_right(sweep, s + reach)):
+        lo, hi = max(s - tmax * u, a - STATION_MERGE_M), min(s + tmax * u, b + STATION_MERGE_M)
+        for k in range(bisect.bisect_left(sweep, lo), bisect.bisect_right(sweep, hi)):
             caps[k] = min(caps[k], max(cap, abs(sweep[k] - s) / u))
-    slope = 1.0 / (RAMP_FACTOR * umax)
     for k in range(1, len(sweep)):
-        caps[k] = min(caps[k], caps[k - 1] + slope * (sweep[k] - sweep[k - 1]))
+        caps[k] = min(caps[k], caps[k - 1] + (sweep[k] - sweep[k - 1]) / (RAMP_FACTOR * reach[k - 1]))
     for k in range(len(sweep) - 2, -1, -1):
-        caps[k] = min(caps[k], caps[k + 1] + slope * (sweep[k + 1] - sweep[k]))
+        caps[k] = min(caps[k], caps[k + 1] + (sweep[k + 1] - sweep[k]) / (RAMP_FACTOR * reach[k]))
     return caps
 
 
-def toe_samples(toes: list[tuple[Callable[[float], float], float, float]], windows: list[tuple[float, float]], tmax: float) -> list[tuple[float, float, float]]:
-    """(station, |du/ds|, |u|) every TOE_SAMPLE_M along each toe (func, s0, s1) where skewed lines can meet it."""
+def toe_samples(toes: list[tuple[Callable[[float], float], float, float]], windows: list[tuple[float, float]], tmax: float) -> list[tuple[float, float, float, float, float]]:
+    """(station, |du/ds|, |u|, s0, s1) every TOE_SAMPLE_M along each toe (func, s0, s1) where skewed lines can meet it."""
     out = []
     for func, a, b in toes:
         for w0, w1 in windows:
@@ -164,7 +165,7 @@ def toe_samples(toes: list[tuple[Callable[[float], float], float, float]], windo
             for k in range(n):
                 rate = abs(us[k + 1] - us[k]) / (ss[k + 1] - ss[k])
                 if rate * tmax > TOE_SKEW_MAX:
-                    out.append((0.5 * (ss[k] + ss[k + 1]), rate, max(abs(us[k]), abs(us[k + 1]))))
+                    out.append((0.5 * (ss[k] + ss[k + 1]), rate, max(abs(us[k]), abs(us[k + 1])), a, b))
     return out
 
 

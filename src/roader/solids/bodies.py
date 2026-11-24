@@ -9,8 +9,10 @@ the deck stays open (G3, AC-H3).
 
 from __future__ import annotations
 
+import bisect
 import math
 from collections.abc import Callable
+from itertools import pairwise
 
 import shapely
 from shapely.geometry import Polygon
@@ -236,36 +238,47 @@ def _skew_field(
     knots: list[SkewKnot],
     sweep: list[float],
     umax: float,
-    limits: list[Flag] | None,
-) -> list[StationLine]:
-    """Station lines with the skew field limited near steep embankment toes and the road's ends (D-161, D-118).
+    base: list[float],
+    sides: Callable[[float, float], tuple[float, float]],
+    toe_limited: bool,
+) -> tuple[list[StationLine], list[Flag]]:
+    """Station lines with the skew field limited toward the road's ends (D-118) and, if ``toe_limited``, near steep embankment toes (D-161).
 
-    Each structure whose skew field had to be limited by a toe is flagged once.
+    The toe limit tapers over the lateral reach ``sides`` gives for the breakpoint interval in
+    ``base`` around each pair of rows. Each structure whose skew field it limits is flagged once.
     """
     tmax = max((abs(k.t) for k in knots), default=0.0)
     windows = []
     for st in structures:
         pad = RAMP_FACTOR * tmax * umax + RAMP_MIN_M + tmax * umax
-        windows.append((st.s_start - pad, st.s_end + pad, st.id))
+        windows.append((st.s_start - pad, st.s_end + pad, st))
     toes = [(line.func, line.s0, line.s1) for line in lines if line.key.startswith("toe:")]
-    caps = toe_skew_limit(toe_samples(toes, [(a, b) for a, b, _ in windows], tmax), sweep, umax, tmax) if tmax > 0.0 else [math.inf] * len(sweep)
+    samples = toe_samples(toes, [(a, b) for a, b, _ in windows], tmax) if toe_limited and tmax > 0.0 else []
+    caps = [math.inf] * len(sweep)
+    if samples:
+        reach = []
+        for a, b in pairwise(sweep):
+            i = min(max(bisect.bisect_right(base, 0.5 * (a + b)) - 1, 0), len(base) - 2)
+            reach.append(max(sides(base[i], base[i + 1])))
+        caps = toe_skew_limit(samples, sweep, reach, tmax)
     out, hit = [], {}
     for s, cap in zip(sweep, caps, strict=True):
         t = skew_at(knots, s)
         if abs(t) > cap:
-            for a, b, st_id in windows:
+            for a, b, st in windows:
                 if a <= s <= b:
-                    lo = hit.get(st_id, (math.inf, 0.0))
-                    hit[st_id] = (min(lo[0], cap), max(lo[1], abs(t)))
+                    hit[st.id] = st
             t = math.copysign(cap, t)
         out.append(StationLine(s, end_limited(t, s, road.length, umax)))
-    if limits is not None:
-        for st_id, (cap, t) in hit.items():
-            limits.append(Flag(
-                "FR-SG-2:skew_limited", st_id, "FR-SG-2",
-                f"|tan skew| on {road.id} limited from {t:.2f} to {cap:.2f} where embankment toes run near the skewed station lines",
-            ))
-    return out
+    flags = []
+    for st in hit.values():
+        ends = [min(out, key=lambda line, s=s: abs(line.s - s)).t for s in (st.s_start, st.s_end)]
+        flags.append(Flag(
+            "FR-SG-2:skew_limited", st.id, "FR-SG-2",
+            f"|tan skew| on {road.id} limited near steep embankment toes; deck ends at {abs(ends[0]):.2f} and {abs(ends[1]):.2f}, "
+            f"supports {abs(skew_at(knots, st.s_start)):.2f} and {abs(skew_at(knots, st.s_end)):.2f}",
+        ))
+    return out, flags
 
 
 def road_bodies(
@@ -411,8 +424,18 @@ def road_bodies(
         return 1.25 * near[1.0] + 1.0, 1.25 * near[-1.0] + 1.0
     knots = skew_knots(structures, umax)
     base = merge_breakpoints(bps + [(k.s, PRIORITY_OTHER) for k in knots if k.ramp], length)
-    station_lines = _skew_field(road, structures, lines, knots, stations(road, base, tol, umax, knots, spans, sides), umax, limits)
-    grid = RoadGrid(road, lines, station_lines, pv)
+    sweep = stations(road, base, tol, umax, knots, spans, sides)
+    station_lines, _ = _skew_field(road, structures, lines, knots, sweep, umax, base, sides, toe_limited=False)
+    try:
+        grid = RoadGrid(road, lines, station_lines, pv)
+    except ValueError:
+        # D-161: before the road falls back to square structures, limit the skew near steep toes.
+        station_lines, flags = _skew_field(road, structures, lines, knots, sweep, umax, base, sides, toe_limited=True)
+        if not flags:
+            raise
+        grid = RoadGrid(road, lines, station_lines, pv)
+        if limits is not None:
+            limits.extend(flags)
 
     def at(f: Callable[[float, float], float]) -> Callable[[int], float]:
         return lambda p: f(pv.s[p], pv.u[p])

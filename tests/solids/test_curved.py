@@ -313,8 +313,9 @@ def test_fr_sg_2_a_57_degree_deck_over_a_steep_toe_is_swept_skewed_and_flagged()
     """Embankment toes on ridged ground run nearly parallel to 57-degree station lines (D-161).
 
     Their intersections jumped between rows, the station lines crossed and the road fell
-    back to square structures. |tan skew| is now limited where an active toe's |du/ds|
-    would make |tan skew| |du/ds| exceed TOE_SKEW_MAX, tapering like a skew ramp.
+    back to square structures. Before that fallback, |tan skew| is now limited where an
+    active toe's |du/ds| would make |tan skew| |du/ds| exceed TOE_SKEW_MAX, tapering like
+    a skew ramp.
     """
     from roader.solids.stations import TOE_SKEW_MAX
 
@@ -334,22 +335,55 @@ def test_fr_sg_2_a_57_degree_deck_over_a_steep_toe_is_swept_skewed_and_flagged()
         assert 3.0 < np.ptp(s) < 23.0, sp_id
 
 
+def test_fr_sg_2_a_road_that_sweeps_at_full_skew_keeps_it_over_steep_toes():
+    """The toe limit only replaces the square fallback (D-161): a 26-degree deck over the same
+    ridged toes, whose |tan skew| |du/ds| exceeds TOE_SKEW_MAX in places but whose grid holds,
+    keeps the support skew. At Woburn the blanket limit squared a 33-degree pier into the road below.
+    """
+    from roader.solids.bodies import _toe
+    from roader.solids.stations import TOE_SKEW_MAX, toe_samples
+    from roader.solids.terrain import TerrainSampler
+
+    skew = 0.45
+    m = _skewed_over_ridges(skew)
+    road, t = m.roads[0], math.tan(skew)
+    sampler = TerrainSampler(m.terrain)
+    toes = [(_toe(road, sign, 3.0, sampler, "ss"), a, b) for sign in (1.0, -1.0) for a, b in ((0.0, 105.0), (145.0, road.length))]
+    assert toe_samples(toes, [(0.0, road.length)], t), "the limit would bind here"
+    assert TOE_SKEW_MAX / t < 2.0
+    notes = []
+    meshes = generate(m, chord_tol_m=TOL, failures=notes)
+    assert notes == []
+    abut = next(x for x in meshes if x.id == "sp_a1:abutment")
+    su = road.alignment.project_many(np.unique(abut.vertices[:, :2], axis=0))
+    on_back = np.abs(su[0] - t * su[1] - m.structures[0].s_start) < 1e-6
+    assert on_back.sum() >= 3
+
+
 def test_fr_sg_2_skew_limit_binds_only_lines_that_meet_the_steep_toe_and_tapers():
-    """A line with |t| <= L meets a toe sample at distance d only if L |u| >= d: L <= max(0.5 / rate, d / |u|) (D-161)."""
+    """A line with |t| <= L meets a toe sample at distance d only if L |u| >= d: L <= max(0.5 / rate, d / |u|) (D-161).
+
+    Only rows where the toe is active solve it; the bound tapers over the lateral reach of each pair of rows.
+    """
     from roader.solids.stations import RAMP_FACTOR, toe_skew_limit
 
-    umax, tmax = 100.0, 1.6
+    tmax = 1.6
     sweep = [float(s) for s in range(101)]
-    caps = toe_skew_limit([(50.0, 2.0, 5.0)], sweep, umax, tmax)  # (station, |du/ds|, |u|)
+    wide = [100.0] * 100
+    toe = (50.0, 2.0, 5.0, 0.0, 100.0)  # (station, |du/ds|, |u|, toe active from, to)
+    caps = toe_skew_limit([toe], sweep, wide, tmax)
     assert caps[50] == pytest.approx(0.25)
     assert caps[51] == pytest.approx(0.25)  # lines within 0.25 |u| meet the steep sample at any allowed skew
-    assert caps[53] == pytest.approx(0.25 + 2.0 / (RAMP_FACTOR * umax))  # past that the ramp taper from s = 51 binds
-    assert caps[30] == pytest.approx(0.25 + 19.0 / (RAMP_FACTOR * umax))
-    assert caps[30] < tmax
-    narrow = toe_skew_limit([(50.0, 2.0, 5.0)], sweep, 1.0, tmax)  # a steep taper: the meeting distance binds
+    assert caps[53] == pytest.approx(0.25 + 2.0 / (RAMP_FACTOR * 100.0))  # past that the ramp taper from s = 51 binds
+    assert caps[30] == pytest.approx(0.25 + 19.0 / (RAMP_FACTOR * 100.0))
+    narrow = toe_skew_limit([toe], sweep, [1.0] * 100, tmax)  # a steep taper: the meeting distance binds
     assert narrow[52] == pytest.approx(2.0 / 5.0)
     assert narrow[59] >= tmax  # beyond tmax |u| no line meets the sample
-    assert toe_skew_limit([(50.0, 0.2, 5.0)], sweep, umax, tmax) == [math.inf] * len(sweep)  # 1.6 * 0.2 <= 0.5
+    assert toe_skew_limit([(50.0, 0.2, 5.0, 0.0, 100.0)], sweep, wide, tmax) == [math.inf] * len(sweep)  # 1.6 * 0.2 <= 0.5
+    # A toe that ends at s = 50 (a deck end) binds only its own rows; the deck's rows taper over their own reach.
+    ended = toe_skew_limit([(49.5, 2.0, 5.0, 0.0, 50.0)], sweep, [100.0] * 50 + [10.0] * 50, tmax)
+    assert ended[50] == pytest.approx(0.25)
+    assert ended[55] == pytest.approx(0.25 + 5.0 / (RAMP_FACTOR * 10.0))
 
 
 def test_ac_p4_skewed_rows_take_the_uv_segment_that_keeps_their_turning_smallest():
