@@ -186,21 +186,27 @@ def twin_joints(structures: list[Structure], roads: dict[str, Road], crossings: 
 
 
 def _clear_of_deck(st: Structure, parent: Road, child: Road, s_seam: float, toward: float, reach: tuple[float, float]) -> float:
-    """First station of ``child`` from its seam where its whole section is past the parent's skewed deck end."""
+    """First station of ``child`` from its seam where its whole section is off the parent's deck:
+    past its skewed end, or past one of its side edges (D-133)."""
     probe = min(max(s_seam + toward * 20.0, 0.0), child.length)
     p0 = _proj1(parent, child.alignment.offset_point(s_seam, 0.0))[0]
     p1 = _proj1(parent, child.alignment.offset_point(probe, 0.0))[0]
     to_end = p1 >= p0
     end = st.s_end if to_end else st.s_start
     t = _end_slope(st, end)
+    pxs, left, right = parent.cross_section, st.deck.overhang("left"), st.deck.overhang("right")
 
     def clear(s: float) -> bool:
+        past_end = beside = True
         for u in (reach[0], 0.0, -reach[1]):
             ps, pu = _proj1(parent, child.alignment.offset_point(s, u))
             q = ps - t * pu
             if (q < end - CLEAR_TOL_M) if to_end else (q > end + CLEAR_TOL_M):
-                return False
-        return True
+                past_end = False
+            sc = min(max(ps, 0.0), parent.length)
+            if -pxs.width_right(sc) - right - CLEAR_TOL_M <= pu <= pxs.width_left(sc) + left + CLEAR_TOL_M:
+                beside = False
+        return past_end or beside
 
     limit = child.length if toward > 0 else 0.0
     lo = s_seam

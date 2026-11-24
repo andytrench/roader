@@ -214,6 +214,38 @@ def test_fr_cr_3_ramp_renders_nothing_on_the_shared_deck(diverge):
     assert not [v for v in result.violations if v.req != "val3dity"]
 
 
+def test_fr_cr_3_shared_span_ends_where_the_ramp_leaves_the_deck_sideways(monkeypatch):
+    """Bellevue link 103757285: a ramp turning off the side of its parent's deck never passes the
+    deck's end line, so its shared stretch ran its whole length (D-133)."""
+    import tests.pipeline.twin_scene as scene
+
+    monkeypatch.setattr(scene, "RAMP_SEAM_BEFORE_END", 45.0)
+    monkeypatch.setattr(scene, "RAMP_TURN", -0.3)
+    model = scene.twin_model(ramp=True)
+    roads = {r.id: r for r in model.roads}
+    west, ramp = model.structures[0], model.roads[-1]
+    extents = [
+        StructureExtent(west.carried_road, west.s_start, west.s_end, "class17", None, (west.s_start, west.s_end)),
+        StructureExtent(ramp.id, 0.0, 17.0, "class17_only", None, (0.0, 17.0)),
+    ]
+    _kept, shares, _flags = absorb_diverging(extents, model.links, roads)
+    barriers = {r.id: list(r.cross_section.barriers) for r in model.roads}
+    attach_shared(model.structures, shares, roads, barriers, model.crossings)
+    (span,) = west.shared
+    upper = model.road(west.carried_road)
+    edge = -(HALF + OVERHANG)
+    reach = RAMP_HALF + 0.45  # pavement plus parapet base
+
+    def off_side(s: float) -> bool:
+        return all(upper.alignment.project(*ramp.alignment.offset_point(s, u))[1] <= edge + 1e-3 for u in (reach, 0.0, -reach))
+
+    assert off_side(span.s_end)
+    assert not off_side(span.s_end - 0.6)
+    t = math.tan(west.supports[-1].skew_rad)
+    s, v = upper.alignment.project(*ramp.alignment.offset_point(span.s_end, reach))
+    assert s - t * v < west.s_end - 5.0  # well short of the deck's end line
+
+
 def test_fr_cr_3_ramp_leaving_its_own_deck_beyond_the_parent_is_kept():
     model = twin_model(ramp=True)
     roads = {r.id: r for r in model.roads}
