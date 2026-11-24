@@ -100,7 +100,7 @@ def fit_edges(prof: Profiles, length: float, gaps: list[tuple[float, float]]) ->
     residuals = []
     for s, values in sides:
         kn = supported_knots(knots, s, 0.5 * WIDTH_KNOT_M)
-        v, r = fit_piecewise(s, values, kn, min_sigma=0.05)
+        v, r = fit_piecewise(s, values, kn, min_sigma=0.05, bounded=True)
         residuals.append(r)
         k2, v2 = simplify(kn, v, WIDTH_TOL_M)
         out.append((k2, v2))

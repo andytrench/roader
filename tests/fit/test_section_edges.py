@@ -34,6 +34,21 @@ def test_fr_xs_1_isolated_edges_do_not_set_a_width_knot():
     assert np.max(np.abs(np.interp(s, fit.knots_right, fit.right) - 5.5)) < 0.2
 
 
+def test_d155_a_step_between_two_knots_keeps_each_knot_within_the_measured_widths():
+    """Bellevue I-405 SB: left edge 11.5 m, a gap, 1.83 m over s = 250-280, then 10 m from s = 300.
+
+    The knot at 250 took -0.2 m to fit the narrow stretch against the wide one beyond the next
+    knot; the left edge then crossed the centre line and the road could not be swept.
+    """
+    s = np.arange(0.0, 500.0, 5.0)
+    left = np.where(s <= 165.0, 11.5, np.where((s >= 250.0) & (s <= 280.0), 1.83, np.where(s >= 300.0, 10.0, np.nan)))
+    right = np.full(len(s), 9.9)
+    fit = fit_edges(_profiles(left, right, s), 500.0, [(195.0, 235.0)])
+    assert fit is not None
+    measured = left[np.isfinite(left)]
+    assert fit.left.min() >= measured.min() - 1e-9 and fit.left.max() <= measured.max() + 1e-9, (fit.knots_left, fit.left)
+
+
 def test_fr_xs_1_dense_width_change_is_followed():
     """A measured taper from 7.0 to 10.0 m over 100 m stays in the edge line."""
     s = np.arange(0.0, 600.0, 5.0)

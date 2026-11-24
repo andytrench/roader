@@ -39,8 +39,14 @@ def fit_piecewise(
     prior: float | None = None,
     prior_weight: float = 0.0,
     min_sigma: float = 0.02,
+    bounded: bool = False,
 ) -> tuple[np.ndarray, np.ndarray]:
-    """Values at knots of y ~ scale * f(s), f piecewise linear. Returns (values, residuals)."""
+    """Values at knots of y ~ scale * f(s), f piecewise linear. Returns (values, residuals).
+
+    ``bounded``: each knot stays within the range of the data between its neighbouring
+    knots (D-155), so a step in the data between two knots cannot swing one of them
+    past every measured value.
+    """
     basis = hat_basis(s, knots)
     if scale is not None:
         basis = basis * np.asarray(scale)[:, None]
@@ -49,17 +55,48 @@ def fit_piecewise(
     rhs_prior = np.full(len(knots), (prior or 0.0) * prior_weight)
     # A light smoothness term ties neighbouring knots where the data are thin.
     diff = np.diff(np.eye(len(knots)), axis=0) * 1e-3
+    lo, hi = _knot_bounds(s, y, knots) if bounded else (None, None)
     values = np.zeros(len(knots))
     for _ in range(IRLS_STEPS):
         aw = basis * w[:, None]
-        lhs = basis.T @ aw + reg + diff.T @ diff
+        lhs = basis.T @ aw + reg + diff.T @ diff + 1e-12 * np.eye(len(knots))
         rhs = aw.T @ y + rhs_prior
-        values = np.linalg.solve(lhs + 1e-12 * np.eye(len(knots)), rhs)
+        values = np.linalg.solve(lhs, rhs) if lo is None else _solve_bounded(lhs, rhs, lo, hi)
         r = y - basis @ values
         sigma = max(1.4826 * float(np.median(np.abs(r))), min_sigma)
         a = np.abs(r) / (HUBER_K * sigma)
         w = np.where(a <= 1.0, 1.0, 1.0 / np.maximum(a, 1e-12))
     return values, y - basis @ values
+
+
+def _knot_bounds(s: np.ndarray, y: np.ndarray, knots: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+    """Least and greatest data value between each knot's neighbours; unbounded where none."""
+    s, y = np.asarray(s, dtype=np.float64), np.asarray(y, dtype=np.float64)
+    lo, hi = np.full(len(knots), -np.inf), np.full(len(knots), np.inf)
+    for j in range(len(knots)):
+        a = knots[j - 1] if j > 0 else -np.inf
+        b = knots[j + 1] if j + 1 < len(knots) else np.inf
+        m = (s > a) & (s < b)
+        if m.any():
+            lo[j], hi[j] = float(y[m].min()), float(y[m].max())
+    return lo, hi
+
+
+def _solve_bounded(lhs: np.ndarray, rhs: np.ndarray, lo: np.ndarray, hi: np.ndarray) -> np.ndarray:
+    """Least squares with knot values held inside [lo, hi]: violators are fixed at their bound and the rest re-solved."""
+    n = len(rhs)
+    fixed = np.zeros(n, dtype=bool)
+    values = np.zeros(n)
+    for _ in range(n + 1):
+        free = ~fixed
+        if free.any():
+            values[free] = np.linalg.solve(lhs[np.ix_(free, free)], rhs[free] - lhs[np.ix_(free, fixed)] @ values[fixed])
+        out = free & ((values < lo) | (values > hi))
+        if not out.any():
+            break
+        values[out] = np.clip(values[out], lo[out], hi[out])
+        fixed |= out
+    return values
 
 
 def knot_stations(length: float, spacing: float, gaps: list[tuple[float, float]] = ()) -> np.ndarray:
