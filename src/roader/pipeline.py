@@ -60,6 +60,7 @@ from roader.evidence import Evidence, build_evidence
 from roader.evidence.strips import STRIP_TOL_M
 from roader.fit.joint import joint_fit_roads
 from roader.fit.links import (
+    bound_tapers,
     child_anchors,
     drop_junction_crossings,
     find_links,
@@ -208,6 +209,8 @@ def run_pipeline(
             if st.carried_road == f.road.id:
                 _fit_overhang(f.road, st, barriers[f.road.id])
         f.road.cross_section.barriers = sorted(barriers[f.road.id], key=lambda b: (b.side, b.s0, b.id))
+    # A parent and its linked child share their taper boundary, off their decks (FR-XS-1, D-104).
+    flags.extend(bound_tapers(fits, junctions, _decks(structures)))
     flags.extend(twin_joints(structures, roads, crossings))
     flags.extend(classify_medians(fits, ev))
 
@@ -525,8 +528,15 @@ def _least_half_width(road, rules) -> float:
     return 0.5 * max(lanes, 1) * rules.get("lane.width", road_class=road.road_class).low
 
 
+def _decks(structures) -> dict[str, list[tuple[float, float]]]:
+    out: dict[str, list[tuple[float, float]]] = {}
+    for st in structures:
+        out.setdefault(st.carried_road, []).append((float(st.s_start), float(st.s_end)))
+    return out
+
+
 def _clamp_edges(st, left, right, caps: dict, limits) -> tuple[np.ndarray, np.ndarray]:
-    """Edges found past a cap end at it (D-103); then those past a neighbour limit are dropped (D-068)."""
+    """Edges found past a cap end at it (D-103, D-104); then those past a neighbour limit are dropped (D-068)."""
     cap_l, cap_r = cap_at(caps.get(1, []), st), cap_at(caps.get(-1, []), st)
     left = np.where(left > cap_l, cap_l, left)
     right = np.where(-right > cap_r, -cap_r, right)
@@ -553,11 +563,11 @@ def measure_edges(model: RoadModel, points: PointSet, holdout: np.ndarray | None
     lines = [Polyline.from_alignment(r.alignment) for r in model.roads]
     halves = [_least_half_width(r, rules) for r in model.roads]
     ev = build_evidence(points, [ln.xy for ln in lines])
-    # D-103: the search stops where the fit's edge does, at a twin's median cap.
+    # D-103, D-104: the search stops where the fit's edge does, at a twin's median cap or a taper boundary.
     fit_pts = ~np.asarray(ev.transient, dtype=bool)
     if holdout is not None and len(holdout) == len(fit_pts):
         fit_pts &= ~np.asarray(holdout, dtype=bool)
-    caps = reference_caps(model.roads, ev.xyz[fit_pts])
+    caps = reference_caps(model.roads, model.links, ev.xyz[fit_pts], _decks(model.structures))
     out = []
     for k, (road, line) in enumerate(zip(model.roads, lines, strict=True)):
         tr = track_line(line, ev)

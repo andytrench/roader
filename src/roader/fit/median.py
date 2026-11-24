@@ -30,6 +30,7 @@ profile and cross-section. The split is an L0 topology change and is flagged.
 
 from __future__ import annotations
 
+import dataclasses
 import itertools
 import math
 from collections import Counter
@@ -550,7 +551,7 @@ def _apply(road: Road, side: int, parts, code: str) -> bool:
         return False
     kn, vals = simplify(st, new, SIMPLIFY_TOL_M)
     base = pw.knots[0].prov
-    prov = Provenance(base.source, base.confidence, rms_m=base.rms_m, n_points=base.n_points, observed_fraction=base.observed_fraction, flags=[*base.flags, code])
+    prov = dataclasses.replace(base, flags=[*base.flags, code])
     piece = Piecewise([Knot(float(k), float(v), prov) for k, v in zip(kn, vals, strict=True)])
     if side > 0:
         xs.width_left = piece
@@ -559,9 +560,101 @@ def _apply(road: Road, side: int, parts, code: str) -> bool:
     return True
 
 
-def reference_caps(roads: list[Road], xyz: np.ndarray) -> dict[str, dict[int, list[tuple[np.ndarray, np.ndarray]]]]:
-    """AC-A3 reference caps per road and side: the fit's twin median caps (D-103), from the model."""
+# ---------------------------------------------------------------- merge and diverge tapers (L3)
+
+TAPER_RATE = 1.0 / 15.0  # design taper: the shared boundary moves at most 1 m across per 15 m along
+
+
+def taper_caps(parent, child, touching: bool = False, decks_p=(), decks_c=()):
+    """[(road id, side, stations, cap)] for a linked child alongside its parent (D-104, amended); [] when none.
+
+    Where, within the D-075 envelope (``TWIN_REACH_M``, ``TWIN_PARALLEL_DEG``,
+    ``TWIN_DZ_M``), the parent's fitted edge reaches past the child's fitted inner edge,
+    the two share the boundary at the midline between them (less ``SPLIT_MARGIN_M``
+    each side, as the twin split), never inside either road's least half-width; only
+    where the child's lanes lie clear of the parent's. Each cap then changes no faster
+    than ``TAPER_RATE``. Not on a deck of either road (``decks_p``, ``decks_c``: station
+    ranges): no boundary at a station on one, and each road's cap is raised so its
+    ramp finishes off its decks, deck widths unchanged. ``touching``: edges already meeting at a boundary (within
+    twice ``SPLIT_MARGIN_M`` plus ``SPLIT_TOL_M``) reproduce it (the AC-A3 reference).
+    """
+    rp, rc, lp, lc = parent.road, child.road, parent.line, child.line
+    st = np.arange(0.0, rp.length, SPLIT_STEP_M)
+    sc, uc, okc = lc.project(lp.point(st), max_dist=TWIN_REACH_M)
+    if not okc.any():
+        return []
+    sc = np.clip(np.nan_to_num(sc), 0.0, rc.length)
+    sp, up, okp = lp.project(lc.point(sc), max_dist=TWIN_REACH_M)
+    up = np.nan_to_num(up)
+    parallel = np.abs(np.cos(lp.heading(st) - lc.heading(sc))) >= math.cos(math.radians(TWIN_PARALLEL_DEG))
+    dz = np.abs(np.array([rp.profile.z(float(s)) for s in st]) - np.array([rc.profile.z(float(s)) for s in sc]))
+    floor_p, floor_c = _least_half_width(rp), _least_half_width(rc)
+    clear = np.abs(up) > floor_p + floor_c
+    near = okc & okp & parallel & (dz < TWIN_DZ_M) & clear & (np.abs(np.nan_to_num(sp) - st) < TWIN_REACH_M)
+    if near.sum() < 3:
+        return []
+    side = 1 if np.median(up[near]) > 0 else -1
+    near &= np.sign(up) == side
+    if near.sum() < 3:
+        return []
+    side_c = 1 if np.median(np.nan_to_num(uc)[near]) > 0 else -1
+    dist = np.abs(up)
+    edge_p = _width(rp, side, st)
+    edge_c = dist - _width(rc, side_c, sc)  # the child's inner edge, from the parent's line
+    meet = edge_c - (2.0 * SPLIT_MARGIN_M + SPLIT_TOL_M if touching else 0.0)
+    core = near & (edge_p > meet) & ~_on(st, decks_p) & ~_on(sc, decks_c)
+    if core.sum() < 3:
+        return []
+    mid = 0.5 * (edge_p + edge_c)
+    cap_p = np.where(core, np.maximum(mid - SPLIT_MARGIN_M, floor_p), np.inf)
+    cap_p = np.maximum(_smooth_cap(st, cap_p), _deck_floor(rp, side, st, decks_p))
+    cap_c = np.maximum(np.maximum(dist - mid - SPLIT_MARGIN_M, floor_c), _deck_floor(rc, side_c, sc, decks_c))
+    st_c = np.arange(0.0, rc.length, SPLIT_STEP_M)
+    order = np.argsort(sc[core])
+    return [
+        (rp.id, side, st, _taper(st, st, cap_p)),
+        (rc.id, side_c, st_c, _taper(st_c, sc[core][order], cap_c[core][order])),
+    ]
+
+
+def _on(s: np.ndarray, ranges) -> np.ndarray:
+    out = np.zeros(len(s), dtype=bool)
+    for a, b in ranges:
+        out |= (s >= a) & (s <= b)
+    return out
+
+
+def _deck_floor(road: Road, side: int, s: np.ndarray, ranges) -> np.ndarray:
+    """Least cap at stations ``s`` from which a ``TAPER_RATE`` ramp reaches the road's full width on its decks."""
+    out = np.full(len(s), -np.inf)
+    for a, b in ranges:
+        d = np.unique(np.concatenate([np.arange(a, b, SPLIT_STEP_M), [b]]))
+        w = _width(road, side, d)
+        out = np.maximum(out, np.max(w[None, :] - TAPER_RATE * np.abs(s[:, None] - d[None, :]), axis=1))
+    return out
+
+
+def _taper(st: np.ndarray, at: np.ndarray, cap: np.ndarray) -> np.ndarray:
+    """On stations ``st``, the least of the finite caps ``cap`` (given at stations ``at``) grown at ``TAPER_RATE``."""
+    fin = np.isfinite(cap)
+    if not fin.any():
+        return np.full(len(st), np.inf)
+    return np.min(cap[fin][None, :] + TAPER_RATE * np.abs(st[:, None] - at[fin][None, :]), axis=1)
+
+
+def reference_caps(roads: list[Road], links, xyz: np.ndarray, decks: dict | None = None) -> dict[str, dict[int, list[tuple[np.ndarray, np.ndarray]]]]:
+    """AC-A3 reference caps per road and side: the fit's twin median caps (D-103) and taper bounds (D-104), from the model."""
     from types import SimpleNamespace
 
     items = [SimpleNamespace(road=r, line=Polyline.from_alignment(r.alignment)) for r in roads]
-    return _twin_caps(items, xyz, touching=True)
+    caps = _twin_caps(items, xyz, touching=True)
+    by = {it.road.id: it for it in items}
+    for lk in links:
+        if lk.kind not in ("diverge", "merge"):
+            continue
+        parent, child = (lk.from_road, lk.to_road) if lk.kind == "diverge" else (lk.to_road, lk.from_road)
+        if parent not in by or child not in by:
+            continue
+        for rid, side, st, cap in taper_caps(by[parent], by[child], True, (decks or {}).get(parent, ()), (decks or {}).get(child, ())):
+            caps.setdefault(rid, {}).setdefault(side, []).append((st, cap))
+    return caps

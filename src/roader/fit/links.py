@@ -43,7 +43,7 @@ import shapely
 
 from roader.conflate.graph import RoadSeed
 from roader.conflate.register import Neighbour
-from roader.fit.median import split_twin_medians
+from roader.fit.median import _apply, split_twin_medians, taper_caps
 from roader.fit.road import RoadFit, fit_road
 from roader.model.provenance import Provenance, Source
 from roader.model.schema import Crossing, Flag, Link, Road
@@ -228,6 +228,35 @@ class _Pool:
     def close(self) -> None:
         self.ex.shutdown()
         shutil.rmtree(self.dir, ignore_errors=True)
+
+
+def bound_tapers(fits: list[RoadFit], js: list[Junction], decks: dict | None = None) -> list[Flag]:
+    """Second pass, children fitted: a parent and its linked child share their taper boundary (FR-XS-1, D-104 amended).
+
+    Only merges and diverges the model links (``_link``: the child end on the parent's
+    pavement, at its level); a continuation meets end to end and has no taper. Not on
+    ``decks`` (road id -> station ranges of the decks it is carried on): deck widths unchanged.
+    """
+    by = {f.road.id: f for f in fits}
+    decks = decks or {}
+    caps: dict[str, dict[int, list]] = {}
+    for j in sorted(js, key=lambda j: (j.parent, j.child, j.end)):
+        if j.at_parent_end or j.parent not in by or j.child not in by:
+            continue
+        link, _flag = _link(by[j.child].road, j.end, by[j.parent].road, j.at_parent_end)
+        if link is None:
+            continue
+        for rid, side, st, cap in taper_caps(by[j.parent], by[j.child], False, decks.get(j.parent, ()), decks.get(j.child, ())):
+            caps.setdefault(rid, {}).setdefault(side, []).append((st, cap))
+    flags = []
+    for rid in sorted(caps):
+        f = by[rid]
+        for side, parts in sorted(caps[rid].items()):
+            if _apply(f.road, side, parts, "FR-XS-1:taper_boundary"):
+                msg = f"{'left' if side > 0 else 'right'} width stops at the boundary shared with a linked road's taper"
+                flags.append(Flag("FR-XS-1:taper_boundary", rid, "FR-XS-1", msg))
+                f.flags.append(flags[-1])
+    return flags
 
 
 def least_half_width(seed: RoadSeed, rules) -> float:
