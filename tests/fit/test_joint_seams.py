@@ -190,3 +190,24 @@ def test_fr_af_3_crossing_on_the_parents_pavement_is_the_parents_crossing():
         s = np.arange(5.0, t.length - 5.0, 10.0)
         bias = 0.03 if t.id == truth[2].id else 0.0
         assert max(abs(it.road.profile.z(float(v)) - t.profile.z(float(v)) - bias) for v in s) < 0.1, t.id
+
+
+def test_ac_h4_continuation_continues_the_parents_cross_slope_transition():
+    """D-164: a road continuing another end to end, where the first's superelevation runs through
+    its end (2% to -2% over 100 m), keeps the change of cross slope across the seam (AC-H4, FR-AF-3).
+
+    Beyond the parent's end there is no parent surface to follow, so the child's hold
+    continues the parent's change of cross slope instead of holding the seam value.
+    """
+    a = scenes.road("first", "ramp", "motorway_link", True, scenes.alignment(-300.0, 0.0, 0.0, [("arc", 300.0, 0.02, 0.02)]), scenes.profile(scenes.MAIN_Z, -0.02, [(300.0, -0.02)]), scenes.section(5.5, 5.5, 0.0, 0.0))
+    x, y, h, k = a.alignment.evaluate(a.length)
+    b = scenes.road("second", "ramp", "motorway_link", True, scenes.alignment(x, y, h, [("arc", 300.0, k, k)]), scenes.profile(a.profile.z(a.length), -0.02, [(300.0, -0.02)]), scenes.section(5.5, 5.5, 0.0, 0.0))
+    a.cross_section.slope_left = scenes.piecewise([(0.0, 0.02), (250.0, 0.02), (300.0, 0.0)])
+    a.cross_section.slope_right = scenes.piecewise([(0.0, -0.02), (250.0, -0.02), (300.0, 0.0)])
+    b.cross_section.slope_left = scenes.piecewise([(0.0, 0.0), (50.0, -0.02), (300.0, -0.02)])
+    b.cross_section.slope_right = scenes.piecewise([(0.0, 0.0), (50.0, 0.02), (300.0, 0.02)])
+    items = _independent([a, b])
+    link = Link("lk_cont", a.id, "end", b.id, "start", "continue", from_s=a.length, to_s=0.0)
+    joint_fit(items, [link], [], RULES)
+    v, n = link_violations(link, {it.road.id: it.road for it in items})
+    assert n > 0 and v == [], [q.message for q in v]

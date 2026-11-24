@@ -45,6 +45,7 @@ from roader.model.schema import Crossing, Flag, Link, Road
 from roader.rules import RuleBook
 
 SEAM_HOLD_M = 5.0
+PAST_END_M = 0.05  # a sample this far from its projection on the parent lies past the parent's end
 SEAM_TRANSITION_M = 20.0
 SEAM_PVI_M = 30.0
 SEAM_WINDOW_M = 60.0  # a child's seam transition curves lie within this of the seam
@@ -174,18 +175,33 @@ def _hold(pw: Piecewise, s_c: float, length: float, values: tuple[float, float],
     return Piecewise(knots)
 
 
-def _slope_across(child: Road, parent: Road, s: float, side: float, fallback: tuple[float, float]) -> float:
-    """Mean surface slope of the parent across the child's direction under one side of the child at its station s."""
-    _t, n_c, _k = _frame(child, s)
+def _slope_across(child: Road, parent: Road, s: float, side: float, fallback: tuple[float, float] | None, shift: float = 0.0) -> float | None:
+    """Mean surface slope of the parent across the child's direction under one side of the child at its station s.
+
+    ``shift``: the sample line moved that far along the child's direction (behind
+    it when negative). No parent pavement under it: the slope at ``fallback``, or None.
+    """
+    t_c, n_c, _k = _frame(child, s)
     vals = []
     for u in _side_offsets(child, s, side):
         x, y = child.alignment.offset_point(s, u)
+        x, y = x + shift * t_c[0], y + shift * t_c[1]
         ps, pu = _project(parent, x, y)
         wl, wr = parent.cross_section.width_left(ps), parent.cross_section.width_right(ps)
         if not (-wr <= pu <= wl):
             continue
-        vals.append(float(surface_gradient(parent, ps, pu) @ n_c))
+        qx, qy = parent.alignment.offset_point(ps, pu)
+        if math.hypot(x - qx, y - qy) > PAST_END_M:
+            continue  # past the parent's end: the projection is clamped to it
+        # Behind the seam the parent may curve away from the child's tangent: across it there.
+        n = n_c
+        if shift != 0.0:
+            n_p = _frame(parent, ps)[1]
+            n = n_p if n_p @ n_c >= 0.0 else -n_p
+        vals.append(float(surface_gradient(parent, ps, pu) @ n))
     if not vals:
+        if fallback is None:
+            return None
         vals = [float(surface_gradient(parent, *fallback) @ n_c)]
     return float(np.mean(vals))
 
@@ -195,13 +211,24 @@ def _seam_slopes(child: Road, parent: Road, seam: Seam) -> None:
 
     Following the parent over the hold (not a constant) keeps the change of cross
     slope along the road equal on both sides of the seam, so the grade matches at
-    every offset where the parent's cross slope is in transition (AC-H4).
+    every offset where the parent's cross slope is in transition (AC-H4). Where the
+    hold runs past the parent's end, the parent's change behind the seam is continued (D-164).
     """
     xs = child.cross_section
     d = 1.0 if seam.child_s < 0.5 * child.length else -1.0
-    near = seam.child_s + d * min(SEAM_HOLD_M, 0.25 * child.length)
+    hold = min(SEAM_HOLD_M, 0.25 * child.length)
+    near = seam.child_s + d * hold
     fallback = (seam.parent_s, seam.parent_u)
-    targets = {side: (_slope_across(child, parent, seam.child_s, side, fallback), _slope_across(child, parent, near, side, fallback)) for side in (1.0, -1.0)}
+    targets = {}
+    for side in (1.0, -1.0):
+        at = _slope_across(child, parent, seam.child_s, side, fallback)
+        there = _slope_across(child, parent, near, side, None)
+        if there is None:
+            # Past the parent's end (an end-to-end continuation) there is no parent surface to
+            # follow: the hold continues the parent's change of cross slope behind the seam (D-164).
+            behind = _slope_across(child, parent, seam.child_s, side, None, shift=-d * hold)
+            there = at if behind is None else 2.0 * at - behind
+        targets[side] = (at, there)
     ref = xs.slope_left.knots[0].prov if xs.slope_left.knots else Provenance(Source.MEASURED, 0.5)
     pprov = parent.cross_section.slope_left.knots[0].prov if parent.cross_section.slope_left.knots else ref
     prov = Provenance(
