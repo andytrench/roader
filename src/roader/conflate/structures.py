@@ -18,13 +18,14 @@ A road leaving or joining another on that road's deck rides the same deck
 from __future__ import annotations
 
 import math
+from collections.abc import Callable
 from dataclasses import dataclass, field
 
 import numpy as np
 
 from roader.evidence import Evidence
 from roader.fit.road import RoadFit
-from roader.model.schema import Flag, Link, Road
+from roader.model.schema import Crossing, Flag, Link, Road
 
 STEP_M = 1.0
 BAND_INNER_M = 1.5
@@ -139,6 +140,40 @@ def chain_extents(
                 )
             )
     return sorted(out, key=lambda e: (e.road_id, e.s_start))
+
+
+def cover_crossed_roads(
+    extents: list[StructureExtent],
+    crossings: list[Crossing],
+    footprint: Callable[[Crossing, float], tuple[float, float]],
+) -> tuple[list[StructureExtent], list[Flag]]:
+    """A deck spans every road it crosses (FR-VC-4, FR-ST-3, D-166).
+
+    ``footprint(crossing, t)``: the stations on the carried road, read along support
+    lines s - t u, covered by the crossed road's pavement plus the least lateral
+    clearance. A data extent whose end falls inside the footprint of a crossing under
+    it (the evidence missed part of the deck) is extended to clear it and flagged; its
+    method and evidence stay as found. Rule extents are built from the footprint already.
+    """
+    out, flags = [], []
+    for e in extents:
+        on = [c for c in crossings if c.upper_road == e.road_id and e.s_start - 1.0 <= c.upper_s <= e.s_end + 1.0]
+        if not on or e.method == "rule":
+            out.append(e)
+            continue
+        t = math.tan(float(np.mean([c.skew_rad for c in on])))
+        spans = [footprint(c, t) for c in on]
+        a, b = min(e.s_start, *(lo for lo, _ in spans)), max(e.s_end, *(hi for _, hi in spans))
+        if a >= e.s_start and b <= e.s_end:
+            out.append(e)
+            continue
+        moved = [f"{name} {old:.1f} -> {new:.1f}" for name, old, new in (("start", e.s_start, a), ("end", e.s_end, b)) if new != old]
+        flags.append(Flag(
+            "FR-VC-4:span_extended", e.road_id, "FR-VC-4",
+            f"{e.method} span s={e.s_start:.1f}-{e.s_end:.1f} ends on a crossed road; {', '.join(moved)} to clear its pavement and lateral clearance",
+        ))
+        out.append(StructureExtent(e.road_id, a, b, e.method, e.geom, e.class17, e.one_sided, list(e.chained), e.clipped))
+    return out, flags
 
 
 SEAM_REACH_M = 2.0  # a run starting this close to its road's seam starts on the parent's deck

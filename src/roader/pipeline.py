@@ -52,6 +52,7 @@ from roader.conflate.structures import (
     StructureExtent,
     absorb_diverging,
     chain_extents,
+    cover_crossed_roads,
     find_extents,
     side_drop,
 )
@@ -167,6 +168,8 @@ def run_pipeline(
         a, b = _footprint_on(by_id[c.upper_road], by_id[c.lower_road], c, lateral + RULE_EXTENT_PAD_M)
         extents.append(StructureExtent(c.upper_road, a, b, "rule", None, None))
         flags.append(Flag("FR-VC-4:not_found", c.id, "FR-VC-4", "no structure ends found in the data; span set from the crossed road and lateral clearance rule"))
+    extents, xflags = cover_crossed_roads(extents, crossings, lambda c, t: _crossed_footprint(by_id, c, t, rules))
+    flags.extend(xflags)
     extents = chain_extents(extents, drops, {f.road.id: f.road.length for f in fits})
     extents, xflags = _over_something(extents, crossings)
     flags.extend(xflags)
@@ -406,6 +409,15 @@ def _buildable_fills(model: RoadModel) -> list[Flag]:
         ss.kind, ss.ratio = "none", 0.0
         out.append(Flag("L4:fill_unbuildable", ss.id, "FR-OC-3", f"fill written as none: {reason}"))
     return out
+
+
+def _crossed_footprint(by_id, c, t: float, rules) -> tuple[float, float]:
+    """Support-line stations on the carried road clear of the crossed pavement by the least lateral clearance (D-166)."""
+    upper, lower = by_id[c.upper_road], by_id[c.lower_road]
+    least = rules.get("clearance.lateral.support", road_class=lower.road.road_class).low
+    xs = upper.road.cross_section
+    across = (-xs.width_right(c.upper_s), xs.width_left(c.upper_s))
+    return _footprint_on(upper, lower, c, least, t=t, across=across)
 
 
 def _over_something(extents: list[StructureExtent], crossings) -> tuple[list[StructureExtent], list[Flag]]:
