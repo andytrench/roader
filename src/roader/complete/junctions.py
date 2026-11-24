@@ -1394,6 +1394,11 @@ def _shared_group(model, roads, group: list[_Stretch], zone_map, covered, by_id,
         area, problem = _shared_area(roads[r], lo, hi, outline, holes, sorted(set(names) - {r}))
         if area is None:
             return [], problem
+        if touched:
+            # Beside a junction area the region obeys the area's rules: no support in it, no deck at its level (D-069, D-154).
+            problem = _structure_conflict(model, roads, {r: (lo, hi)}, area)
+            if problem:
+                return [], f"region of {r} {lo:.1f}-{hi:.1f}: {problem}"
         out.append(area)
     return out, ""
 
