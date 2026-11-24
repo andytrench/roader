@@ -39,7 +39,6 @@ KNOWN: dict[tuple[str, str | None], str] = {
     ("spui", "AC-A5"): "decks: the ramps riding the wide street deck get no structure of their own, and the street deck is not matched to the truth",
     ("cloverleaf", "AC-A5"): "decks: I-88 deck end 3 m off beside the diverging loop",
     ("directional", "AC-A5"): "decks: stacked-level deck ends 20-26 m off (flyover over the I-88 deck)",
-    ("spui", "FR-EX-1"): "decks: a pier column falls outside its cap on a ramp deck at the wide street deck; the ramp is swept with square structures",
 }
 
 
