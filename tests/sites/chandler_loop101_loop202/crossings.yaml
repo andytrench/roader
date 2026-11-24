@@ -4,8 +4,9 @@
 # (lidar_sha256 ca573143..., vector_sha256 ba6057a5...), not from a site visit or plans.
 # Crossings are every plan intersection inside the AOI, without a shared node, between
 # in-scope OSM edges (roader.io.in_scope) where at least one edge is limited-access
-# (D-037): 97 crossings. Footways, cycleways and service roads are in scope under
-# roader.io.in_scope and are listed.
+# (D-037): 61 crossings. Under D-160 paths (footways,
+# cycleways and the like) are in scope only on their own bridges; service roads are in
+# scope under roader.io.in_scope and are listed.
 #
 # Class 17 (bridge deck) is present in this collection: 388,651 returns in the AOI.
 #
@@ -31,7 +32,7 @@
 # on along the mainline deck the ramp's centerline continues onto.
 #
 # Review checklist: confirm the vertical order of the multi-level flyover crossings;
-# decide whether footway and service crossings belong in the AC-H2 list; resolve the
+# decide whether service crossings belong in the AC-H2 list; resolve the
 # unresolved entries; confirm the structure grouping and the deck ends.
 
 site_id: chandler_loop101_loop202
@@ -147,17 +148,6 @@ crossings:
     structure: st03_ramp
     tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
     evidence: "upper measured; lower interpolated over 54 m"
-  - id: ramp28613336_over_footway14045416471404541647
-    upper: {osm_way: 28613336, name: "ramp", highway: motorway_link}
-    lower: {osm_way: 1404541647, name: "footway1404541647", highway: footway}
-    lonlat: [-111.893122, 33.293875]
-    upper_z_m: 367.1
-    lower_z_m: 358.2
-    dz_m: 8.9
-    skew_deg: 65
-    structure: st03_ramp
-    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
-    evidence: "upper measured; lower interpolated over 56 m"
   - id: ramp28613427_over_ramp23606324
     upper: {osm_way: 28613427, name: "ramp", highway: motorway_link}
     lower: {osm_way: 23606324, name: "ramp", highway: motorway_link}
@@ -235,17 +225,6 @@ crossings:
     structure: st06_ramp
     tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
     evidence: "upper measured; lower interpolated over 34 m"
-  - id: ramp28613492_over_footway953215817953215817
-    upper: {osm_way: 28613492, name: "ramp", highway: motorway_link}
-    lower: {osm_way: 953215817, name: "footway953215817", highway: footway}
-    lonlat: [-111.894595, 33.29543]
-    upper_z_m: 364.4
-    lower_z_m: 356.8
-    dz_m: 7.6
-    skew_deg: 58
-    structure: st06_ramp
-    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
-    evidence: "upper measured; lower interpolated over 32 m"
   - id: ramp28613505_over_ramp436409378
     upper: {osm_way: 28613505, name: "ramp", highway: motorway_link}
     lower: {osm_way: 436409378, name: "ramp", highway: motorway_link}
@@ -268,17 +247,6 @@ crossings:
     structure: st07_ramp
     tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
     evidence: "upper measured; lower interpolated over 34 m"
-  - id: ramp28613505_over_footway953215817953215817
-    upper: {osm_way: 28613505, name: "ramp", highway: motorway_link}
-    lower: {osm_way: 953215817, name: "footway953215817", highway: footway}
-    lonlat: [-111.894396, 33.295124]
-    upper_z_m: 366.1
-    lower_z_m: 356.9
-    dz_m: 9.2
-    skew_deg: 60
-    structure: st07_ramp
-    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
-    evidence: "upper measured; lower interpolated over 36 m"
   - id: ramp28613515_over_southpriceroad437461829
     upper: {osm_way: 28613515, name: "ramp", highway: motorway_link}
     lower: {osm_way: 437461829, name: "South Price Road", highway: secondary}
@@ -290,17 +258,6 @@ crossings:
     structure: st08_ramp
     tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
     evidence: "upper measured; lower interpolated over 56 m"
-  - id: ramp28613515_over_footway953215817953215817
-    upper: {osm_way: 28613515, name: "ramp", highway: motorway_link}
-    lower: {osm_way: 953215817, name: "footway953215817", highway: footway}
-    lonlat: [-111.894063, 33.294638]
-    upper_z_m: 368.2
-    lower_z_m: 357.3
-    dz_m: 10.9
-    skew_deg: 60
-    structure: st08_ramp
-    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
-    evidence: "upper interpolated (occluded); lower interpolated over 52 m"
   - id: southchandlervillage200754589_over_ramp23606299
     upper: {osm_way: 200754589, name: "South Chandler Village Drive", highway: tertiary}
     lower: {osm_way: 23606299, name: "ramp", highway: motorway_link}
@@ -499,39 +456,6 @@ crossings:
     structure: st11_ramp
     tags: {upper_layer: "2", upper_bridge: "yes", lower_layer: ""}
     evidence: "upper measured; lower interpolated over 62 m"
-  - id: ramp436409385_over_footway779442062779442062
-    upper: {osm_way: 436409385, name: "ramp", highway: motorway_link}
-    lower: {osm_way: 779442062, name: "footway779442062", highway: footway}
-    lonlat: [-111.893356, 33.293104]
-    upper_z_m: 373.4
-    lower_z_m: 359.3
-    dz_m: 14.1
-    skew_deg: 70
-    structure: st11_ramp
-    tags: {upper_layer: "2", upper_bridge: "yes", lower_layer: ""}
-    evidence: "upper measured; lower interpolated over 44 m"
-  - id: ramp436409385_over_footway779442076779442076
-    upper: {osm_way: 436409385, name: "ramp", highway: motorway_link}
-    lower: {osm_way: 779442076, name: "footway779442076", highway: footway}
-    lonlat: [-111.892901, 33.292705]
-    upper_z_m: 372.1
-    lower_z_m: 359.5
-    dz_m: 12.6
-    skew_deg: 50
-    structure: st11_ramp
-    tags: {upper_layer: "2", upper_bridge: "yes", lower_layer: ""}
-    evidence: "upper measured; lower interpolated over 28 m"
-  - id: ramp436409385_over_footway953215817953215817
-    upper: {osm_way: 436409385, name: "ramp", highway: motorway_link}
-    lower: {osm_way: 953215817, name: "footway953215817", highway: footway}
-    lonlat: [-111.894161, 33.294781]
-    upper_z_m: 371.0
-    lower_z_m: 357.2
-    dz_m: 13.8
-    skew_deg: 61
-    structure: st11_ramp
-    tags: {upper_layer: "2", upper_bridge: "yes", lower_layer: ""}
-    evidence: "upper measured; lower interpolated over 46 m"
   - id: ramp436409386_over_ramp28613439
     upper: {osm_way: 436409386, name: "ramp", highway: motorway_link}
     lower: {osm_way: 28613439, name: "ramp", highway: motorway_link}
@@ -609,39 +533,6 @@ crossings:
     structure: st12_ramp
     tags: {upper_layer: "2", upper_bridge: "yes", lower_layer: ""}
     evidence: "upper measured; lower interpolated over 56 m"
-  - id: ramp436409386_over_footway779442062779442062
-    upper: {osm_way: 436409386, name: "ramp", highway: motorway_link}
-    lower: {osm_way: 779442062, name: "footway779442062", highway: footway}
-    lonlat: [-111.893331, 33.292988]
-    upper_z_m: 373.6
-    lower_z_m: 359.0
-    dz_m: 14.6
-    skew_deg: 52
-    structure: st12_ramp
-    tags: {upper_layer: "2", upper_bridge: "yes", lower_layer: ""}
-    evidence: "upper measured; lower interpolated over 34 m"
-  - id: ramp436409386_over_footway779442076779442076
-    upper: {osm_way: 436409386, name: "ramp", highway: motorway_link}
-    lower: {osm_way: 779442076, name: "footway779442076", highway: footway}
-    lonlat: [-111.893012, 33.292707]
-    upper_z_m: 372.7
-    lower_z_m: 359.5
-    dz_m: 13.2
-    skew_deg: 49
-    structure: st12_ramp
-    tags: {upper_layer: "2", upper_bridge: "yes", lower_layer: ""}
-    evidence: "upper measured; lower interpolated over 26 m"
-  - id: ramp436409386_over_footway953215817953215817
-    upper: {osm_way: 436409386, name: "ramp", highway: motorway_link}
-    lower: {osm_way: 953215817, name: "footway953215817", highway: footway}
-    lonlat: [-111.894242, 33.2949]
-    upper_z_m: 370.8
-    lower_z_m: 357.0
-    dz_m: 13.8
-    skew_deg: 62
-    structure: st12_ramp
-    tags: {upper_layer: "2", upper_bridge: "yes", lower_layer: ""}
-    evidence: "upper measured; lower interpolated over 56 m"
   - id: ramp436409386_over_ramp1216385607
     upper: {osm_way: 436409386, name: "ramp", highway: motorway_link}
     lower: {osm_way: 1216385607, name: "ramp", highway: motorway_link}
@@ -653,160 +544,6 @@ crossings:
     structure: st12_ramp
     tags: {upper_layer: "2", upper_bridge: "yes", lower_layer: ""}
     evidence: "upper measured; lower interpolated over 28 m"
-  - id: footway779442052779442052_over_ramp18748500
-    upper: {osm_way: 779442052, name: "footway779442052", highway: footway}
-    lower: {osm_way: 18748500, name: "ramp", highway: motorway_link}
-    lonlat: [-111.894069, 33.298676]
-    upper_z_m: 363.3
-    lower_z_m: 354.6
-    dz_m: 8.7
-    skew_deg: 0
-    structure: st13_footway779442052
-    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
-    evidence: "upper measured; lower interpolated over 34 m"
-  - id: footway779442052779442052_over_ramp23606517
-    upper: {osm_way: 779442052, name: "footway779442052", highway: footway}
-    lower: {osm_way: 23606517, name: "ramp", highway: motorway_link}
-    lonlat: [-111.8947, 33.298656]
-    upper_z_m: 363.2
-    lower_z_m: 354.5
-    dz_m: 8.7
-    skew_deg: 6
-    structure: st13_footway779442052
-    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
-    evidence: "upper measured; lower interpolated over 36 m"
-  - id: footway779442052779442052_over_ramp28613365
-    upper: {osm_way: 779442052, name: "footway779442052", highway: footway}
-    lower: {osm_way: 28613365, name: "ramp", highway: motorway_link}
-    lonlat: [-111.894121, 33.298675]
-    upper_z_m: 363.2
-    lower_z_m: 354.7
-    dz_m: 8.5
-    skew_deg: 0
-    structure: st13_footway779442052
-    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
-    evidence: "upper measured; lower interpolated over 36 m"
-  - id: footway779442052779442052_over_ramp436409375
-    upper: {osm_way: 779442052, name: "footway779442052", highway: footway}
-    lower: {osm_way: 436409375, name: "ramp", highway: motorway_link}
-    lonlat: [-111.894174, 33.298673]
-    upper_z_m: 363.3
-    lower_z_m: 354.7
-    dz_m: 8.6
-    skew_deg: 3
-    structure: st13_footway779442052
-    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
-    evidence: "upper measured; lower interpolated over 36 m"
-  - id: footway779442052779442052_over_ramp436409379
-    upper: {osm_way: 779442052, name: "footway779442052", highway: footway}
-    lower: {osm_way: 436409379, name: "ramp", highway: motorway_link}
-    lonlat: [-111.894299, 33.298669]
-    upper_z_m: 363.3
-    lower_z_m: 354.7
-    dz_m: 8.6
-    skew_deg: 2
-    structure: st13_footway779442052
-    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
-    evidence: "upper measured; lower interpolated over 36 m"
-  - id: footway779442052779442052_over_pricefreeway528135745
-    upper: {osm_way: 779442052, name: "footway779442052", highway: footway}
-    lower: {osm_way: 528135745, name: "Price Freeway", highway: motorway}
-    lonlat: [-111.89437, 33.298667]
-    upper_z_m: 363.0
-    lower_z_m: 354.6
-    dz_m: 8.4
-    skew_deg: 3
-    structure: st13_footway779442052
-    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
-    evidence: "upper measured; lower interpolated over 36 m"
-  - id: footway779442052779442052_over_ramp603393417
-    upper: {osm_way: 779442052, name: "footway779442052", highway: footway}
-    lower: {osm_way: 603393417, name: "ramp", highway: motorway_link}
-    lonlat: [-111.893878, 33.298683]
-    upper_z_m: 363.2
-    lower_z_m: 354.4
-    dz_m: 8.8
-    skew_deg: 1
-    structure: st13_footway779442052
-    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
-    evidence: "upper measured; lower interpolated over 34 m"
-  - id: footway779442053779442053_over_ramp18748500
-    upper: {osm_way: 779442053, name: "footway779442053", highway: footway}
-    lower: {osm_way: 18748500, name: "ramp", highway: motorway_link}
-    lonlat: [-111.894058, 33.29844]
-    upper_z_m: 362.5
-    lower_z_m: 354.7
-    dz_m: 7.8
-    skew_deg: 0
-    structure: st14_footway779442053
-    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
-    evidence: "upper measured; lower interpolated over 32 m"
-  - id: footway779442053779442053_over_ramp23606517
-    upper: {osm_way: 779442053, name: "footway779442053", highway: footway}
-    lower: {osm_way: 23606517, name: "ramp", highway: motorway_link}
-    lonlat: [-111.894717, 33.298416]
-    upper_z_m: 362.4
-    lower_z_m: 354.9
-    dz_m: 7.5
-    skew_deg: 6
-    structure: st14_footway779442053
-    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
-    evidence: "upper measured; lower interpolated over 32 m"
-  - id: footway779442053779442053_over_ramp28613365
-    upper: {osm_way: 779442053, name: "footway779442053", highway: footway}
-    lower: {osm_way: 28613365, name: "ramp", highway: motorway_link}
-    lonlat: [-111.894112, 33.298438]
-    upper_z_m: 362.5
-    lower_z_m: 354.8
-    dz_m: 7.7
-    skew_deg: 1
-    structure: st14_footway779442053
-    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
-    evidence: "upper measured; lower interpolated over 32 m"
-  - id: footway779442053779442053_over_ramp436409375
-    upper: {osm_way: 779442053, name: "footway779442053", highway: footway}
-    lower: {osm_way: 436409375, name: "ramp", highway: motorway_link}
-    lonlat: [-111.894176, 33.298436]
-    upper_z_m: 362.6
-    lower_z_m: 354.9
-    dz_m: 7.7
-    skew_deg: 3
-    structure: st14_footway779442053
-    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
-    evidence: "upper measured; lower interpolated over 32 m"
-  - id: footway779442053779442053_over_ramp436409379
-    upper: {osm_way: 779442053, name: "footway779442053", highway: footway}
-    lower: {osm_way: 436409379, name: "ramp", highway: motorway_link}
-    lonlat: [-111.894298, 33.298432]
-    upper_z_m: 362.6
-    lower_z_m: 354.9
-    dz_m: 7.7
-    skew_deg: 2
-    structure: st14_footway779442053
-    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
-    evidence: "upper measured; lower interpolated over 32 m"
-  - id: footway779442053779442053_over_pricefreeway528135745
-    upper: {osm_way: 779442053, name: "footway779442053", highway: footway}
-    lower: {osm_way: 528135745, name: "Price Freeway", highway: motorway}
-    lonlat: [-111.894374, 33.298429]
-    upper_z_m: 362.5
-    lower_z_m: 354.8
-    dz_m: 7.7
-    skew_deg: 3
-    structure: st14_footway779442053
-    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
-    evidence: "upper measured; lower interpolated over 34 m"
-  - id: footway779442053779442053_over_ramp603393417
-    upper: {osm_way: 779442053, name: "footway779442053", highway: footway}
-    lower: {osm_way: 603393417, name: "ramp", highway: motorway_link}
-    lonlat: [-111.89386, 33.298448]
-    upper_z_m: 362.5
-    lower_z_m: 354.7
-    dz_m: 7.8
-    skew_deg: 1
-    structure: st14_footway779442053
-    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
-    evidence: "upper measured; lower interpolated over 34 m"
   - id: southpriceroad779442064_over_santanfreeway528423334
     upper: {osm_way: 779442064, name: "South Price Road", highway: secondary}
     lower: {osm_way: 528423334, name: "Santan Freeway", highway: motorway}
@@ -829,28 +566,6 @@ crossings:
     structure: st15_southpriceroad
     tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
     evidence: "upper measured; lower interpolated over 46 m"
-  - id: footway779442066779442066_over_santanfreeway603393353
-    upper: {osm_way: 779442066, name: "footway779442066", highway: footway}
-    lower: {osm_way: 603393353, name: "Santan Freeway", highway: motorway}
-    lonlat: [-111.892386, 33.291899]
-    upper_z_m: 362.4
-    lower_z_m: 352.6
-    dz_m: 9.8
-    skew_deg: 24
-    structure: st16_footway779442070
-    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
-    evidence: "upper interpolated (occluded); lower interpolated over 50 m"
-  - id: footway779442070779442070_over_santanfreeway528423334
-    upper: {osm_way: 779442070, name: "footway779442070", highway: footway}
-    lower: {osm_way: 528423334, name: "Santan Freeway", highway: motorway}
-    lonlat: [-111.892544, 33.292265]
-    upper_z_m: 366.1
-    lower_z_m: 352.7
-    dz_m: 13.4
-    skew_deg: 22
-    structure: st16_footway779442070
-    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
-    evidence: "upper interpolated (occluded); lower interpolated over 48 m"
   - id: ramp1119519528_over_ramp28613439
     upper: {osm_way: 1119519528, name: "ramp", highway: motorway_link}
     lower: {osm_way: 28613439, name: "ramp", highway: motorway_link}
@@ -928,28 +643,6 @@ crossings:
     structure: st17_ramp
     tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
     evidence: "upper measured; lower interpolated over 24 m"
-  - id: ramp1119519528_over_footway779442083779442083
-    upper: {osm_way: 1119519528, name: "ramp", highway: motorway_link}
-    lower: {osm_way: 779442083, name: "footway779442083", highway: footway}
-    lonlat: [-111.89254, 33.29113]
-    upper_z_m: 372.6
-    lower_z_m: 361.2
-    dz_m: 11.4
-    skew_deg: 53
-    structure: st17_ramp
-    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
-    evidence: "upper measured; lower interpolated over 28 m"
-  - id: ramp1119519528_over_footway779442084779442084
-    upper: {osm_way: 1119519528, name: "ramp", highway: motorway_link}
-    lower: {osm_way: 779442084, name: "footway779442084", highway: footway}
-    lonlat: [-111.891904, 33.290878]
-    upper_z_m: 371.7
-    lower_z_m: 361.3
-    dz_m: 10.4
-    skew_deg: 38
-    structure: st17_ramp
-    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
-    evidence: "upper measured; lower interpolated over 24 m"
   - id: ramp1119519528_over_service883059701883059701
     upper: {osm_way: 1119519528, name: "ramp", highway: motorway_link}
     lower: {osm_way: 883059701, name: "service883059701", highway: service}
@@ -1016,124 +709,16 @@ crossings:
     structure: st18_southchandlervillagedriv
     tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
     evidence: "upper measured; lower interpolated over 26 m"
-  - id: footway14095242451409524245_over_ramp23606299
-    upper: {osm_way: 1409524245, name: "footway1409524245", highway: footway}
-    lower: {osm_way: 23606299, name: "ramp", highway: motorway_link}
-    lonlat: [-111.902262, 33.291691]
-    upper_z_m: 360.9
-    lower_z_m: 353.2
-    dz_m: 7.7
-    skew_deg: 4
-    structure: st19_footway1409524245
-    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
-    evidence: "upper measured; lower interpolated over 28 m"
-  - id: footway14095242451409524245_over_ramp28613496
-    upper: {osm_way: 1409524245, name: "footway1409524245", highway: footway}
-    lower: {osm_way: 28613496, name: "ramp", highway: motorway_link}
-    lonlat: [-111.902192, 33.292226]
-    upper_z_m: 360.9
-    lower_z_m: 353.5
-    dz_m: 7.4
-    skew_deg: 10
-    structure: st19_footway1409524245
-    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
-    evidence: "upper measured; lower interpolated over 28 m"
-  - id: footway14095242451409524245_over_santanfreeway528135751
-    upper: {osm_way: 1409524245, name: "footway1409524245", highway: footway}
-    lower: {osm_way: 528135751, name: "Santan Freeway", highway: motorway}
-    lonlat: [-111.902244, 33.291829]
-    upper_z_m: 361.0
-    lower_z_m: 353.5
-    dz_m: 7.5
-    skew_deg: 7
-    structure: st19_footway1409524245
-    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
-    evidence: "upper measured; lower interpolated over 28 m"
-  - id: footway14095242451409524245_over_santanfreeway603393368
-    upper: {osm_way: 1409524245, name: "footway1409524245", highway: footway}
-    lower: {osm_way: 603393368, name: "Santan Freeway", highway: motorway}
-    lonlat: [-111.902214, 33.292059]
-    upper_z_m: 361.0
-    lower_z_m: 353.5
-    dz_m: 7.5
-    skew_deg: 8
-    structure: st19_footway1409524245
-    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
-    evidence: "upper measured; lower interpolated over 28 m"
-  - id: footway14095242511409524251_over_ramp23606299
-    upper: {osm_way: 1409524251, name: "footway1409524251", highway: footway}
-    lower: {osm_way: 23606299, name: "ramp", highway: motorway_link}
-    lonlat: [-111.90248, 33.291698]
-    upper_z_m: 361.2
-    lower_z_m: 353.1
-    dz_m: 8.1
-    skew_deg: 4
-    structure: st20_footway1409524251
-    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
-    evidence: "upper measured; lower interpolated over 30 m"
-  - id: footway14095242511409524251_over_ramp28613496
-    upper: {osm_way: 1409524251, name: "footway1409524251", highway: footway}
-    lower: {osm_way: 28613496, name: "ramp", highway: motorway_link}
-    lonlat: [-111.902418, 33.292212]
-    upper_z_m: 361.7
-    lower_z_m: 353.3
-    dz_m: 8.4
-    skew_deg: 10
-    structure: st20_footway1409524251
-    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
-    evidence: "upper measured; lower interpolated over 30 m"
-  - id: footway14095242511409524251_over_santanfreeway528135751
-    upper: {osm_way: 1409524251, name: "footway1409524251", highway: footway}
-    lower: {osm_way: 528135751, name: "Santan Freeway", highway: motorway}
-    lonlat: [-111.902465, 33.291826]
-    upper_z_m: 361.6
-    lower_z_m: 353.4
-    dz_m: 8.2
-    skew_deg: 7
-    structure: st20_footway1409524251
-    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
-    evidence: "upper measured; lower interpolated over 30 m"
-  - id: footway14095242511409524251_over_santanfreeway603393368
-    upper: {osm_way: 1409524251, name: "footway1409524251", highway: footway}
-    lower: {osm_way: 603393368, name: "Santan Freeway", highway: motorway}
-    lonlat: [-111.902437, 33.292053]
-    upper_z_m: 361.8
-    lower_z_m: 353.4
-    dz_m: 8.4
-    skew_deg: 7
-    structure: st20_footway1409524251
-    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
-    evidence: "upper measured; lower interpolated over 30 m"
 unresolved:
-  - id: ramp436409385_x_footway779442069779442069
-    a: {osm_way: 436409385, name: "ramp", highway: motorway_link, layer: "2", bridge: "yes"}
-    b: {osm_way: 779442069, name: "footway779442069", highway: footway, layer: "", bridge: ""}
-    lonlat: [-111.892582, 33.292502]
-    reason: "no lidar profile on one side of the crossing (b one-sided); cannot interpolate"
   - id: ramp436409385_x_service883059700883059700
     a: {osm_way: 436409385, name: "ramp", highway: motorway_link, layer: "2", bridge: "yes"}
     b: {osm_way: 883059700, name: "service883059700", highway: service, layer: "", bridge: ""}
     lonlat: [-111.893388, 33.293134]
     reason: "no lidar profile on one side of the crossing (b one-sided); cannot interpolate"
-  - id: ramp436409386_x_footway779442069779442069
-    a: {osm_way: 436409386, name: "ramp", highway: motorway_link, layer: "2", bridge: "yes"}
-    b: {osm_way: 779442069, name: "footway779442069", highway: footway, layer: "", bridge: ""}
-    lonlat: [-111.892627, 33.292463]
-    reason: "no lidar profile on one side of the crossing (b one-sided); cannot interpolate"
   - id: ramp436409386_x_service883059700883059700
     a: {osm_way: 436409386, name: "ramp", highway: motorway_link, layer: "2", bridge: "yes"}
     b: {osm_way: 883059700, name: "service883059700", highway: service, layer: "", bridge: ""}
     lonlat: [-111.893462, 33.29312]
-    reason: "no lidar profile on one side of the crossing (b one-sided); cannot interpolate"
-  - id: santanfreeway528423334_x_footway779442065779442065
-    a: {osm_way: 528423334, name: "Santan Freeway", highway: motorway, layer: "", bridge: ""}
-    b: {osm_way: 779442065, name: "footway779442065", highway: footway, layer: "1", bridge: "yes"}
-    lonlat: [-111.893001, 33.292277]
-    reason: "no lidar profile on one side of the crossing (b one-sided); cannot interpolate"
-  - id: santanfreeway603393353_x_footway779442065779442065
-    a: {osm_way: 603393353, name: "Santan Freeway", highway: motorway, layer: "", bridge: ""}
-    b: {osm_way: 779442065, name: "footway779442065", highway: footway, layer: "1", bridge: "yes"}
-    lonlat: [-111.892848, 33.291922]
     reason: "no lidar profile on one side of the crossing (b one-sided); cannot interpolate"
 
 structure_ends:
@@ -1159,7 +744,7 @@ structure_ends:
           osm_bridge_length_m: 84.7
     - id: st03_ramp
       carries: [28613336]
-      over: [5641709, 1404541647]
+      over: [5641709]
       ends:
         - along: 28613336
           start_lonlat: [-111.892796, 33.293567]
@@ -1182,7 +767,7 @@ structure_ends:
       ends_unavailable: "no class 17 run on the carried centerline at the crossing"
     - id: st06_ramp
       carries: [28613492]
-      over: [436409378, 603393393, 953215817]
+      over: [436409378, 603393393]
       ends:
         - along: 28613492
           start_lonlat: [-111.89455, 33.295883]
@@ -1191,7 +776,7 @@ structure_ends:
           osm_bridge_length_m: 114.8
     - id: st07_ramp
       carries: [28613505]
-      over: [436409378, 603393393, 953215817]
+      over: [436409378, 603393393]
       ends:
         - along: 28613505
           start_lonlat: [-111.894398, 33.295881]
@@ -1200,7 +785,7 @@ structure_ends:
           osm_bridge_length_m: 114.8
     - id: st08_ramp
       carries: [28613515]
-      over: [437461829, 953215817]
+      over: [437461829]
       ends:
         - along: 28613515
           start_lonlat: [-111.89411, 33.294003]
@@ -1232,7 +817,7 @@ structure_ends:
           osm_bridge_length_m: 117.1
     - id: st11_ramp
       carries: [436409385]
-      over: [5641709, 28613515, 436409372, 436409387, 436948361, 437461829, 528423334, 779442062, 779442076, 953215817]
+      over: [5641709, 28613515, 436409372, 436409387, 436948361, 437461829, 528423334]
       ends:
         - along: 436409385
           start_lonlat: [-111.890357, 33.291871]
@@ -1241,31 +826,13 @@ structure_ends:
           osm_bridge_length_m: 562.7
     - id: st12_ramp
       carries: [436409386]
-      over: [28613439, 436409372, 436409378, 436409387, 436948337, 528423334, 603393393, 779442062, 779442076, 953215817, 1216385607]
+      over: [28613439, 436409372, 436409378, 436409387, 436948337, 528423334, 603393393, 1216385607]
       ends:
         - along: 436409386
           start_lonlat: [-111.894255, 33.295467]
           end_lonlat: [-111.890369, 33.291802]
           length_m: 608.5
           osm_bridge_length_m: 573.6
-    - id: st13_footway779442052
-      carries: [779442052]
-      over: [18748500, 23606517, 28613365, 436409375, 436409379, 528135745, 603393417]
-      ends:
-        - along: 779442052
-          start_lonlat: [-111.894856, 33.298651]
-          end_lonlat: [-111.893713, 33.298688]
-          length_m: 106.5
-          osm_bridge_length_m: 129.3
-    - id: st14_footway779442053
-      carries: [779442053]
-      over: [18748500, 23606517, 28613365, 436409375, 436409379, 528135745, 603393417]
-      ends:
-        - along: 779442053
-          start_lonlat: [-111.89484, 33.298412]
-          end_lonlat: [-111.893708, 33.298453]
-          length_m: 105.5
-          osm_bridge_length_m: 133.8
     - id: st15_southpriceroad
       carries: [779442064]
       over: [528423334, 603393353]
@@ -1275,25 +842,9 @@ structure_ends:
           end_lonlat: [-111.892675, 33.291732]
           length_m: 76.0
           osm_bridge_length_m: 85.3
-    - id: st16_footway779442070
-      carries: [779442066, 779442067, 779442070]
-      over: [528423334, 603393353]
-      ends:
-        - along: 779442066
-          start_lonlat: [-111.892303, 33.291716]
-          end_lonlat: [-111.892628, 33.292461]
-          length_m: 88.0
-          osm_bridge_length_m: 86.2
-          truncated_at_aoi_edge: true  # deck continues past the AOI; length is the part inside
-        - along: 779442070
-          start_lonlat: [-111.892303, 33.291716]
-          end_lonlat: [-111.892628, 33.292461]
-          length_m: 88.0
-          osm_bridge_length_m: 86.2
-          truncated_at_aoi_edge: true  # deck continues past the AOI; length is the part inside
     - id: st17_ramp
       carries: [1119519528]
-      over: [28613439, 321652977, 436409393, 436948360, 437461827, 528423334, 603393353, 779442083, 779442084, 883059701, 934166595]
+      over: [28613439, 321652977, 436409393, 436948360, 437461827, 528423334, 603393353, 883059701, 934166595]
       ends:
         - along: 1119519528
           start_lonlat: [-111.894379, 33.293849]
@@ -1309,21 +860,3 @@ structure_ends:
           end_lonlat: [-111.902473, 33.291552]
           length_m: 84.5
           osm_bridge_length_m: 93.3
-    - id: st19_footway1409524245
-      carries: [1409524245]
-      over: [23606299, 28613496, 528135751, 603393368]
-      ends:
-        - along: 1409524245
-          start_lonlat: [-111.90218, 33.292311]
-          end_lonlat: [-111.902281, 33.291549]
-          length_m: 85.0
-          osm_bridge_length_m: 101.4
-    - id: st20_footway1409524251
-      carries: [1409524251]
-      over: [23606299, 28613496, 528135751, 603393368]
-      ends:
-        - along: 1409524251
-          start_lonlat: [-111.902519, 33.291553]
-          end_lonlat: [-111.902407, 33.292304]
-          length_m: 84.5
-          osm_bridge_length_m: 97.9

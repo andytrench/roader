@@ -4,8 +4,9 @@
 # (lidar_sha256 bd7acdde..., vector_sha256 a696539a...), not from a site visit or plans.
 # Crossings are every plan intersection inside the AOI, without a shared node, between
 # in-scope OSM edges (roader.io.in_scope) where at least one edge is limited-access
-# (D-037): 18 crossings. Footways, cycleways and service roads are in scope under
-# roader.io.in_scope and are listed.
+# (D-037): 10 crossings. Under D-160 paths (footways,
+# cycleways and the like) are in scope only on their own bridges; service roads are in
+# scope under roader.io.in_scope and are listed.
 #
 # Class 17 (bridge deck) is present in this collection: 260,388 returns in the AOI.
 #
@@ -30,26 +31,12 @@
 # AOI (`truncated_at_aoi_edge` when the deck runs on past it). Ends along a ramp can run
 # on along the mainline deck the ramp's centerline continues onto.
 #
-# Review checklist: confirm the vertical order; the footway 154647901 crossing over I-94
-# way 1230393204 has upper_z_m about 4 m below the other rows on the same footbridge
-# (the trace probably took the ground beside it), check it first; decide whether footway
-# crossings belong in the AC-H2 list; confirm the deck ends (no class 17 run on one I-94
-# bridge).
+# Review checklist: confirm the vertical order; confirm the deck ends (no class 17 run on
+# one I-94 bridge).
 
 site_id: wright_co_i94_fenning
 status: draft, needs human review
 crossings:
-  - id: i9440467680_over_footway591249130591249130
-    upper: {osm_way: 40467680, name: "I 94", highway: motorway}
-    lower: {osm_way: 591249130, name: "footway591249130", highway: footway}
-    lonlat: [-93.762598, 45.289838]
-    upper_z_m: 300.5
-    lower_z_m: 292.4
-    dz_m: 8.1
-    skew_deg: 49
-    structure: st01_i94
-    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
-    evidence: "upper measured; lower interpolated over 32 m"
   - id: i9440467680_over_broadwaystreeteast1230393206
     upper: {osm_way: 40467680, name: "I 94", highway: motorway}
     lower: {osm_way: 1230393206, name: "Broadway Street East", highway: tertiary}
@@ -59,28 +46,6 @@ crossings:
     dz_m: 8.3
     skew_deg: 50
     structure: st01_i94
-    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
-    evidence: "upper measured; lower interpolated over 32 m"
-  - id: i9440467680_over_footway12937083001293708300
-    upper: {osm_way: 40467680, name: "I 94", highway: motorway}
-    lower: {osm_way: 1293708300, name: "footway1293708300", highway: footway}
-    lonlat: [-93.762258, 45.289854]
-    upper_z_m: 300.6
-    lower_z_m: 292.6
-    dz_m: 8.0
-    skew_deg: 50
-    structure: st01_i94
-    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
-    evidence: "upper measured; lower interpolated over 34 m"
-  - id: i9440467681_over_footway591249130591249130
-    upper: {osm_way: 40467681, name: "I 94", highway: motorway}
-    lower: {osm_way: 591249130, name: "footway591249130", highway: footway}
-    lonlat: [-93.76179, 45.289417]
-    upper_z_m: 300.7
-    lower_z_m: 292.4
-    dz_m: 8.3
-    skew_deg: 51
-    structure: st02_i94
     tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
     evidence: "upper measured; lower interpolated over 32 m"
   - id: i9440467681_over_broadwaystreeteast1135032828
@@ -94,17 +59,6 @@ crossings:
     structure: st02_i94
     tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
     evidence: "upper measured; lower interpolated over 32 m"
-  - id: i9440467681_over_footway12937083001293708300
-    upper: {osm_way: 40467681, name: "I 94", highway: motorway}
-    lower: {osm_way: 1293708300, name: "footway1293708300", highway: footway}
-    lonlat: [-93.761443, 45.289429]
-    upper_z_m: 300.6
-    lower_z_m: 292.2
-    dz_m: 8.4
-    skew_deg: 51
-    structure: st02_i94
-    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
-    evidence: "upper measured; lower interpolated over 34 m"
   - id: fenningavenue40467744_over_ramp40467784
     upper: {osm_way: 40467744, name: "Fenning Avenue", highway: secondary}
     lower: {osm_way: 40467784, name: "ramp", highway: motorway_link}
@@ -193,62 +147,18 @@ crossings:
     structure: st04_fenningavenue
     tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
     evidence: "upper measured; lower interpolated over 38 m"
-  - id: footway154647901154647901_over_ramp40467784
-    upper: {osm_way: 154647901, name: "footway154647901", highway: footway}
-    lower: {osm_way: 40467784, name: "ramp", highway: motorway_link}
-    lonlat: [-93.771053, 45.29085]
-    upper_z_m: 295.0
-    lower_z_m: 286.9
-    dz_m: 8.1
-    skew_deg: 25
-    structure: st05_footway154647901
-    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
-    evidence: "upper measured; lower interpolated over 16 m"
-  - id: footway154647901154647901_over_ramp1230393202
-    upper: {osm_way: 154647901, name: "footway154647901", highway: footway}
-    lower: {osm_way: 1230393202, name: "ramp", highway: motorway_link}
-    lonlat: [-93.77105, 45.291109]
-    upper_z_m: 294.9
-    lower_z_m: 286.9
-    dz_m: 8.0
-    skew_deg: 25
-    structure: st05_footway154647901
-    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
-    evidence: "upper measured; lower interpolated over 16 m"
-  - id: footway154647901154647901_over_i941230393203
-    upper: {osm_way: 154647901, name: "footway154647901", highway: footway}
-    lower: {osm_way: 1230393203, name: "I 94", highway: motorway}
-    lonlat: [-93.771051, 45.29106]
-    upper_z_m: 295.0
-    lower_z_m: 287.0
-    dz_m: 8.0
-    skew_deg: 25
-    structure: st05_footway154647901
-    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
-    evidence: "upper measured; lower interpolated over 16 m"
-  - id: footway154647901154647901_over_i941230393204
-    upper: {osm_way: 154647901, name: "footway154647901", highway: footway}
-    lower: {osm_way: 1230393204, name: "I 94", highway: motorway}
-    lonlat: [-93.771052, 45.290901]
-    upper_z_m: 290.9
-    lower_z_m: 287.0
-    dz_m: 3.9
-    skew_deg: 25
-    structure: st05_footway154647901
-    tags: {upper_layer: "1", upper_bridge: "yes", lower_layer: ""}
-    evidence: "upper interpolated (occluded); lower interpolated over 16 m"
 
 structure_ends:
   status: draft, needs human review
   structures:
     - id: st01_i94
       carries: [40467680]
-      over: [591249130, 1230393206, 1293708300]
+      over: [1230393206]
       ends: []
       ends_unavailable: "no class 17 run on the carried centerline at the crossing"
     - id: st02_i94
       carries: [40467681]
-      over: [591249130, 1135032828, 1293708300]
+      over: [1135032828]
       ends:
         - along: 40467681
           start_lonlat: [-93.76239, 45.289391]
@@ -273,12 +183,3 @@ structure_ends:
           end_lonlat: [-93.770736, 45.290413]
           length_m: 103.5
           osm_bridge_length_m: 115.0
-    - id: st05_footway154647901
-      carries: [154647901]
-      over: [40467784, 1230393202, 1230393203, 1230393204]
-      ends:
-        - along: 154647901
-          start_lonlat: [-93.771048, 45.291439]
-          end_lonlat: [-93.771055, 45.290512]
-          length_m: 103.0
-          osm_bridge_length_m: 96.6

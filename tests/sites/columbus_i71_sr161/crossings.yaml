@@ -4,8 +4,9 @@
 # (lidar_sha256 5b174241..., vector_sha256 c6759176...), not from a site visit or plans.
 # Crossings are every plan intersection inside the AOI, without a shared node, between
 # in-scope OSM edges (roader.io.in_scope) where at least one edge is limited-access
-# (D-037): 4 crossings. Footways, cycleways and service roads are in scope under
-# roader.io.in_scope and are listed.
+# (D-037): 4 crossings. Under D-160 paths (footways,
+# cycleways and the like) are in scope only on their own bridges; service roads are in
+# scope under roader.io.in_scope and are listed.
 #
 # Class 17 (bridge deck) is present in this collection: 56,118 returns in the AOI.
 #
