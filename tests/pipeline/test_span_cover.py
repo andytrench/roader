@@ -69,11 +69,49 @@ def test_d166_pipeline_moves_a_short_data_end_off_the_lower_road(points, vectors
         return out
 
     monkeypatch.setattr(P, "find_extents", short)
-    model = P.run_pipeline(points, vectors, truth.frame, truth.unit).model
+    result = P.run_pipeline(points, vectors, truth.frame, truth.unit)
+    model = result.model
     assert cut
     (st,) = [st for st in model.structures if st.carried_road in cut]
     assert any(f.code == "FR-VC-4:span_extended" for f in model.flags)
-    lower = next(c for c in model.crossings if c.upper_road == st.carried_road)
-    road = next(r for r in model.roads if r.id == lower.lower_road)
-    half = max(road.cross_section.width_left(lower.lower_s), road.cross_section.width_right(lower.lower_s))
-    assert st.s_start < lower.upper_s - half  # the abutment stands off the lower pavement
+    _abutments_clear_of_lower_pavements(result, st)
+
+
+def _abutments_clear_of_lower_pavements(result, st):
+    """Each abutment block (FR-ST-3) lies outside every crossed pavement, read along its support lines."""
+    from roader.solids.stations import support_block
+    from roader.structures.infer import _footprint_on
+
+    fits = {f.road.id: f for f in result.fits}
+    upper = fits[st.carried_road]
+    xs = upper.road.cross_section
+    for c in (c for c in result.model.crossings if c.upper_road == st.carried_road):
+        for sp in (sp for sp in st.supports if sp.kind == "abutment"):
+            across = (-xs.width_right(sp.station), xs.width_left(sp.station))
+            lo, hi = _footprint_on(upper, fits[c.lower_road], c, 0.0, t=math.tan(sp.skew_rad), across=across)
+            a, b = support_block(st, sp)
+            assert b <= lo or a >= hi, (sp.id, (a, b), (lo, hi))
+
+
+def test_d170_the_abutment_block_not_only_the_deck_end_clears_the_crossed_pavement(points, vectors, truth, monkeypatch):
+    """Columbus I-71 northbound after D-166: the deck end stood 0.7 m clear of East Dublin
+    Granville Road, but the 1.5 m abutment behind it reached 0.8 m into the pavement
+    (AC-H1, AC-H3). The footprint is padded by the abutment's thickness (FR-ST-3, D-170)."""
+    import roader.pipeline as P
+
+    real = P.find_extents
+    cut = {}
+
+    def short(fit, ev, skews=None):
+        out = real(fit, ev, skews)
+        for e in out:
+            under = [s for s, _k in skews or [] if e.s_start < s < e.s_end]
+            if under:
+                cut[fit.road.id] = min(under)
+                e.s_start = min(under) - 1.0  # the deck "starts" on the first crossed road's centre line
+        return out
+
+    monkeypatch.setattr(P, "find_extents", short)
+    result = P.run_pipeline(points, vectors, truth.frame, truth.unit)
+    (st,) = [st for st in result.model.structures if st.carried_road in cut]
+    _abutments_clear_of_lower_pavements(result, st)

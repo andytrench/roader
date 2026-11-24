@@ -76,9 +76,9 @@ from roader.io.vectors import VectorEdge
 from roader.model.provenance import Provenance, Source
 from roader.model.schema import ELEMENT_FAILED, Flag, Frame, RoadModel, UnitRecord
 from roader.model.serialize import dumps, loads
-from roader.rules import RuleBook
+from roader.rules import RuleBook, era_of
 from roader.structures import attach_shared, infer_structure, parapet_fill, twin_joints
-from roader.structures.infer import _footprint_on
+from roader.structures.infer import _footprint_on, abutment_thickness
 
 RULE_EXTENT_PAD_M = 1.0
 SKEW_REACH_M = 15.0
@@ -412,12 +412,18 @@ def _buildable_fills(model: RoadModel) -> list[Flag]:
 
 
 def _crossed_footprint(by_id, c, t: float, rules) -> tuple[float, float]:
-    """Support-line stations on the carried road clear of the crossed pavement by the least lateral clearance (D-166)."""
+    """Deck-end stations whose abutment block clears the crossed pavement by the least lateral clearance (D-166, D-170).
+
+    The block reaches ``abutment_thickness`` from the deck end into the span, so the
+    support-line footprint of the pavement is widened by that much at each end.
+    """
     upper, lower = by_id[c.upper_road], by_id[c.lower_road]
     least = rules.get("clearance.lateral.support", road_class=lower.road.road_class).low
     xs = upper.road.cross_section
     across = (-xs.width_right(c.upper_s), xs.width_left(c.upper_s))
-    return _footprint_on(upper, lower, c, least, t=t, across=across)
+    a, b = _footprint_on(upper, lower, c, least, t=t, across=across)
+    thick = abutment_thickness(rules, era_of(None))
+    return a - thick, b + thick
 
 
 def _over_something(extents: list[StructureExtent], crossings) -> tuple[list[StructureExtent], list[Flag]]:

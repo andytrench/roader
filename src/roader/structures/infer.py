@@ -157,6 +157,11 @@ class StructureResult:
     spans: list[float]
 
 
+def abutment_thickness(rules: RuleBook, era: str) -> float:
+    """Along-road thickness of an abutment block at a deck end (FR-ST-3): a column width plus a cap overhang each side."""
+    return rules.fill("column.width", era=era)[0] + 2.0 * rules.fill("cap.overhang", era=era)[0]
+
+
 def _footprint_on(
     upper: RoadFit, lower: RoadFit, c: Crossing, clearance: float, *, t: float = 0.0, across: tuple[float, float] = (0.0, 0.0)
 ) -> tuple[float, float]:
@@ -507,7 +512,7 @@ def infer_structure(
                 column_width_m=0.0 if kind == "abutment" else col_w,
                 cap_depth_m=cap_d,
                 # Measured along the road; on a skew the cap's width across its own line is this times cos(skew) (D-025).
-                cap_width_m=(col_w + 2.0 * cap_over) / (1.0 if kind == "abutment" else max(math.cos(skew), 0.2)),
+                cap_width_m=abutment_thickness(rules, era) if kind == "abutment" else (col_w + 2.0 * cap_over) / max(math.cos(skew), 0.2),
                 footing_z=float(ground - foot),
                 prov=prov,
             )
