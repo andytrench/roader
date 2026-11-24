@@ -990,7 +990,7 @@ def _support_outline(road: Road, st: Structure, sp: Support) -> Polygon:
     a, b = support_block(st, sp)
     t = math.tan(sp.skew_rad)
     xs = road.cross_section
-    ur, ul = -xs.width_right(sp.station) - st.deck.overhang("right"), xs.width_left(sp.station) + st.deck.overhang("left")
+    ur, ul = -xs.width_right(sp.station) - st.deck.overhang_at("right", sp.station), xs.width_left(sp.station) + st.deck.overhang_at("left", sp.station)
     corners = [(a + t * ur, ur), (b + t * ur, ur), (b + t * ul, ul), (a + t * ul, ul)]
     return Polygon([road.alignment.offset_point(min(max(s, 0.0), road.length), u) for s, u in corners])
 
@@ -1005,8 +1005,7 @@ def _overhangs(road: Road, st: Structure) -> list[Polygon]:
     xs = road.cross_section
     out = []
     for side, sign, width in (("left", 1.0, xs.width_left), ("right", -1.0, xs.width_right)):
-        oh = st.deck.overhang(side)
-        if oh <= 0.0:
+        if st.deck.overhang(side) <= 0.0:
             continue
         n = max(2, math.ceil((st.s_end - st.s_start) / OUTLINE_STEP_M) + 1)
         stations = [st.s_start + (st.s_end - st.s_start) * k / (n - 1) for k in range(n)]
@@ -1019,7 +1018,7 @@ def _overhangs(road: Road, st: Structure) -> list[Polygon]:
             return road.alignment.offset_point(sv, sign * (width(sv) + extra))
 
         inner = [at(s, 0.0) for s in stations]
-        outer = [at(s, oh) for s in reversed(stations)]
+        outer = [at(s, max(st.deck.overhang_at(side, s), 0.0)) for s in reversed(stations)]
         poly = Polygon(inner + outer)
         if not poly.is_valid:
             poly = shapely.make_valid(poly)

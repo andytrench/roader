@@ -252,10 +252,21 @@ class DeckSpec:
     # Per-side overhang where one side differs, e.g. the joint side of a twin deck (FR-CR-3); None: overhang_m.
     overhang_left_m: float | None = None
     overhang_right_m: float | None = None
+    # Per-station overhang on one side, e.g. a twin joint following the gap (FR-CR-3, D-134); None: overhang(side).
+    overhang_left_at: Piecewise | None = None
+    overhang_right_at: Piecewise | None = None
 
     def overhang(self, side: str) -> float:
+        """One value per side; with a per-station overhang, its largest (the deck's outer reach)."""
+        profile = self.overhang_left_at if side == "left" else self.overhang_right_at
+        if profile is not None:
+            return max(k.value for k in profile.knots)
         value = self.overhang_left_m if side == "left" else self.overhang_right_m
         return self.overhang_m if value is None else value
+
+    def overhang_at(self, side: str, s: float) -> float:
+        profile = self.overhang_left_at if side == "left" else self.overhang_right_at
+        return self.overhang(side) if profile is None else profile(s)
 
 
 @dataclass

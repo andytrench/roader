@@ -228,7 +228,7 @@ def run_pipeline(
             f.road.cross_section.barriers = sorted(barriers[f.road.id], key=lambda b: (b.side, b.s0, b.id))
         # A parent and its linked child share their taper boundary, off their decks (FR-XS-1, D-104).
         out.extend(bound_tapers(fits, junctions, _decks(structures)))
-        out.extend(twin_joints(structures, roads, crossings))
+        out.extend(twin_joints(structures, roads, crossings, links))
         out.extend(classify_medians(fits, ev))
 
         slopes = []

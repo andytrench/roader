@@ -107,7 +107,9 @@ def _structure(road: Road, crossed: list[Road]) -> Structure:
     return Structure(sid, "bridge", road.id, a, b, "multi_girder", None, [r.id for r in crossed], DeckSpec(DEPTH, 0.22, OVERHANG, RULE), supports, TRUTH)
 
 
-def twin_model(ramp: bool = False) -> RoadModel:
+def twin_model(ramp: bool = False, converge: float = 0.0, linked: bool = False) -> RoadModel:
+    """``converge``: east turned by this angle about its middle, so the gap varies along the decks.
+    ``linked``: a merge link joins the two roads (a ramp and mainline converging, FR-CR-3)."""
     flat = Profile([VerticalElement(0.0, 600.0, 100.0, 0.0, 0.0, TRUTH)])
     eb = _road("eb", -300.0, -9.0, 0.0, 600.0, flat, 5.5, "mainline", "motorway")
     wb = _road("wb", 300.0, 9.0, math.pi, 600.0, Profile([VerticalElement(0.0, 600.0, 100.0, 0.0, 0.0, TRUTH)]), 5.5, "mainline", "motorway")
@@ -115,7 +117,8 @@ def twin_model(ramp: bool = False) -> RoadModel:
     n = (-d[1], d[0])
     half_len, off = LENGTH / 2.0, CENTRE_GAP / 2.0
     west = _road("west", -half_len * d[0] - off * n[0], -half_len * d[1] - off * n[1], HEADING, LENGTH, _crest(), HALF, "mainline", "motorway")
-    east = _road("east", half_len * d[0] + off * n[0], half_len * d[1] + off * n[1], HEADING + math.pi, LENGTH, _crest(), HALF, "mainline", "motorway")
+    de = (math.cos(HEADING + converge), math.sin(HEADING + converge))
+    east = _road("east", off * n[0] + half_len * de[0], off * n[1] + half_len * de[1], HEADING + converge + math.pi, LENGTH, _crest(), HALF, "mainline", "motorway")
     structures = [_structure(west, [eb, wb]), _structure(east, [eb, wb])]
     roads = [eb, wb, west, east]
     crossings = []
@@ -130,6 +133,8 @@ def twin_model(ramp: bool = False) -> RoadModel:
                 Crossing(stable_id("cx", upper.id, lower.id), upper.id, su, lower.id, sl, p.x, p.y, dz, SKEW, TRUTH, clearance_m=dz - DEPTH, structure_id=st.id)
             )
     links = []
+    if linked:
+        links.append(Link(stable_id("lk", west.id, east.id), west.id, "end", east.id, "start", "merge"))
     if ramp:
         seam = structures[0].s_end - RAMP_SEAM_BEFORE_END
         x0, y0 = west.alignment.offset_point(seam, RAMP_U0)

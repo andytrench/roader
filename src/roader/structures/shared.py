@@ -22,8 +22,17 @@ import math
 import numpy as np
 
 from roader.conflate.structures import Share
+from roader.model.geometry import Knot, Piecewise
 from roader.model.provenance import Source
-from roader.model.schema import Barrier, Crossing, Flag, Road, SharedSpan, Structure
+from roader.model.schema import (
+    Barrier,
+    Crossing,
+    Flag,
+    Link,
+    Road,
+    SharedSpan,
+    Structure,
+)
 
 TWIN_STEP_M = 1.0
 TWIN_MIN_SAMPLES = 5
@@ -37,6 +46,7 @@ CLEAR_STEP_M = 0.5
 CLEAR_TOL_M = 1e-3
 FOOTPRINT_STEP_M = 1.0
 BOX_STEP_M = 5.0
+PROFILE_TOL_M = 0.002  # a per-station joint overhang is thinned to this, never above a sampled value
 BOX_PAD_M = 30.0  # half width of a wide deck: plan boxes this far apart hold no twin
 
 
@@ -116,16 +126,66 @@ def _gaps(a: Structure, ra: Road, side_a: str, b: Structure, rb: Road, side_b: s
     return [sign_b * float(ub) - max(_width(rb, side_b)(float(sb)), reach_b) for sb, ub in zip(sbs, ubs, strict=True)]
 
 
-def twin_joints(structures: list[Structure], roads: dict[str, Road], crossings: list[Crossing]) -> list[Flag]:
+def _joint_overhangs(a: Structure, ra: Road, side_a: str, b: Structure, rb: Road, side_b: str, samples, gaps: list[float]):
+    """(station, overhang) on each deck's facing side: the gap at each station, less the joint, split between them.
+
+    Each side stays between its edge TWIN_EDGE_KEEP_M outside its reference line and its own
+    overhang; where one side is held, the other takes the rest of the gap (D-134).
+    """
+    va, vb = [], []
+    for (s, sb, _ub), gap in zip(samples, gaps, strict=True):
+        lo_a, hi_a = TWIN_EDGE_KEEP_M - _width(ra, side_a)(s), a.deck.overhang_at(side_a, s)
+        lo_b, hi_b = TWIN_EDGE_KEEP_M - _width(rb, side_b)(sb), b.deck.overhang_at(side_b, sb)
+        room = gap - JOINT_GAP_M
+        x = max(min(0.5 * room, hi_a), lo_a)
+        y = max(min(room - x, hi_b), lo_b)
+        x = max(min(room - y, hi_a), lo_a)
+        va.append((s, x))
+        vb.append((sb, y))
+    return va, vb
+
+
+def _profile(values: list[tuple[float, float]], prov) -> Piecewise:
+    """Piecewise-linear overhang through (station, value), thinned to PROFILE_TOL_M without exceeding any value."""
+    pts = sorted(values)
+    xs, ys = [pts[0][0]], [pts[0][1]]
+    for s, v in pts[1:]:
+        if s - xs[-1] < 1e-6:
+            ys[-1] = min(ys[-1], v)
+        else:
+            xs.append(s)
+            ys.append(v)
+    keep = [0]
+    i = 0
+    while i < len(xs) - 1:
+        j = i + 1
+        while j + 1 < len(xs):
+            k = j + 1
+            line = [ys[i] + (ys[k] - ys[i]) * (xs[m] - xs[i]) / (xs[k] - xs[i]) for m in range(i + 1, k)]
+            if any(line[m - i - 1] > ys[m] + 1e-9 or ys[m] - line[m - i - 1] > PROFILE_TOL_M for m in range(i + 1, k)):
+                break
+            j = k
+        keep.append(j)
+        i = j
+    if max(ys) - min(ys) <= PROFILE_TOL_M:
+        return Piecewise([Knot(xs[0], min(ys), prov)])
+    return Piecewise([Knot(xs[m], ys[m], prov) for m in keep])
+
+
+def twin_joints(structures: list[Structure], roads: dict[str, Road], crossings: list[Crossing], links: list[Link] = ()) -> list[Flag]:
     """Make the decks of twin structures disjoint (FR-CR-3, AC-H3, FR-SV-7).
 
     Two structures on different roads are twins when the roads run alongside each
     other over the decks at about the same height and do not cross, and their
     facing deck edges (barriers and overhang) would meet or overlap. On the facing
-    sides, rule parapets are dropped and the overhang becomes half the smallest gap
-    between the facing edges, so the decks meet at most on a joint line.
+    sides, rule parapets are dropped and the overhang at each station becomes half
+    the gap between the facing edges there (D-134), so the decks meet at most on a
+    joint line. Pavements overlapping by more than a fit error are converging roads
+    (D-105), left as they are unless a merge or diverge links them: a ramp and its
+    mainline take the same joint along the middle of their overlap.
     """
     crossing_pairs = {frozenset((c.upper_road, c.lower_road)) for c in crossings}
+    linked = {frozenset((lk.from_road, lk.to_road)) for lk in links if lk.kind in ("merge", "diverge")}
     flags: list[Flag] = []
     ordered = sorted(structures, key=lambda st: st.id)
     boxes = {st.id: _box(roads[st.carried_road], st) for st in ordered}
@@ -151,7 +211,7 @@ def twin_joints(structures: list[Structure], roads: dict[str, Road], crossings: 
             )
             if pavement >= used:
                 continue  # the decks never meet
-            if pavement < -TWIN_MAX_OVERLAP_M:
+            if pavement < -TWIN_MAX_OVERLAP_M and frozenset((a.carried_road, b.carried_road)) not in linked:
                 for st, other in ((a, b), (b, a)):
                     flags.append(
                         Flag("FR-CR-3:converging_decks", st.id, "FR-CR-3", f"pavements of {st.id} and {other.id} overlap by {-pavement:.2f} m over the decks: roads converging, not twin carriageways; decks left as they are")
@@ -166,15 +226,17 @@ def twin_joints(structures: list[Structure], roads: dict[str, Road], crossings: 
                 ]
                 dropped += len(road.cross_section.barriers) - len(keep)
                 road.cross_section.barriers = keep
-            gap = min(_gaps(a, ra, side_a, b, rb, side_b, _barrier_reach(ra, a, side_a), _barrier_reach(rb, b, side_b), samples))
+            gaps = _gaps(a, ra, side_a, b, rb, side_b, _barrier_reach(ra, a, side_a), _barrier_reach(rb, b, side_b), samples)
+            gap = min(gaps)
             # Negative when the fitted pavements overlap: the decks stop short of their pavement edges.
             half = (gap - JOINT_GAP_M) / 2.0
-            for st, side, road in ((a, side_a, ra), (b, side_b, rb)):
-                value = max(min(st.deck.overhang(side), half), TWIN_EDGE_KEEP_M - _narrowest(road, st, side))
+            va, vb = _joint_overhangs(a, ra, side_a, b, rb, side_b, samples, gaps)
+            for st, side, values in ((a, side_a, va), (b, side_b, vb)):
+                profile = _profile(values, st.deck.prov)
                 if side == "left":
-                    st.deck.overhang_left_m = value
+                    st.deck.overhang_left_at = profile
                 else:
-                    st.deck.overhang_right_m = value
+                    st.deck.overhang_right_at = profile
                 st.deck.prov.flags.append(f"FR-CR-3:twin_joint:{side}")
             for st, other in ((a, b), (b, a)):
                 message = f"twin of {other.id}: facing pavements {pavement:.2f} m apart, edges {gap:.2f} m; joint overhang {half:.2f} m, {dropped} rule parapets dropped"
@@ -200,7 +262,7 @@ def _clear_of_deck(
     to_end = p1 >= p0
     end = st.s_end if to_end else st.s_start
     t = _end_slope(st, end)
-    pxs, left, right = parent.cross_section, st.deck.overhang("left"), st.deck.overhang("right")
+    pxs = parent.cross_section
 
     def clear(s: float) -> bool:
         past_end = beside = True
@@ -210,8 +272,8 @@ def _clear_of_deck(
             if (q < end - CLEAR_TOL_M) if to_end else (q > end + CLEAR_TOL_M):
                 past_end = False
             sc = min(max(ps, 0.0), parent.length)
-            lo = -max(pxs.width_right(sc), zone[1]) - right - JOINT_GAP_M
-            hi = max(pxs.width_left(sc), zone[0]) + left + JOINT_GAP_M
+            lo = -max(pxs.width_right(sc), zone[1]) - st.deck.overhang_at("right", sc) - JOINT_GAP_M
+            hi = max(pxs.width_left(sc), zone[0]) + st.deck.overhang_at("left", sc) + JOINT_GAP_M
             if lo < pu < hi:
                 beside = False
         return past_end or beside
@@ -343,7 +405,7 @@ def _outside_deck(st: Structure, parent: Road, child: Road, a: float, b: float) 
     for ps, pu in zip(*(v.tolist() for v in _proj(parent, xy)), strict=True):
         if not st.s_start + t0 * pu <= ps <= st.s_end + t1 * pu:
             continue  # past the deck end: the road's own pavement there
-        left = parent.cross_section.width_left(ps) + st.deck.overhang("left")
-        right = parent.cross_section.width_right(ps) + st.deck.overhang("right")
+        left = parent.cross_section.width_left(ps) + st.deck.overhang_at("left", ps)
+        right = parent.cross_section.width_right(ps) + st.deck.overhang_at("right", ps)
         worst = max(worst, pu - left, -right - pu)
     return worst

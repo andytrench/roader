@@ -8,7 +8,7 @@ shared between roads (FR-CR-3).
 Public API:
     infer_structure(extent, upper_fit, crossings, fits, evidence, rules, drop, barriers) -> StructureResult
     parapet_fill(road, structure, existing_barriers, rules) -> list[Barrier]
-    twin_joints(structures, roads, crossings) -> list[Flag]
+    twin_joints(structures, roads, crossings, links) -> list[Flag]
     attach_shared(structures, shares, roads, barriers, crossings) -> list[Flag]
 """
 

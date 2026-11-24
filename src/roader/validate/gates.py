@@ -203,8 +203,8 @@ def check_voids(
         su, uu = proj.project(xy)
         xs = upper.cross_section
         # Per side: a twin deck's joint side stops at the joint (FR-CR-3), not at the outer overhang.
-        half_l = np.array([xs.width_left(float(s)) for s in su]) + st.deck.overhang("left")
-        half_r = np.array([xs.width_right(float(s)) for s in su]) + st.deck.overhang("right")
+        half_l = np.array([xs.width_left(float(s)) + st.deck.overhang_at("left", float(s)) for s in su])
+        half_r = np.array([xs.width_right(float(s)) + st.deck.overhang_at("right", float(s)) for s in su])
         under = (su >= st.s_start) & (su <= st.s_end) & (uu <= half_l) & (uu >= -half_r)
         if not under.any():
             result.violations.append(Violation(gate, c.id, "no lower-road samples under the deck footprint"))
@@ -271,7 +271,7 @@ def _deck_half(road: Road, st, side: str, s: float) -> float:
     """Deck edge offset as the solids build it: the pavement or the parapets standing on the deck, whichever is wider, plus the overhang."""
     width = road.cross_section.width_left(s) if side == "left" else road.cross_section.width_right(s)
     zone = max((b.offset_m + b.base_width_m for b in road.cross_section.barriers if b.side == side and b.s0 < st.s_end and b.s1 > st.s_start), default=0.0)
-    return max(width, zone) + st.deck.overhang(side)
+    return max(width, zone) + st.deck.overhang_at(side, s)
 
 
 def _lower_samples(c, st, upper: Road, lower: Road, step: float, lateral: float) -> tuple[np.ndarray, np.ndarray]:

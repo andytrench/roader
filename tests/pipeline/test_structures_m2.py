@@ -116,6 +116,64 @@ def test_fr_cr_3_roads_overlapping_by_more_than_a_fit_error_are_not_trimmed_as_t
     assert not [f for f in flags if f.code == "FR-CR-3:twin_joint"]
 
 
+def _joint_check(model):
+    meshes = generate(model)
+    a, b = (_plan(_deck(meshes, st)) for st in model.structures)
+    assert a.intersection(b).area < 1e-6
+    assert a.distance(b) < 0.05  # the decks meet at the joint
+    parts = {st.id for st in model.structures} | {sp.id for st in model.structures for sp in st.supports}
+    result = check_solids([m for m in meshes if m.element_id in parts])
+    assert not [v for v in result.violations if v.req != "val3dity"], [v.message for v in result.violations][:3]
+    result = check_voids(model, meshes)
+    assert result.passed, [v.message for v in result.violations]
+
+
+def test_fr_cr_3_twin_joint_follows_the_gap_station_by_station():
+    """New Orleans: one deck-wide minimum gap left the twin decks apart where the roads part.
+    The facing overhang is set at each station from that station's gap (FR-CR-3, D-134)."""
+    model = twin_model(converge=0.01)
+    twin_joints(model.structures, {r.id: r for r in model.roads}, model.crossings)
+    for st in model.structures:
+        values = [st.deck.overhang_at("left", s) for s in np.linspace(st.s_start, st.s_end, 9)]
+        assert max(values) - min(values) > 0.2  # the gap opens by about 0.56 m along the deck
+        assert st.deck.overhang_at("right", st.s_start) == pytest.approx(OVERHANG)
+    _joint_check(model)
+
+
+def test_fr_cr_3_linked_decks_converging_past_a_fit_error_meet_at_a_joint(monkeypatch):
+    """Bellevue: ramp and mainline decks at a merge or diverge overlap by 4.5-14.8 m; left as
+    they were (D-105) the decks passed through each other. Linked roads take a joint along the
+    middle of the overlap, station by station, each edge kept outside its reference line (D-134)."""
+    import tests.pipeline.twin_scene as scene
+    from roader.structures.shared import TWIN_EDGE_KEEP_M, TWIN_MAX_OVERLAP_M
+
+    monkeypatch.setattr(scene, "CENTRE_GAP", 2.0 * HALF - (TWIN_MAX_OVERLAP_M + 2.0))
+    model = scene.twin_model(converge=0.01, linked=True)
+    flags = twin_joints(model.structures, {r.id: r for r in model.roads}, model.crossings, model.links)
+    assert not [f for f in flags if f.code == "FR-CR-3:converging_decks"]
+    assert sorted(f.element_id for f in flags if f.code == "FR-CR-3:twin_joint") == sorted(st.id for st in model.structures)
+    for st in model.structures:
+        road = model.road(st.carried_road)
+        for s in np.linspace(st.s_start, st.s_end, 9):
+            assert road.cross_section.width_left(s) + st.deck.overhang_at("left", s) >= TWIN_EDGE_KEEP_M - 1e-9
+    _joint_check(model)
+
+
+def test_fr_cr_3_deck_overhang_per_station_round_trips():
+    """D-134: DeckSpec carries a per-station overhang per side; the scalar stays the fallback."""
+    from roader.model.geometry import Knot, Piecewise
+    from roader.model.serialize import dumps, loads
+
+    model = twin_model()
+    st = model.structures[0]
+    st.deck.overhang_left_at = Piecewise([Knot(st.s_start, -0.5, st.deck.prov), Knot(st.s_end, 0.5, st.deck.prov)])
+    assert st.deck.overhang_at("left", 0.5 * (st.s_start + st.s_end)) == pytest.approx(0.0)
+    assert st.deck.overhang_at("right", st.s_start) == st.deck.overhang("right")
+    back = loads(dumps(model))
+    assert back.structures[0].deck.overhang_at("left", st.s_end) == pytest.approx(0.5)
+    assert dumps(back) == dumps(model)
+
+
 def test_ac_h3_rays_under_a_twin_deck_reach_its_own_soffit(twins):
     model, _flags, meshes = twins
     result = check_voids(model, meshes)

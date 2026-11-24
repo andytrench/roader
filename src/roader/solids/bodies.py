@@ -440,22 +440,22 @@ def road_bodies(
                 (b.offset_m + b.base_width_m for b, s0, s1 in barriers if b.side == side and s0 < st.s_end and s1 > st.s_start),
                 default=0.0,
             )
-            overhang = st.deck.overhang(side)
-            # D-141: a twin joint's negative overhang (FR-CR-3) never takes the edge within DECK_EDGE_MIN_M of the centre line.
+            profile = st.deck.overhang_left_at if side == "left" else st.deck.overhang_right_at
+            # D-141: a twin joint's negative overhang (FR-CR-3) never takes the edge within DECK_EDGE_MIN_M of the centre line;
+            # a per-station overhang (D-134) is held there station by station.
             samples = [st.s_start, st.s_end] + [k.s for k in width.knots if st.s_start < k.s < st.s_end]
-            least = min(max(width(s), zone) for s in samples) - DECK_EDGE_MIN_M
-            if overhang < -least:
-                if limits is not None:
-                    limits.append(Flag(
-                        "FR-SG-2:deck_edge_limited", st.id, "FR-CR-3",
-                        f"{side} overhang {overhang:.2f} m would take the deck edge past its pavement; limited to {-least:.2f} m ({DECK_EDGE_MIN_M} m from the centre line)",
-                    ))
-                overhang = -least
+            samples += [k.s for k in profile.knots if st.s_start < k.s < st.s_end] if profile is not None else []
+            worst = min(max(width(s), zone) + st.deck.overhang_at(side, s) - DECK_EDGE_MIN_M for s in samples)
+            if worst < 0.0 and limits is not None:
+                limits.append(Flag(
+                    "FR-SG-2:deck_edge_limited", st.id, "FR-CR-3",
+                    f"{side} overhang would take the deck edge past its pavement by {-worst:.2f} m; held {DECK_EDGE_MIN_M} m from the centre line",
+                ))
             breaks = sorted({off for b, s0, s1 in barriers if b.side == side and s0 < st.s_end and s1 > st.s_start for off in _barrier_offsets(b)[0]})
 
-            def edge(s: float, width=width, zone=zone, overhang=overhang, sign=sign, breaks=breaks) -> float:
+            def edge(s: float, width=width, zone=zone, deck=st.deck, side=side, sign=sign, breaks=breaks) -> float:
                 w = width(s)
-                e = max(w, zone) + overhang
+                e = max(max(w, zone) + deck.overhang_at(side, s), DECK_EDGE_MIN_M)
                 # D-158: a deck edge this close to the pavement edge or a barrier breakline takes it; the strip between would be sub-millimetre (FR-SV-5).
                 for v in (w, *breaks):
                     if abs(e - v) < LINE_SNAP_M:
@@ -463,6 +463,8 @@ def road_bodies(
                 return sign * e
 
             lines.append(ULine(f"d{side[0]}:{st.id}", edge, st.s_start, st.s_end))
+            if profile is not None:
+                bps += [(k.s, PRIORITY_OTHER) for k in profile.knots if st.s_start < k.s < st.s_end]
             for k, u in enumerate(skew_offsets(road, st, side, min(tol, STRUCTURE_TOL_M))):
                 lines.append(ULine(f"k{side[0]}{k}:{st.id}", _const(u), st.s_start, st.s_end))
         bps += [(st.s_start, PRIORITY_STRUCTURE), (st.s_end, PRIORITY_STRUCTURE)]
