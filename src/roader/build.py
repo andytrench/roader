@@ -7,6 +7,7 @@ references, then renders, gates and publishes through ``export_model`` (FR-EX-1)
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -34,7 +35,7 @@ POINTS_OVERLAY = "points_sample.glb"
 class SiteReference:
     """Hand-labelled (or draft) references for one site (AC-H2, AC-A4, AC-A5)."""
 
-    crossings: list[dict[str, str]] = field(default_factory=list)
+    crossings: list[dict[str, Any]] = field(default_factory=list)  # upper_road, lower_road, and x, y where labelled (D-163)
     crossing_dz: dict[str, float] = field(default_factory=dict)
     crossing_points: dict[str, tuple[float, float]] = field(default_factory=dict)  # D-096
     structure_stations: dict[str, tuple[float, float]] = field(default_factory=dict)
@@ -68,20 +69,21 @@ def load_site_reference(
         lower = _road_for_way(model, entry["lower"]["osm_way"])
         if upper is None or lower is None:
             continue
-        ref.crossings.append({"upper_road": upper.id, "lower_road": lower.id})
-        crossing = next(
-            (
-                c
-                for c in model.crossings
-                if {c.upper_road, c.lower_road} == {upper.id, lower.id}
-            ),
-            None,
-        )
-        if crossing is not None and "dz_m" in entry:
+        item: dict[str, Any] = {"upper_road": upper.id, "lower_road": lower.id}
+        at = None
+        if "lonlat" in entry:
+            x, y = to_unit.lonlat_to_unit([entry["lonlat"][0]], [entry["lonlat"][1]])
+            at = (float(x[0]), float(y[0]))
+            item.update(x=at[0], y=at[1])  # AC-H2 tells apart crossings of the same two roads (D-163)
+        ref.crossings.append(item)
+        pair = [c for c in model.crossings if {c.upper_road, c.lower_road} == {upper.id, lower.id}]
+        if at is not None:
+            pair.sort(key=lambda c: math.hypot(c.x - at[0], c.y - at[1]))
+        if pair and "dz_m" in entry:
+            crossing = pair[0]
             ref.crossing_dz[crossing.id] = float(entry["dz_m"])
-            if "lonlat" in entry:
-                x, y = to_unit.lonlat_to_unit([entry["lonlat"][0]], [entry["lonlat"][1]])
-                ref.crossing_points[crossing.id] = (float(x[0]), float(y[0]))
+            if at is not None:
+                ref.crossing_points[crossing.id] = at
     for structure in (doc.get("structure_ends") or {}).get("structures", []):
         for end in structure.get("ends", []):
             road = _road_for_way(model, end["along"])

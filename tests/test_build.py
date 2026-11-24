@@ -64,7 +64,9 @@ def test_site_reference_maps_ways_to_model_ids(tmp_path):
     path.write_text(yaml.safe_dump(doc))
     ref = load_site_reference(path, model, model.frame)
     eb = next(r for r in model.roads if r.vector_refs[0].feature_id == "eb")
-    assert ref.crossings == [{"upper_road": over.id, "lower_road": eb.id}]
+    (entry,) = ref.crossings
+    assert (entry["upper_road"], entry["lower_road"]) == (over.id, eb.id)
+    assert (entry["x"], entry["y"]) == pytest.approx((x0, y0), abs=1e-3)  # D-163
     assert list(ref.crossing_dz.values()) == [7.0]
     (px, py), = ref.crossing_points.values()  # D-096
     assert (px, py) == pytest.approx((x0, y0), abs=1e-3)
@@ -72,6 +74,39 @@ def test_site_reference_maps_ways_to_model_ids(tmp_path):
     assert s0 == pytest.approx(st.s_start, abs=1e-3) and s1 == pytest.approx(
         st.s_end, abs=1e-3
     )
+
+
+def test_ac_h2_two_crossings_of_the_same_roads_are_told_apart_by_lonlat_d163(tmp_path):
+    """AC-H2, AC-A4 (D-163): each reference entry's lonlat picks its own crossing of the two roads.
+
+    Without it the gate took the first model crossing of the pair for every entry, so a
+    second crossing of the same roads in the other order read as reversed, and both dz
+    values landed on the first crossing.
+    """
+    import dataclasses
+
+    from roader.validate.gates import check_crossing_order
+
+    model = overpass_model()
+    first = model.crossings[0]
+    second = dataclasses.replace(
+        first, id="cx_second", x=first.x + 80.0, y=first.y, upper_road=first.lower_road, lower_road=first.upper_road, dz_m=-first.dz_m
+    )
+    model.crossings = [first, second]
+    ways = {r.id: r.vector_refs[0].feature_id for r in model.roads}
+    to_lonlat = FrameTransformer(model.frame)
+
+    def entry(c, dz):
+        lon, lat = to_lonlat.unit_to_lonlat([c.x], [c.y])
+        return {"upper": {"osm_way": ways[c.upper_road]}, "lower": {"osm_way": ways[c.lower_road]}, "lonlat": [float(lon[0]), float(lat[0])], "dz_m": dz}
+
+    path = tmp_path / "crossings.yaml"
+    path.write_text(yaml.safe_dump({"status": "draft", "crossings": [entry(second, 3.0), entry(first, 7.0)]}))
+    ref = load_site_reference(path, model, model.frame)
+    assert ref.crossing_dz == {"cx_second": 3.0, first.id: 7.0}
+    result = check_crossing_order(model, ref.crossings)
+    assert result.passed, [v.message for v in result.violations]
+    assert result.metrics["n_correct"] == 2.0
 
 
 _cfg = load_unit_config(M1_UNIT)
