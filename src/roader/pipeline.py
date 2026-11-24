@@ -216,14 +216,15 @@ def run_pipeline(
             filled = parapet_fill(by_id[e.road_id].road, res.structure, barriers[e.road_id], rules)
             barriers[e.road_id].extend(filled)
             _fit_overhang(by_id[e.road_id].road, res.structure, barriers[e.road_id])
-        out.extend(attach_shared(structures, shares, roads, barriers, crossings))
-
         for f in fits:
             _clip_parapets(barriers[f.road.id], [st for st in structures if st.carried_road == f.road.id])
             _parapets_outside_pavement(f.road, barriers[f.road.id])
             for st in structures:
                 if st.carried_road == f.road.id:
                     _fit_overhang(f.road, st, barriers[f.road.id])
+        # After the decks' barriers and overhangs are final: a shared stretch ends past the deck edge as swept (D-133).
+        out.extend(attach_shared(structures, shares, roads, barriers, crossings))
+        for f in fits:
             f.road.cross_section.barriers = sorted(barriers[f.road.id], key=lambda b: (b.side, b.s0, b.id))
         # A parent and its linked child share their taper boundary, off their decks (FR-XS-1, D-104).
         out.extend(bound_tapers(fits, junctions, _decks(structures)))

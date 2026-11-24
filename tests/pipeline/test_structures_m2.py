@@ -233,7 +233,9 @@ def test_fr_cr_3_shared_span_ends_where_the_ramp_leaves_the_deck_sideways(monkey
     attach_shared(model.structures, shares, roads, barriers, model.crossings)
     (span,) = west.shared
     upper = model.road(west.carried_road)
-    edge = -(HALF + OVERHANG)
+    from roader.structures.shared import JOINT_GAP_M
+
+    edge = -(HALF + 0.45 + OVERHANG + JOINT_GAP_M)  # the deck edge as swept: parapet zone plus overhang, then an open joint
     reach = RAMP_HALF + 0.45  # pavement plus parapet base
 
     def off_side(s: float) -> bool:

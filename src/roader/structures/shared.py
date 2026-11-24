@@ -185,9 +185,15 @@ def twin_joints(structures: list[Structure], roads: dict[str, Road], crossings: 
     return flags
 
 
-def _clear_of_deck(st: Structure, parent: Road, child: Road, s_seam: float, toward: float, reach: tuple[float, float]) -> float:
+def _clear_of_deck(
+    st: Structure, parent: Road, child: Road, s_seam: float, toward: float, reach: tuple[float, float], zone: tuple[float, float] = (0.0, 0.0)
+) -> float:
     """First station of ``child`` from its seam where its whole section is off the parent's deck:
-    past its skewed end, or past one of its side edges (D-133)."""
+    past its skewed end, or an open joint past one of its side edges (D-133).
+
+    A side edge is where the solids sweep it: the wider of the pavement and the barriers
+    standing on the deck (``zone``, left and right), plus the overhang.
+    """
     probe = min(max(s_seam + toward * 20.0, 0.0), child.length)
     p0 = _proj1(parent, child.alignment.offset_point(s_seam, 0.0))[0]
     p1 = _proj1(parent, child.alignment.offset_point(probe, 0.0))[0]
@@ -204,7 +210,9 @@ def _clear_of_deck(st: Structure, parent: Road, child: Road, s_seam: float, towa
             if (q < end - CLEAR_TOL_M) if to_end else (q > end + CLEAR_TOL_M):
                 past_end = False
             sc = min(max(ps, 0.0), parent.length)
-            if -pxs.width_right(sc) - right - CLEAR_TOL_M <= pu <= pxs.width_left(sc) + left + CLEAR_TOL_M:
+            lo = -max(pxs.width_right(sc), zone[1]) - right - JOINT_GAP_M
+            hi = max(pxs.width_left(sc), zone[0]) + left + JOINT_GAP_M
+            if lo < pu < hi:
                 beside = False
         return past_end or beside
 
@@ -296,7 +304,11 @@ def attach_shared(
         reach = tuple(
             max([_width(child, side)(mid), *(b.offset_m + b.base_width_m for b in barriers.get(child.id, []) if b.side == side)]) for side in ("left", "right")
         )
-        deck_end = _clear_of_deck(st, parent, child, sh.s_seam, sh.toward, reach)
+        zone = tuple(
+            max((b.offset_m + b.base_width_m for b in barriers.get(parent.id, []) if b.side == side and b.s0 < st.s_end and b.s1 > st.s_start), default=0.0)
+            for side in ("left", "right")
+        )
+        deck_end = _clear_of_deck(st, parent, child, sh.s_seam, sh.toward, reach, zone)
         end = _inside_parent(parent, child, deck_end, sh.toward)
         a, b = sorted((sh.s_seam, end))
         a, b = max(a, 0.0), min(b, child.length)
