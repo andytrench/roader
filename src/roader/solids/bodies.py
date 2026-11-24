@@ -534,7 +534,7 @@ def road_bodies(
                 side = 1.0 if u >= 0.0 else -1.0
                 near[side] = max(near[side], abs(u))
         return 1.25 * near[1.0] + 1.0, 1.25 * near[-1.0] + 1.0
-    knots = skew_knots(structures, umax, length)
+    knots = skew_knots(structures, umax)
     base = merge_breakpoints(bps + [(k.s, PRIORITY_OTHER) for k in knots if k.ramp], length)
     sweep = stations(road, base, tol, umax, knots, spans, sides)
     station_lines, flags = _skew_field(road, structures, lines, knots, sweep, umax, base, sides, toe_limited=tier >= 2)
