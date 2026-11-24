@@ -54,6 +54,7 @@ from roader.solids.terrain import TerrainSampler
 MIN_FILL_M = 1e-3
 FOLD_LIMIT = 0.1  # a u-line on the inside of a curve keeps 1 - k u at least this (D-142); twice the grid's FOLD_MARGIN
 DECK_EDGE_MIN_M = 0.5  # a deck edge stays this far from its road's centre line (D-141)
+LINE_SNAP_M = 5e-3  # a deck edge closer than this to another line on its side takes that line (D-158)
 TOE_SKEW_RATE = 0.5  # |t| times a toe's along-road rate stays under this on skewed station lines (D-156)
 TOE_SAMPLE_M = 0.5
 TOE_EDGE_M = 0.1  # a pulled-in toe stays this far past the pavement edge
@@ -445,9 +446,16 @@ def road_bodies(
                         f"{side} overhang {overhang:.2f} m would take the deck edge past its pavement; limited to {-least:.2f} m ({DECK_EDGE_MIN_M} m from the centre line)",
                     ))
                 overhang = -least
+            breaks = sorted({off for b, s0, s1 in barriers if b.side == side and s0 < st.s_end and s1 > st.s_start for off in _barrier_offsets(b)[0]})
 
-            def edge(s: float, width=width, zone=zone, overhang=overhang, sign=sign) -> float:
-                return sign * (max(width(s), zone) + overhang)
+            def edge(s: float, width=width, zone=zone, overhang=overhang, sign=sign, breaks=breaks) -> float:
+                w = width(s)
+                e = max(w, zone) + overhang
+                # D-158: a deck edge this close to the pavement edge or a barrier breakline takes it; the strip between would be sub-millimetre (FR-SV-5).
+                for v in (w, *breaks):
+                    if abs(e - v) < LINE_SNAP_M:
+                        return sign * v
+                return sign * e
 
             lines.append(ULine(f"d{side[0]}:{st.id}", edge, st.s_start, st.s_end))
             for k, u in enumerate(skew_offsets(road, st, side, min(tol, STRUCTURE_TOL_M))):

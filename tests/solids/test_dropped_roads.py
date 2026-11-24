@@ -53,6 +53,20 @@ def _section_at(road, s: float) -> JunctionSeam:
     return JunctionSeam(road.id, s, -5.0, 5.0, 0, x, y, heading, k)
 
 
+def test_d158_a_deck_edge_a_fraction_of_a_millimetre_from_a_parapet_breakline_takes_it():
+    """Bellevue SR 520: the twin-joint overhang (-0.174 m) put both decks' facing edges 0.6-0.7 mm
+    from their parapet's outer top line; the strip between gave sub-millimetre edges (val3dity 102)."""
+    m = overpass_model()
+    st = m.structures[0]
+    top_outer = 5.0 + 0.1 + 0.25  # the parapet at 5.0 m, base 0.45 m, top 0.25 m: outer top line at 5.35 m
+    deck = dataclasses.replace(st.deck, overhang_left_m=top_outer + 0.0006 - 5.45)
+    m = dataclasses.replace(m, structures=[dataclasses.replace(st, deck=deck)])
+    meshes = generate(m)
+    for mesh in meshes:
+        if mesh.closed and mesh.id.startswith(st.id):
+            assert not mc.solid_problems(mesh), (mesh.id, mc.solid_problems(mesh))
+
+
 def test_d156_a_jumping_toe_beside_a_skewed_deck_keeps_the_skew():
     """The toe met a skewed station line nowhere (no fixed point) or out of order (lines crossed):
     the road was swept with its structures squared, which left the junction seams off the outline."""
