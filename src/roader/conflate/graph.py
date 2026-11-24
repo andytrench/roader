@@ -17,6 +17,7 @@ from dataclasses import dataclass, field
 import numpy as np
 import shapely
 
+from roader.conflate.chains import split_self_crossings
 from roader.conflate.polyline import Polyline
 from roader.io.vectors import VectorEdge, is_limited_access, is_path, path_in_scope
 from roader.model.schema import VectorRef
@@ -184,6 +185,7 @@ def select_roads(edges: list[VectorEdge], extent: shapely.Geometry | None = None
         assigned.update(chain)
         groups.append(chain)
 
+    groups = [run for chain in groups for run in split_self_crossings(chain, lambda ids: _merge_coords(ids, edges)[0])]
     inner = extent.buffer(-EXTENT_INSET_M) if extent is not None else None
     seeds = []
     for chain in groups:

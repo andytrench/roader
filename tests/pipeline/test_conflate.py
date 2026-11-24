@@ -79,6 +79,53 @@ def test_d_160_fr_in_5_only_paths_on_their_own_bridges_are_selected():
     assert picked == ["bridge", "fwy"]
 
 
+def _trumpet_ramp() -> list[VectorEdge]:
+    """A semi-direct ramp: approach, flyover bridge, then a loop that passes back under the flyover."""
+    link = {"highway": "motorway_link", "oneway": "yes"}
+    approach = np.array([[0.0, 300.0], [0.0, 60.0]])
+    flyover = np.array([[0.0, 60.0], [0.0, -40.0]])
+    loop = np.array([[0.0, -40.0], [-5.0, -70.0], [-35.0, -85.0], [-65.0, -70.0], [-75.0, -40.0], [-60.0, -10.0], [-30.0, 0.0], [30.0, 0.0], [200.0, 0.0]])
+    return [
+        VectorEdge("osm", "approach", approach, dict(link)),
+        VectorEdge("osm", "flyover", flyover, {**link, "bridge": "yes", "layer": "1"}),
+        VectorEdge("osm", "loop", loop, dict(link)),
+    ]
+
+
+def test_fr_vc_1_a_chained_ramp_that_crosses_itself_splits_into_simple_roads_d162():
+    """FR-VC-1, FR-CR-1, AC-H2 (D-162): a trumpet's flyover and the loop under it are two roads.
+
+    One chained road crossing itself was cut at the crossing by the extent clip, which kept
+    only its longest piece; at Lorain the flyover over the Turnpike was lost and the crossing
+    of the flyover over the loop could not be recorded (a road cannot cross itself).
+    """
+    import shapely
+
+    edges = _trumpet_ramp()
+    seeds = select_roads(edges, shapely.box(-400.0, -400.0, 400.0, 400.0))
+    refs = sorted([r.feature_id for r in s.vector_refs] for s in seeds)
+    assert refs == [["approach", "flyover"], ["loop"]]
+    for s in seeds:
+        assert shapely.LineString(s.line.xy).is_simple
+        whole = sum(shapely.LineString(e.coords).length for e in edges if e.feature_id in {r.feature_id for r in s.vector_refs})
+        assert abs(s.line.length - whole) < 0.1  # nothing is clipped away
+    upper = next(s for s in seeds if len(s.vector_refs) == 2)
+    lower = next(s for s in seeds if len(s.vector_refs) == 1)
+    assert shapely.LineString(upper.line.xy).crosses(shapely.LineString(lower.line.xy))
+
+
+def test_fr_vc_1_self_crossing_split_leaves_simple_chains_alone_d162():
+    from roader.conflate.chains import split_self_crossings
+
+    pieces = {0: np.array([[0.0, 0.0], [100.0, 0.0]]), 1: np.array([[100.0, 0.0], [200.0, 10.0]]), 2: np.array([[200.0, 10.0], [300.0, 0.0]])}
+    merge = lambda ids: np.vstack([pieces[i] for i in ids])
+    assert split_self_crossings([0, 1, 2], merge) == [[0, 1, 2]]
+    assert split_self_crossings([1], merge) == [[1]]
+    # A way that turns back across the first one starts a new chain at the edge that would cross.
+    pieces[2] = np.array([[200.0, 10.0], [150.0, 60.0], [50.0, -50.0]])
+    assert split_self_crossings([0, 1, 2], merge) == [[0, 1], [2]]
+
+
 def test_fr_af_3_a_ramp_ending_on_a_street_node_is_its_child_d124():
     """A street is the parent of a ramp end on it, ahead of another ramp ending at the same node (D-124, revises D-051)."""
     from roader.fit.links import junctions
