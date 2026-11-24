@@ -98,7 +98,8 @@ _TRUST = {Source.MEASURED: 0, Source.INVENTORY: 1, Source.VECTOR: 2, Source.RULE
 LIFT_RULE_ID = "junction.lift"
 MAX_ROUNDS = 40  # merge rounds of overlapping areas
 MIN_EDGE_M = 0.01  # outline vertices closer than this are one vertex (well clear of the 1 mm of FR-SV-5)
-CONFORM_TOL_M = 2e-6  # a vertex this close to another outline's edge is put on it (D-021)
+CONFORM_TOL_M = 2e-6  # a vertex this close to another outline's edge lies on it (D-021)
+CONFORM_SNAP_M = 5e-3  # a vertex this close to another outline's edge is put into it (D-159); half MIN_EDGE_M
 SHARED_MIN_M2 = 0.05  # overlaps smaller than this are rounding, not shared pavement
 SHARED_STEP_M = 1.0  # overlap chords along the narrower road
 SHARED_GAP_M = 0.25  # a shared region ends where its row clears the other pavement by this (no gore to close, D-137)
@@ -1697,7 +1698,11 @@ def _needle(a, b, c) -> bool:
 
 
 def _conform(rings: list[list[tuple[float, float]]]) -> list[list[tuple[float, float]]]:
-    """Put every vertex lying on another ring's edge into that edge, so touching outlines share vertices (D-021)."""
+    """Put every vertex within CONFORM_SNAP_M of another ring's edge into that edge, so touching outlines share vertices (D-021).
+
+    Two outlines tracing one edge with their own vertices lie chords apart, a few millimetres at most;
+    each takes the other's vertices there, so both run through the same points (D-159).
+    """
     pts = sorted({p for r in rings for p in r})
     if not pts:
         return rings
@@ -1711,13 +1716,13 @@ def _conform(rings: list[list[tuple[float, float]]]) -> list[list[tuple[float, f
             q = r[(i + 1) % len(r)]
             nr.append(p)
             seg = LineString([p, q])
-            near = tree.query(seg.buffer(CONFORM_TOL_M))
+            near = tree.query(seg.buffer(CONFORM_SNAP_M))
             on = []
             for k in near:
                 v = pts[int(k)]
                 if v in own:
                     continue
-                if seg.distance(Point(v)) <= CONFORM_TOL_M:
+                if seg.distance(Point(v)) <= CONFORM_SNAP_M and 0.0 < seg.project(Point(v)) < seg.length:
                     on.append((seg.project(Point(v)), v))
             nr.extend(v for _t, v in sorted(on))
         out.append(nr)

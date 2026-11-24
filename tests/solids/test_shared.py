@@ -10,7 +10,7 @@ import pytest
 from shapely.geometry import Polygon
 from shapely.ops import unary_union
 
-from roader.complete.junctions import _snap_rings, build_junctions
+from roader.complete.junctions import _conform, _snap_rings, build_junctions
 from roader.model import dumps, loads
 from roader.model.geometry import AlignElement, Alignment, Profile, VerticalElement
 from roader.model.schema import DeckSpec, Link, Road, RoadModel, Structure, Support
@@ -312,6 +312,20 @@ def test_fr_sv_5_near_coincident_outline_vertices_merge():
     spike = [(0.0, 0.0), (10.0, 0.0), (10.0, 5.0), (12.0, 5.0000001), (9.0, 5.0), (0.0, 5.0)]
     (out,) = _snap_rings([spike], set())
     assert (12.0, 5.0000001) not in out and Polygon(out).is_valid
+
+
+def test_d159_outlines_tracing_one_edge_with_different_vertices_conform():
+    """FR-SV-7, D-021: Woburn jn_8030 (I-95 WB) and jn_b31a (its ramp) traced their common edge with
+    different vertices, 38 um to 2.9 mm off each other's edges; their fill tops were near-coplanar
+    faces 38 um apart, which the crossing test cannot tell from a crossing (AC-H1 held the unit)."""
+    a = [(0.0, 0.0), (10.0, 0.0), (10.0, 5.0), (0.0, 5.0)]
+    b = [(0.0, -5.0), (10.0, -5.0), (10.0, 0.0), (7.0, -0.0029), (3.0, 0.000038), (0.0, 0.0)]
+    a2, b2 = _conform([a, b])
+    assert (7.0, -0.0029) in a2 and (3.0, 0.000038) in a2
+    pa, pb = Polygon(a2), Polygon(b2)
+    assert pa.is_valid and pb.is_valid
+    assert pa.intersection(pb).area < 1e-12 and abs(pa.union(pb).area - pa.area - pb.area) < 1e-12
+    assert pa.intersection(pb).length > 10.0 - 1e-6  # one shared edge, no gap
 
 
 def test_fr_sv_5_seam_row_wins_over_a_near_outline_vertex():
