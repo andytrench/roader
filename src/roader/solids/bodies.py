@@ -14,6 +14,7 @@ import math
 from collections.abc import Callable
 from itertools import pairwise
 
+import numpy as np
 import shapely
 from shapely.geometry import Polygon
 
@@ -53,6 +54,10 @@ from roader.solids.terrain import TerrainSampler
 MIN_FILL_M = 1e-3
 FOLD_LIMIT = 0.1  # a u-line on the inside of a curve keeps 1 - k u at least this (D-142); twice the grid's FOLD_MARGIN
 DECK_EDGE_MIN_M = 0.5  # a deck edge stays this far from its road's centre line (D-141)
+TOE_SKEW_RATE = 0.5  # |t| times a toe's along-road rate stays under this on skewed station lines (D-156)
+TOE_SAMPLE_M = 0.5
+TOE_EDGE_M = 0.1  # a pulled-in toe stays this far past the pavement edge
+TOE_PULL_MIN_M = 0.05  # a toe pulled in by less keeps its place on the ground
 # Real-time export profile (FR-SV-7, D-038): resting bodies embed into what carries
 # them, and every outline is inset in plan by a per-class amount so faces that touch
 # in the analytic profile end up at least 0.2 mm apart (coplanar means within 0.1 mm).
@@ -179,6 +184,83 @@ def _toe(road: Road, sign: float, ratio: float, sampler: TerrainSampler, ss_id: 
         return sign * (w + 0.5 * (lo + hi))
 
     return toe
+
+
+def _toe_limited(
+    toe: Callable[[float], float],
+    width: Callable[[float], float],
+    a: float,
+    b: float,
+    length: float,
+    tmax: float,
+    note: Callable[[float], None] | None = None,
+) -> Callable[[float], float]:
+    """A toe line on a road with skewed station lines, pulled in so it moves along the road by at most
+    TOE_SKEW_RATE / tmax per metre (FR-SG-2, D-156).
+
+    A skewed station line s0 + t u meets the toe where u = toe(s0 + t u); with |t| times the toe's
+    rate below 1 it meets it once and neighbouring lines meet it in order. The toe is sampled every
+    TOE_SAMPLE_M over every station a skewed line through [a, b] can reach and replaced by the lower
+    envelope of cones of that slope, so it only ever moves toward the road: the fill keeps its
+    thickness and ends on a wall where it was pulled in. ``note`` gets the largest pull when one
+    reaches TOE_PULL_MIN_M.
+    """
+    rate = TOE_SKEW_RATE / tmax
+    cache: list[tuple[np.ndarray, np.ndarray]] = []
+
+    def sample(lo: float, hi: float) -> tuple[np.ndarray, np.ndarray]:
+        ss = np.linspace(lo, hi, max(2, math.ceil((hi - lo) / TOE_SAMPLE_M) + 1))
+        out = []
+        for s in ss:
+            try:
+                out.append(toe(float(s)))
+            except ValueError:
+                out.append(math.nan)
+        return ss, np.array(out)
+
+    def build() -> tuple[np.ndarray, np.ndarray]:
+        lo, hi = a, b
+        ss, us = sample(lo, hi)
+        for _ in range(4):
+            reach = float(np.nanmax(np.abs(us))) if np.isfinite(us).any() else 0.0
+            ext = tmax * reach + TOE_SAMPLE_M
+            nlo, nhi = max(a - ext, 0.0), min(b + ext, length)
+            if nlo >= lo - 1e-9 and nhi <= hi + 1e-9:
+                break
+            lo, hi = min(lo, nlo), max(hi, nhi)
+            ss, us = sample(lo, hi)
+        ok = np.isfinite(us)
+        if not ok.any():
+            raise ValueError("FR-SG: embankment has no toe on its stretch")
+        ss, us = ss[ok], us[ok]
+        sign = 1.0 if us[0] >= 0.0 else -1.0
+        d = np.abs(us)
+        for k in range(1, len(d)):
+            d[k] = min(d[k], d[k - 1] + rate * (ss[k] - ss[k - 1]))
+        for k in range(len(d) - 2, -1, -1):
+            d[k] = min(d[k], d[k + 1] + rate * (ss[k + 1] - ss[k]))
+        # Never pulled onto the pavement: at least TOE_EDGE_M past the edge unless the toe itself is closer.
+        edge = np.array([width(float(s)) for s in ss]) + TOE_EDGE_M
+        d = np.maximum(d, np.minimum(np.abs(us), edge))
+        own = (ss >= a) & (ss <= b)
+        pull = float(np.max((np.abs(us) - d)[own])) if own.any() else 0.0
+        if note is not None and pull >= TOE_PULL_MIN_M:
+            note(pull)
+        return ss, sign * d
+
+    def limited(s: float) -> float:
+        if not cache:
+            cache.append(build())
+        ss, us = cache[0]
+        env = float(np.interp(s, ss, us))
+        try:
+            exact = toe(s)
+        except ValueError:
+            return env
+        # Where it is not pulled in by TOE_PULL_MIN_M the toe stays where the slope meets the ground: no wall.
+        return exact if abs(exact) <= abs(env) + TOE_PULL_MIN_M else env
+
+    return limited
 
 
 def _fill_top(road: Road, sign: float, ratio: float) -> Callable[[float, float], float]:
@@ -378,6 +460,7 @@ def road_bodies(
             bps += [(a, PRIORITY_STRUCTURE), (b, PRIORITY_STRUCTURE), (sp.station, PRIORITY_STRUCTURE)]
 
     fills: list[tuple[SideSlope, float, list[tuple[float, float]]]] = []
+    tmax = max((abs(math.tan(sp.skew_rad)) for st in structures for sp in st.supports), default=0.0)
     for ss in model.side_slopes:
         if ss.road_id != road.id or ss.kind == "none":
             continue
@@ -390,7 +473,19 @@ def road_bodies(
         sign = 1.0 if ss.side == "left" else -1.0
         pieces = subtract(max(ss.s0, 0.0), min(ss.s1, length), carried)
         for k, (a, b) in enumerate(pieces):
-            lines.append(ULine(f"toe:{ss.id}:{k}", _toe(road, sign, ss.ratio, sampler, ss.id), a, b))
+            toe = _toe(road, sign, ss.ratio, sampler, ss.id)
+            if tmax > 0.0:
+                width = xs.width_left if sign > 0 else xs.width_right
+
+                def note(pull: float, ss=ss, a=a, b=b) -> None:
+                    if limits is not None:
+                        limits.append(Flag(
+                            "FR-SG-2:toe_limited", ss.id, "FR-SG-2",
+                            f"embankment toe on {road.id} over s={a:.1f}-{b:.1f} pulled in by up to {pull:.2f} m to stay ordered on skewed station lines",
+                        ))
+
+                toe = _toe_limited(toe, width, a, b, length, tmax, note)
+            lines.append(ULine(f"toe:{ss.id}:{k}", toe, a, b))
         fills.append((ss, sign, pieces))
 
     lines = _fold_limited(road, lines, limits)

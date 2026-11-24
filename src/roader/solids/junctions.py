@@ -64,8 +64,11 @@ def zones(model: RoadModel) -> dict[str, list[tuple[float, float]]]:
             hi = [sm.s for sm in jn.seams if sm.road_id == rid and sm.side < 0]
             if any(sm.side == 0 for sm in jn.seams if sm.road_id == rid):
                 raise ValueError(f"junction {jn.id}: seam on {rid} has no side (D-046)")
-            a = min(lo) if lo else 0.0
-            b = max(hi) if hi else lengths[rid]
+            # A shared region without a seam on one side starts at a road end or a carried edge, where its first
+            # lifted section lies (D-157); any other participant without seams lies wholly inside the area.
+            ends = [sm.s for sm in jn.sections if sm.road_id == rid] if jn.kind == "shared" else []
+            a = min(lo) if lo else min(ends, default=0.0)
+            b = max(hi) if hi else max(ends, default=lengths[rid])
             if b - a <= STATION_MERGE_M:
                 raise ValueError(f"junction {jn.id}: empty interval on {rid}")
             out.setdefault(rid, []).append((a, b))
