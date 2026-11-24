@@ -295,6 +295,63 @@ def test_toe_reaching_the_centre_of_curvature_is_held_and_flagged_fr_sg_2():
         assert np.all(1.0 - k * u >= FOLD_LIMIT - 1e-6)
 
 
+def _ridged(x: float, y: float) -> float:
+    return _tilted(x, y) - 1.0 + 1.5 * math.sin(y / 4.0)
+
+
+def _skewed_over_ridges(skew: float) -> RoadModel:
+    import dataclasses
+
+    m = curved_model(_ridged)
+    st = m.structures[0]
+    abutments = [dataclasses.replace(sp, skew_rad=skew, footing_z=85.0) for sp in st.supports if sp.kind == "abutment"]
+    m.structures = [dataclasses.replace(st, supports=abutments)]
+    return m
+
+
+def test_fr_sg_2_a_57_degree_deck_over_a_steep_toe_is_swept_skewed_and_flagged():
+    """Embankment toes on ridged ground run nearly parallel to 57-degree station lines (D-161).
+
+    Their intersections jumped between rows, the station lines crossed and the road fell
+    back to square structures. |tan skew| is now limited where an active toe's |du/ds|
+    would make |tan skew| |du/ds| exceed TOE_SKEW_MAX, tapering like a skew ramp.
+    """
+    from roader.solids.stations import TOE_SKEW_MAX
+
+    m = _skewed_over_ridges(1.0)
+    notes = []
+    meshes = generate(m, chord_tol_m=TOL, failures=notes)
+    assert [f for f in notes if f.code == "FR-EX-1:element_failed"] == []
+    assert {(f.code, f.element_id) for f in notes} == {("FR-SG-2:skew_limited", "st_curve")}
+    assert all(mc.solid_problems(x) == [] for x in meshes if x.closed)
+    assert TOE_SKEW_MAX == 0.5
+    road = m.roads[0]
+    # The abutments stay skewed (FR-ST-4), less than the supports where the toes bind: a square
+    # 1 m abutment spans 1 m of station, the full 1.56 skew over the 14 m deck about 23 m.
+    for sp_id in ("sp_a1", "sp_a2"):
+        abut = next(x for x in meshes if x.id == f"{sp_id}:abutment")
+        s, _u = road.alignment.project_many(np.unique(abut.vertices[:, :2], axis=0))
+        assert 3.0 < np.ptp(s) < 23.0, sp_id
+
+
+def test_fr_sg_2_skew_limit_binds_only_lines_that_meet_the_steep_toe_and_tapers():
+    """A line with |t| <= L meets a toe sample at distance d only if L |u| >= d: L <= max(0.5 / rate, d / |u|) (D-161)."""
+    from roader.solids.stations import RAMP_FACTOR, toe_skew_limit
+
+    umax, tmax = 100.0, 1.6
+    sweep = [float(s) for s in range(101)]
+    caps = toe_skew_limit([(50.0, 2.0, 5.0)], sweep, umax, tmax)  # (station, |du/ds|, |u|)
+    assert caps[50] == pytest.approx(0.25)
+    assert caps[51] == pytest.approx(0.25)  # lines within 0.25 |u| meet the steep sample at any allowed skew
+    assert caps[53] == pytest.approx(0.25 + 2.0 / (RAMP_FACTOR * umax))  # past that the ramp taper from s = 51 binds
+    assert caps[30] == pytest.approx(0.25 + 20.0 / (RAMP_FACTOR * umax))
+    assert caps[30] < tmax
+    narrow = toe_skew_limit([(50.0, 2.0, 5.0)], sweep, 1.0, tmax)  # a steep taper: the meeting distance binds
+    assert narrow[52] == pytest.approx(2.0 / 5.0)
+    assert narrow[59] == math.inf  # beyond tmax |u| no line meets the sample
+    assert toe_skew_limit([(50.0, 0.2, 5.0)], sweep, umax, tmax) == [math.inf] * len(sweep)  # 1.6 * 0.2 <= 0.5
+
+
 def test_ac_p4_skewed_rows_take_the_uv_segment_that_keeps_their_turning_smallest():
     """A skewed deck row reaches stations past its UV0 segment's end; the face takes the neighbouring segment
     whose reference heading keeps its turning smallest, so deck, cap and pavement tops stay well under AC-P4 (D-148).

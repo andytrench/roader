@@ -30,8 +30,11 @@ from roader.solids.grid import Cell, PlanVertices, RoadGrid, ULine
 from roader.solids.stations import (
     PRIORITY_OTHER,
     PRIORITY_STRUCTURE,
+    RAMP_FACTOR,
+    RAMP_MIN_M,
     STATION_MERGE_M,
     STRUCTURE_TOL_M,
+    SkewKnot,
     StationLine,
     end_limited,
     merge_breakpoints,
@@ -40,6 +43,8 @@ from roader.solids.stations import (
     skew_offsets,
     stations,
     support_block,
+    toe_samples,
+    toe_skew_limit,
 )
 from roader.solids.terrain import TerrainSampler
 
@@ -224,6 +229,45 @@ def _fold_limited(road: Road, lines: list[ULine], limits: list[Flag] | None) -> 
     return out
 
 
+def _skew_field(
+    road: Road,
+    structures: list[Structure],
+    lines: list[ULine],
+    knots: list[SkewKnot],
+    sweep: list[float],
+    umax: float,
+    limits: list[Flag] | None,
+) -> list[StationLine]:
+    """Station lines with the skew field limited near steep embankment toes and the road's ends (D-161, D-118).
+
+    Each structure whose skew field had to be limited by a toe is flagged once.
+    """
+    tmax = max((abs(k.t) for k in knots), default=0.0)
+    windows = []
+    for st in structures:
+        pad = RAMP_FACTOR * tmax * umax + RAMP_MIN_M + tmax * umax
+        windows.append((st.s_start - pad, st.s_end + pad, st.id))
+    toes = [(line.func, line.s0, line.s1) for line in lines if line.key.startswith("toe:")]
+    caps = toe_skew_limit(toe_samples(toes, [(a, b) for a, b, _ in windows], tmax), sweep, umax, tmax) if tmax > 0.0 else [math.inf] * len(sweep)
+    out, hit = [], {}
+    for s, cap in zip(sweep, caps, strict=True):
+        t = skew_at(knots, s)
+        if abs(t) > cap:
+            for a, b, st_id in windows:
+                if a <= s <= b:
+                    lo = hit.get(st_id, (math.inf, 0.0))
+                    hit[st_id] = (min(lo[0], cap), max(lo[1], abs(t)))
+            t = math.copysign(cap, t)
+        out.append(StationLine(s, end_limited(t, s, road.length, umax)))
+    if limits is not None:
+        for st_id, (cap, t) in hit.items():
+            limits.append(Flag(
+                "FR-SG-2:skew_limited", st_id, "FR-SG-2",
+                f"|tan skew| on {road.id} limited from {t:.2f} to {cap:.2f} where embankment toes run near the skewed station lines",
+            ))
+    return out
+
+
 def road_bodies(
     model: RoadModel,
     road: Road,
@@ -367,7 +411,7 @@ def road_bodies(
         return 1.25 * near[1.0] + 1.0, 1.25 * near[-1.0] + 1.0
     knots = skew_knots(structures, umax)
     base = merge_breakpoints(bps + [(k.s, PRIORITY_OTHER) for k in knots if k.ramp], length)
-    station_lines = [StationLine(s, end_limited(skew_at(knots, s), s, length, umax)) for s in stations(road, base, tol, umax, knots, spans, sides)]
+    station_lines = _skew_field(road, structures, lines, knots, stations(road, base, tol, umax, knots, spans, sides), umax, limits)
     grid = RoadGrid(road, lines, station_lines, pv)
 
     def at(f: Callable[[float, float], float]) -> Callable[[int], float]:
