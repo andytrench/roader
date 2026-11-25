@@ -78,7 +78,13 @@ from roader.model.provenance import Provenance, Source
 from roader.model.schema import ELEMENT_FAILED, Flag, Frame, RoadModel, UnitRecord
 from roader.model.serialize import dumps, loads
 from roader.rules import RuleBook, era_of
-from roader.structures import attach_shared, infer_structure, open_ends, parapet_fill, twin_joints
+from roader.structures import (
+    attach_shared,
+    infer_structure,
+    open_ends,
+    parapet_fill,
+    twin_joints,
+)
 from roader.structures.held_skew import CAP_MIN, capped, held_skew
 from roader.structures.infer import _footprint_on, abutment_thickness
 
