@@ -136,6 +136,7 @@ def test_fr_cr_3_twin_joint_follows_the_gap_station_by_station():
     for st in model.structures:
         values = [st.deck.overhang_at("left", s) for s in np.linspace(st.s_start, st.s_end, 9)]
         assert max(values) - min(values) > 0.2  # the gap opens by about 0.56 m along the deck
+        assert max(values) <= 0.0 or min(values) >= 0.0  # the edge never crosses its pavement edge line (Bellevue, New Orleans)
         assert st.deck.overhang_at("right", st.s_start) == pytest.approx(OVERHANG)
     _joint_check(model)
 

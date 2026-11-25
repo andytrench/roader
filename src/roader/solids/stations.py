@@ -312,7 +312,9 @@ def skew_offsets(road: Road, structure: Structure, side: str, tol: float) -> lis
         return []
     h = math.sqrt(8.0 * 0.5 * tol / bend)
     narrow = min([width(a), width(b)] + [k.value for k in width.knots if a < k.s < b])
-    full = narrow + structure.deck.overhang(side)
+    profile = structure.deck.overhang_left_at if side == "left" else structure.deck.overhang_right_at
+    least = min(k.value for k in profile.knots) if profile is not None else structure.deck.overhang(side)
+    full = narrow + least  # inside the innermost deck edge of a per-station overhang (D-134)
     n = math.ceil(full / h)
     sign = 1.0 if side == "left" else -1.0
     return [sign * full * k / n for k in range(1, n) if full * k / n < narrow - SKEW_LINE_EDGE_M]

@@ -232,6 +232,9 @@ def twin_joints(structures: list[Structure], roads: dict[str, Road], crossings: 
             half = (gap - JOINT_GAP_M) / 2.0
             va, vb = _joint_overhangs(a, ra, side_a, b, rb, side_b, samples, gaps)
             for st, side, values in ((a, side_a, va), (b, side_b, vb)):
+                if min(v for _s, v in values) < 0.0:
+                    # A deck edge crossing its pavement edge would cross that sweep line: once inside anywhere, it stays inside (D-134).
+                    values = [(s, min(v, 0.0)) for s, v in values]
                 profile = _profile(values, st.deck.prov)
                 if side == "left":
                     st.deck.overhang_left_at = profile
