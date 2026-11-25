@@ -373,6 +373,28 @@ def test_fr_cr_3_shared_span_ends_where_the_ramp_leaves_the_deck_sideways(monkey
     assert s - t * v < west.s_end - 5.0  # well short of the deck's end line
 
 
+def test_fr_cr_3_ramp_still_on_its_dropped_structure_run_does_not_leave_sideways(monkeypatch):
+    """New Orleans rd_33265bac1124, rd_3f8fa2295161: their own structure runs were dropped for riding
+    the I-10 deck; ended sideways, their elevated pavement stood on nothing (D-133)."""
+    import tests.pipeline.twin_scene as scene
+
+    monkeypatch.setattr(scene, "RAMP_SEAM_BEFORE_END", 45.0)
+    monkeypatch.setattr(scene, "RAMP_TURN", -0.3)
+    model = scene.twin_model(ramp=True)
+    roads = {r.id: r for r in model.roads}
+    west, ramp = model.structures[0], model.roads[-1]
+    extents = [
+        StructureExtent(west.carried_road, west.s_start, west.s_end, "class17", None, (west.s_start, west.s_end)),
+        StructureExtent(ramp.id, 0.0, 35.0, "class17_only", None, (0.0, 35.0)),
+    ]
+    kept, shares, _flags = absorb_diverging(extents, model.links, roads)
+    assert [e.road_id for e in kept] == [west.carried_road]
+    barriers = {r.id: list(r.cross_section.barriers) for r in model.roads}
+    attach_shared(model.structures, shares, roads, barriers, model.crossings)
+    (span,) = west.shared
+    assert span.s_end >= 35.0 - 1e-6
+
+
 def test_fr_cr_3_ramp_leaving_its_own_deck_beyond_the_parent_is_kept():
     model = twin_model(ramp=True)
     roads = {r.id: r for r in model.roads}

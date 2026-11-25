@@ -201,6 +201,7 @@ class Share:
     road_id: str
     s_seam: float  # seam station on this road
     toward: float  # +1: the road leaves the seam toward increasing s (a diverge), -1: arrives there (a merge)
+    run_end: float | None = None  # far end of this road's own structure run dropped for riding the deck (D-133)
 
 
 def absorb_diverging(
@@ -261,7 +262,9 @@ def absorb_diverging(
                 )
             continue
         dropped.update(own)
-        shares.append(Share(parent, p_seam, child, seam, toward))
+        far = [extents[k].s_end if toward > 0 else extents[k].s_start for k in own]
+        run_end = (max(far) if toward > 0 else min(far)) if far else None
+        shares.append(Share(parent, p_seam, child, seam, toward, run_end))
     return [e for k, e in enumerate(extents) if k not in dropped], shares, flags
 
 

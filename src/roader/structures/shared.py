@@ -278,12 +278,15 @@ def _clear_of_deck(
     toward: float,
     reach: tuple[float, float],
     zone: tuple[float, float] = (0.0, 0.0),
+    run_end: float | None = None,
 ) -> float:
     """First station of ``child`` from its seam where its whole section is off the parent's deck:
     past its skewed end, or an open joint past one of its side edges (D-133).
 
     A side edge is where the solids sweep it: the wider of the pavement and the barriers
-    standing on the deck (``zone``, left and right), plus the overhang.
+    standing on the deck (``zone``, left and right), plus the overhang. Within the road's own
+    structure run dropped for riding the deck (up to ``run_end``) it is still elevated, so only
+    passing the deck end clears it there.
     """
     probe = min(max(s_seam + toward * 20.0, 0.0), child.length)
     p0 = _proj1(parent, child.alignment.offset_point(s_seam, 0.0))[0]
@@ -305,6 +308,8 @@ def _clear_of_deck(
             hi = max(pxs.width_left(sc), zone[0]) + st.deck.overhang_at("left", sc) + JOINT_GAP_M
             if lo < pu < hi:
                 beside = False
+        if beside and run_end is not None and (s - run_end) * toward < 0.0:
+            beside = False
         return past_end or beside
 
     limit = child.length if toward > 0 else 0.0
@@ -399,7 +404,7 @@ def attach_shared(
             max((b.offset_m + b.base_width_m for b in barriers.get(parent.id, []) if b.side == side and b.s0 < st.s_end and b.s1 > st.s_start), default=0.0)
             for side in ("left", "right")
         )
-        deck_end = _clear_of_deck(st, parent, child, sh.s_seam, sh.toward, reach, zone)
+        deck_end = _clear_of_deck(st, parent, child, sh.s_seam, sh.toward, reach, zone, sh.run_end)
         end = _inside_parent(parent, child, deck_end, sh.toward)
         a, b = sorted((sh.s_seam, end))
         a, b = max(a, 0.0), min(b, child.length)
