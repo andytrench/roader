@@ -29,7 +29,7 @@ PROFILES = ("analytic", "realtime")
 LOD_CHORD_TOL = {0: 0.01, 1: 0.05, 2: 0.25, 3: 1.0}  # m, FR-AS-1
 MAX_RETRIES = 50
 
-__all__ = ["LOD_CHORD_TOL", "PROFILES", "TERRAIN_ELEMENT_ID", "generate", "generate_lods"]
+__all__ = ["LOD_CHORD_TOL", "PROFILES", "TERRAIN_ELEMENT_ID", "generate", "generate_lods", "swept_lines"]
 
 
 def generate(model: RoadModel, chord_tol_m: float = 0.01, profile: str = "analytic", *, failures: list[Flag] | None = None) -> list[Mesh]:
@@ -97,6 +97,21 @@ def _retried(road, model: RoadModel, plan: JunctionPlan, sampler, chord_tol_m: f
         notes.extend(flags)
         return True
     return False
+
+
+def swept_lines(model: RoadModel, road, sampler, chord_tol_m: float) -> list | None:
+    """Station lines the solids sweep ``road`` with, through the same retries as ``generate`` (D-161, D-171).
+
+    None when the road would fall back to square structures.
+    """
+    for tier in (0, 1, 2):
+        lines: list = []
+        try:
+            road_bodies(model, road, sampler, chord_tol_m, PlanVertices(), tier=tier, swept=lines)
+        except Exception:  # noqa: BLE001, S112
+            continue
+        return lines
+    return None
 
 
 def _generate(model: RoadModel, chord_tol_m: float, profile: str, failures: list[Flag] | None, dropped: set[str], squared: set[str]) -> list[Mesh]:

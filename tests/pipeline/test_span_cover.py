@@ -36,12 +36,28 @@ def test_d166_an_end_inside_the_crossed_footprint_moves_clear_and_is_flagged():
     assert sorted(seen) == [("cx_a", 0.0), ("cx_b", 0.0)]
 
 
-def test_d166_ends_already_clear_rule_spans_and_other_roads_are_left_alone():
+def test_d166_ends_already_clear_and_other_roads_are_left_alone():
     e = StructureExtent("up", 590.0, 650.0, "class17", None, (590.0, 650.0))
-    rule = StructureExtent("up", 700.0, 705.0, "rule", None, None)
+    rule = StructureExtent("up", 690.0, 715.0, "rule", None, None)
     other = StructureExtent("other", 600.0, 610.0, "sheet_break", (600.0, 610.0), None)
     out, flags = cover_crossed_roads([e, rule, other], [_crossing(607.0), _crossing(702.0, cid="cx_r")], lambda c, t: (c.upper_s - 9.0, c.upper_s + 9.0))
     assert out == [e, rule, other] and flags == []
+
+
+def test_d171_a_rule_span_is_covered_too():
+    """A rule span's footprint is read square on the centerline; a skewed abutment line overruns it (D-171)."""
+    rule = StructureExtent("up", 700.0, 705.0, "rule", None, None)
+    out, flags = cover_crossed_roads([rule], [_crossing(702.0, cid="cx_r")], lambda c, t: (c.upper_s - 9.0, c.upper_s + 9.0))
+    assert (out[0].s_start, out[0].s_end, out[0].method) == (693.0, 711.0, "rule")
+    assert [f.code for f in flags] == ["FR-VC-4:span_extended"]
+
+
+def test_d171_the_footprint_is_read_at_the_skew_held_at_the_nearest_end():
+    e = StructureExtent("up", 600.0, 640.0, "class17", None, (600.0, 640.0))
+    seen = []
+    hold = {"up": lambda s: 0.2 if s < 620.0 else 5.0}
+    cover_crossed_roads([e], [_crossing(605.0, 0.9), _crossing(635.0, 0.9, "cx_b")], lambda c, t: (seen.append((c.id, t)), (c.upper_s, c.upper_s))[1], hold)
+    assert seen == [("cx_a", pytest.approx(0.2)), ("cx_b", pytest.approx(math.tan(0.9)))]
 
 
 def test_d166_the_footprint_uses_the_supports_skew():

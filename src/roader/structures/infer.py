@@ -20,6 +20,7 @@ from __future__ import annotations
 import dataclasses
 import itertools
 import math
+from collections.abc import Callable
 from dataclasses import dataclass
 
 import numpy as np
@@ -32,6 +33,7 @@ from roader.model.provenance import Provenance, Source
 from roader.model.schema import Barrier, Crossing, DeckSpec, Flag, Structure, Support
 from roader.model.serialize import stable_id
 from roader.rules import RuleBook, era_of
+from roader.structures.held_skew import capped
 
 OVERHANG_BAND_M = 3.0
 DECK_LEVEL_BELOW_M = 0.3
@@ -393,7 +395,9 @@ def infer_structure(
     rules: RuleBook,
     drop: tuple[np.ndarray, np.ndarray, np.ndarray],
     barriers: list[Barrier],
+    hold: Callable[[float], float] | None = None,
 ) -> StructureResult:
+    """``hold``: |tan skew| the sweep holds at a station (D-171); supports, piers and clear zones are laid out at it."""
     flags: list[Flag] = []
     road = upper.road
     year = None
@@ -428,12 +432,12 @@ def infer_structure(
     # FR-ST-3: observed piers first; then the layout rule, only between the crossed
     # roads' clear zones and only in gaps no observed pier stands in; then even spacing.
     t = math.tan(skew)
-    seen = _pier_returns(upper, ev, extent, overhang, [(fits[c.lower_road], fits[c.lower_road].road.profile.z(c.lower_s)) for c in on], t)
+    mid = 0.5 * (extent.s_start + extent.s_end)
+    seen = _pier_returns(upper, ev, extent, overhang, [(fits[c.lower_road], fits[c.lower_road].road.profile.z(c.lower_s)) for c in on], capped(t, hold, mid))
     need = col_w / max(math.cos(skew), 0.2) + 0.5
     xs = road.cross_section
-    mid = 0.5 * (extent.s_start + extent.s_end)
     across = (-xs.width_right(mid) - overhang, xs.width_left(mid) + overhang)
-    pavements = _merged([_footprint_on(upper, fits[c.lower_road], c, 0.0, t=t, across=across) for c in on])
+    pavements = _merged([_footprint_on(upper, fits[c.lower_road], c, 0.0, t=capped(t, hold, c.upper_s), across=across) for c in on])
     observed: dict[float, tuple[ObservedPier, float]] = {}
     for p in seen:
         at = clear_of_lanes(p.station, pavements, need)
@@ -441,7 +445,7 @@ def infer_structure(
             flags.append(Flag("FR-ST-3:observed_over_lane", sid, "FR-ST-3", f"{p.n_returns} pier-like returns at s={p.station:.1f} stand on a lower pavement with no clear place within {PIER_SNAP_M} m; not used"))
             continue
         observed[at] = (p, at - p.station)
-    zones = _merged([_footprint_on(upper, fits[c.lower_road], c, lateral, t=t, across=across) for c in on])
+    zones = _merged([_footprint_on(upper, fits[c.lower_road], c, lateral, t=capped(t, hold, c.upper_s), across=across) for c in on])
     piers = sorted(observed)
     inner = (extent.s_start + PIER_END_CLEAR_M, extent.s_end - PIER_END_CLEAR_M)
     for (a0, a1), (b0, b1) in itertools.pairwise(zones):
@@ -502,17 +506,18 @@ def infer_structure(
             )
             if moved:
                 prov.flags.append(f"FR-ST-3:observed_moved_{moved:+.2f}m_off_lower_pavement")
+        sk = math.atan(capped(t, hold, s))
         supports.append(
             Support(
                 id=stable_id("sp", sid, label),
                 station=float(s),
                 kind=kind,
-                skew_rad=skew,
+                skew_rad=sk,
                 n_columns=0 if kind == "abutment" else max(1, math.ceil(deck_width / per_col)),
                 column_width_m=0.0 if kind == "abutment" else col_w,
                 cap_depth_m=cap_d,
                 # Measured along the road; on a skew the cap's width across its own line is this times cos(skew) (D-025).
-                cap_width_m=abutment_thickness(rules, era) if kind == "abutment" else (col_w + 2.0 * cap_over) / max(math.cos(skew), 0.2),
+                cap_width_m=abutment_thickness(rules, era) if kind == "abutment" else (col_w + 2.0 * cap_over) / max(math.cos(sk), 0.2),
                 footing_z=float(ground - foot),
                 prov=prov,
             )

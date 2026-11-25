@@ -374,10 +374,12 @@ def road_bodies(
     realtime: bool = False,
     limits: list[Flag] | None = None,
     tier: int = 0,
+    swept: list[StationLine] | None = None,
 ) -> list[Body]:
     """Bodies of one road. ``realtime`` switches to the real-time profile's levels and insets.
 
     ``limits`` collects a flag wherever the model's geometry had to be limited to be swept (D-141).
+    ``swept`` receives the station lines of the grid, the skew the sweep holds (D-171).
     ``tier`` is the retry step for a road whose grid fails at full skew (D-161): 1 pulls embankment
     toes in (D-156), 2 also limits the skew near steep toes.
     """
@@ -541,6 +543,8 @@ def road_bodies(
     grid = RoadGrid(road, lines, station_lines, pv)
     if limits is not None:
         limits.extend(flags)
+    if swept is not None:
+        swept[:] = station_lines
 
     def at(f: Callable[[float, float], float]) -> Callable[[int], float]:
         return lambda p: f(pv.s[p], pv.u[p])

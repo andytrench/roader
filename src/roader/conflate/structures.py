@@ -146,6 +146,7 @@ def cover_crossed_roads(
     extents: list[StructureExtent],
     crossings: list[Crossing],
     footprint: Callable[[Crossing, float], tuple[float, float]],
+    hold: dict[str, Callable[[float], float]] | None = None,
 ) -> tuple[list[StructureExtent], list[Flag]]:
     """A deck spans every road it crosses (FR-VC-4, FR-ST-3, D-166).
 
@@ -153,16 +154,27 @@ def cover_crossed_roads(
     lines s - t u, covered by the crossed road's pavement plus the least lateral
     clearance. A data extent whose end falls inside the footprint of a crossing under
     it (the evidence missed part of the deck) is extended to clear it and flagged; its
-    method and evidence stay as found. Rule extents are built from the footprint already.
+    method and evidence stay as found. Rule extents are checked too: their footprint is
+    read square on the centerline, which a skewed abutment's line overruns (D-171).
+    ``hold`` (road id to the |tan skew| its sweep holds at a station, D-171) caps the skew
+    each footprint is read at to the one held at the extent end nearest the crossing.
     """
     out, flags = [], []
     for e in extents:
         on = [c for c in crossings if c.upper_road == e.road_id and e.s_start - 1.0 <= c.upper_s <= e.s_end + 1.0]
-        if not on or e.method == "rule":
+        if not on:
             out.append(e)
             continue
         t = math.tan(float(np.mean([c.skew_rad for c in on])))
-        spans = [footprint(c, t) for c in on]
+        at = (hold or {}).get(e.road_id)
+
+        def held(c: Crossing, t: float = t, at=at, e=e) -> float:
+            if at is None:
+                return t
+            end = e.s_start if abs(c.upper_s - e.s_start) <= abs(c.upper_s - e.s_end) else e.s_end
+            return math.copysign(min(abs(t), at(end)), t)
+
+        spans = [footprint(c, held(c)) for c in on]
         a, b = min(e.s_start, *(lo for lo, _ in spans)), max(e.s_end, *(hi for _, hi in spans))
         if a >= e.s_start and b <= e.s_end:
             out.append(e)
