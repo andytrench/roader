@@ -141,6 +141,19 @@ def test_fr_cr_3_twin_joint_follows_the_gap_station_by_station():
     _joint_check(model)
 
 
+def test_fr_cr_3_a_deck_twinned_twice_on_one_side_keeps_the_tighter_joint():
+    """New Orleans st_11e833634214 twins three decks; a later pair must not undo an earlier joint (D-134)."""
+    from roader.model.geometry import Knot, Piecewise
+
+    model = twin_model(converge=0.01)
+    west = model.structures[0]
+    earlier = Piecewise([Knot(west.s_start, -1.0, west.deck.prov)])
+    west.deck.overhang_left_at = earlier
+    twin_joints(model.structures, {r.id: r for r in model.roads}, model.crossings)
+    for s in np.linspace(west.s_start - 5.0, west.s_end + 5.0, 21):
+        assert west.deck.overhang_at("left", s) <= -1.0 + 1e-9
+
+
 def test_fr_cr_3_linked_decks_converging_past_a_fit_error_meet_at_a_joint(monkeypatch):
     """Bellevue: ramp and mainline decks at a merge or diverge overlap by 4.5-14.8 m; left as
     they were (D-105) the decks passed through each other. Linked roads take a joint along the
@@ -340,6 +353,31 @@ def test_fr_cr_3_shared_span_ends_where_the_ramp_leaves_the_deck_sideways(monkey
     t = math.tan(west.supports[-1].skew_rad)
     s, v = upper.alignment.project(*ramp.alignment.offset_point(span.s_end, reach))
     assert s - t * v < west.s_end - 5.0  # well short of the deck's end line
+
+
+def test_fr_cr_3_ramp_leaving_the_deck_sideways_onto_a_twin_deck_rides_on(monkeypatch):
+    """New Orleans rd_84ecd83cacd1 left its parent deck sideways onto the twin deck beside it at the
+    same level; its pavement swept there cut that deck. Off one deck onto another is not off (D-133)."""
+    import tests.pipeline.twin_scene as scene
+
+    monkeypatch.setattr(scene, "RAMP_SEAM_BEFORE_END", 45.0)
+    monkeypatch.setattr(scene, "RAMP_TURN", 0.3)
+    monkeypatch.setattr(scene, "RAMP_U0", 2.0)
+    model = scene.twin_model(ramp=True)
+    roads = {r.id: r for r in model.roads}
+    west, ramp = model.structures[0], model.roads[-1]
+    extents = [
+        StructureExtent(west.carried_road, west.s_start, west.s_end, "class17", None, (west.s_start, west.s_end)),
+        StructureExtent(ramp.id, 0.0, 17.0, "class17_only", None, (0.0, 17.0)),
+    ]
+    _kept, shares, _flags = absorb_diverging(extents, model.links, roads)
+    barriers = {r.id: list(r.cross_section.barriers) for r in model.roads}
+    attach_shared(model.structures, shares, roads, barriers, model.crossings)
+    (span,) = west.shared
+    upper = model.road(west.carried_road)
+    beside = HALF + 0.45 + OVERHANG + 0.02 + RAMP_HALF + 0.45  # where the ramp would clear west's left edge
+    s_side = next(s for s in np.arange(0.0, 150.0, 0.5) if upper.alignment.project(*ramp.alignment.offset_point(s, 0.0))[1] > beside)
+    assert span.s_end > s_side + 1.0
 
 
 def test_fr_cr_3_ramp_leaving_its_own_deck_beyond_the_parent_is_kept():

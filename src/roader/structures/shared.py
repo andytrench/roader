@@ -41,6 +41,7 @@ TWIN_PARALLEL = math.cos(math.radians(35.0))
 TWIN_REACH_M = 40.0
 JOINT_GAP_M = 0.02  # open longitudinal joint between twin decks; touching decks from two road grids cannot conform
 TWIN_MAX_OVERLAP_M = 4.0  # fitted twin pavements overlap by a fit error at most; more is two roads converging
+OTHER_DECK_DZ_M = 2.0  # a ramp leaving its parent deck sideways onto another deck this close in height rides on
 TWIN_EDGE_KEEP_M = 1.0  # a trimmed deck edge stays this far outside its road's reference line
 CLEAR_STEP_M = 0.5
 CLEAR_TOL_M = 1e-3
@@ -246,6 +247,12 @@ def twin_joints(structures: list[Structure], roads: dict[str, Road], crossings: 
             half = (gap - JOINT_GAP_M) / 2.0
             va, vb = _joint_overhangs(a, ra, side_a, b, rb, side_b, samples, gaps)
             for st, side, values in ((a, side_a, va), (b, side_b, vb)):
+                previous = st.deck.overhang_left_at if side == "left" else st.deck.overhang_right_at
+                if previous is not None:
+                    # A deck twinned on this side before keeps that joint wherever it is tighter.
+                    new = _profile(values, st.deck.prov)
+                    stations = sorted({s for s, _v in values} | {k.s for k in previous.knots})
+                    values = [(s, min(previous(s), new(s))) for s in stations]
                 if min(v for _s, v in values) < 0.0:
                     # A deck edge crossing its pavement edge would cross that sweep line: once inside anywhere, it stays inside (D-134).
                     values = [(s, min(v, 0.0)) for s, v in values]
@@ -265,13 +272,21 @@ def twin_joints(structures: list[Structure], roads: dict[str, Road], crossings: 
 
 
 def _clear_of_deck(
-    st: Structure, parent: Road, child: Road, s_seam: float, toward: float, reach: tuple[float, float], zone: tuple[float, float] = (0.0, 0.0)
+    st: Structure,
+    parent: Road,
+    child: Road,
+    s_seam: float,
+    toward: float,
+    reach: tuple[float, float],
+    zone: tuple[float, float] = (0.0, 0.0),
+    others: list[tuple[Road, Structure]] = (),
 ) -> float:
     """First station of ``child`` from its seam where its whole section is off the parent's deck:
     past its skewed end, or an open joint past one of its side edges (D-133).
 
     A side edge is where the solids sweep it: the wider of the pavement and the barriers
-    standing on the deck (``zone``, left and right), plus the overhang.
+    standing on the deck (``zone``, left and right), plus the overhang. Leaving sideways onto
+    another deck at its level (``others``, a twin beside the parent) is not leaving.
     """
     probe = min(max(s_seam + toward * 20.0, 0.0), child.length)
     p0 = _proj1(parent, child.alignment.offset_point(s_seam, 0.0))[0]
@@ -293,6 +308,8 @@ def _clear_of_deck(
             hi = max(pxs.width_left(sc), zone[0]) + st.deck.overhang_at("left", sc) + JOINT_GAP_M
             if lo < pu < hi:
                 beside = False
+        if beside and not past_end and _on_other_deck(child, s, others):
+            return False
         return past_end or beside
 
     limit = child.length if toward > 0 else 0.0
@@ -311,6 +328,20 @@ def _clear_of_deck(
         else:
             lo = mid
     return hi
+
+
+def _on_other_deck(child: Road, s: float, others: list[tuple[Road, Structure]]) -> bool:
+    """The child's reference line at ``s`` lies over another deck within OTHER_DECK_DZ_M of its height."""
+    x, y = child.alignment.offset_point(s, 0.0)
+    z = child.profile.z(s)
+    for road, st in others:
+        ps, pu = _proj1(road, (x, y))
+        if not st.s_start <= ps <= st.s_end:
+            continue
+        xs = road.cross_section
+        if -xs.width_right(ps) - st.deck.overhang_at("right", ps) <= pu <= xs.width_left(ps) + st.deck.overhang_at("left", ps) and abs(road.surface_z(ps, pu) - z) <= OTHER_DECK_DZ_M:
+            return True
+    return False
 
 
 def _inside_parent(parent: Road, child: Road, s_from: float, toward: float) -> float:
@@ -373,6 +404,7 @@ def attach_shared(
     is flagged: the parent deck does not cover it.
     """
     flags: list[Flag] = []
+    boxes = {s.id: _box(roads[s.carried_road], s) for s in structures if s.carried_road in roads}
     for sh in shares:
         st = next((s for s in structures if s.carried_road == sh.parent_road and s.s_start - 1.0 <= sh.parent_s <= s.s_end + 1.0), None)
         if st is None:
@@ -387,7 +419,8 @@ def attach_shared(
             max((b.offset_m + b.base_width_m for b in barriers.get(parent.id, []) if b.side == side and b.s0 < st.s_end and b.s1 > st.s_start), default=0.0)
             for side in ("left", "right")
         )
-        deck_end = _clear_of_deck(st, parent, child, sh.s_seam, sh.toward, reach, zone)
+        others = [(roads[o.carried_road], o) for o in structures if o is not st and o.carried_road not in (parent.id, child.id) and o.id in boxes and not _apart(boxes[o.id], boxes[st.id], TWIN_REACH_M)]
+        deck_end = _clear_of_deck(st, parent, child, sh.s_seam, sh.toward, reach, zone, others)
         end = _inside_parent(parent, child, deck_end, sh.toward)
         a, b = sorted((sh.s_seam, end))
         a, b = max(a, 0.0), min(b, child.length)
