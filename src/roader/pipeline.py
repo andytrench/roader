@@ -83,6 +83,7 @@ from roader.structures.held_skew import CAP_MIN, capped, held_skew
 from roader.structures.infer import _footprint_on, abutment_thickness
 
 RULE_EXTENT_PAD_M = 1.0
+MAX_RELAYOUTS = 3  # D-171: layouts read for the skew the sweep holds
 SKEW_REACH_M = 15.0
 PARAPET_EDGE_GAP_M = 0.02  # keeps the parapet face and the pavement edge distinct sweep lines
 
@@ -262,17 +263,21 @@ def run_pipeline(
     start_roads = copy.deepcopy([f.road for f in fits])
     start_barriers = copy.deepcopy(barriers)
     model, layout_flags, completions = layout(fits, barriers, extents, {})
-    # D-171: supports carry the skew the sweep can hold, read from the solids on this layout.
-    hold = held_skew(model)
-    caps = _skew_caps(model.structures, hold)
-    if caps:
-        fits = [dataclasses.replace(f, road=r) for f, r in zip(fits, start_roads, strict=True)]
+    # D-171: supports carry the skew the sweep can hold, read from the solids on each layout
+    # until the layout holds it (a capped skew field can itself fail and be squared).
+    first, hold = model.structures, {}
+    for _ in range(MAX_RELAYOUTS):
+        found = held_skew(model)
+        if not _skew_caps(model.structures, found):
+            break
+        hold = _tighter(hold, found)
+        fits = [dataclasses.replace(f, road=r) for f, r in zip(fits, copy.deepcopy(start_roads), strict=True)]
         by_id = {f.road.id: f for f in fits}
-        extents, xflags = cover_crossed_roads(extents, crossings, lambda c, t: _crossed_footprint(by_id, c, t, rules), hold)
+        extents, xflags = cover_crossed_roads(extents, crossings, lambda c, t, by_id=by_id: _crossed_footprint(by_id, c, t, rules), hold)
         flags.extend(xflags)
-        first = model.structures
-        model, layout_flags, completions = layout(fits, start_barriers, extents, hold)
-        layout_flags.extend(_capped_flags(first, model.structures, caps))
+        model, layout_flags, completions = layout(fits, copy.deepcopy(start_barriers), extents, hold)
+    if hold:
+        layout_flags.extend(_capped_flags(first, model.structures))
     flags.extend(layout_flags)
     # L6 areas lifted from the canonical roads, so they match the sweeps of the saved model (FR-SG-3, D-043, D-046).
     model.junctions, junction_flags = build_junctions(loads(dumps(dataclasses.replace(model, terrain=None))))
@@ -435,28 +440,35 @@ def _buildable_fills(model: RoadModel) -> list[Flag]:
     return out
 
 
-def _skew_caps(structures, hold) -> list[Flag]:
-    """Flags for the structures whose supports the sweep cannot hold at full skew (FR-ST-4, D-171)."""
-    out = []
-    for st in structures:
-        at = hold.get(st.carried_road)
-        if at is None:
-            continue
-        cut = [(sp.id, math.tan(sp.skew_rad), capped(math.tan(sp.skew_rad), at, sp.station)) for sp in st.supports]
-        cut = [(i, a, b) for i, a, b in cut if abs(a) - abs(b) > CAP_MIN]
-        if cut:
-            text = ", ".join(f"{i} {abs(a):.2f} -> {abs(b):.2f}" for i, a, b in cut)
-            out.append(Flag("FR-ST-4:skew_capped", st.id, "FR-ST-4", f"|tan skew| capped to what the sweep holds near the road end or steep toes: {text}"))
+def _skew_caps(structures, hold) -> bool:
+    """True when some support is steeper than its road's sweep holds at its station (FR-ST-4, D-171)."""
+    return any(
+        abs(math.tan(sp.skew_rad)) - abs(capped(math.tan(sp.skew_rad), hold[st.carried_road], sp.station)) > CAP_MIN
+        for st in structures
+        if st.carried_road in hold
+        for sp in st.supports
+    )
+
+
+def _tighter(a: dict, b: dict) -> dict:
+    """Per road, the smaller of two held |tan skew| fields."""
+    out = dict(a)
+    for road_id, f in b.items():
+        g = out.get(road_id)
+        out[road_id] = f if g is None else (lambda s, f=f, g=g: min(f(s), g(s)))
     return out
 
 
-def _capped_flags(first, final, caps: list[Flag]) -> list[Flag]:
-    """The cap flags moved to the re-inferred structure over the same span (a moved deck end renames it)."""
+def _capped_flags(first, final) -> list[Flag]:
+    """``FR-ST-4:skew_capped`` on each final structure whose supports lost skew against the first layout's (D-171)."""
     out = []
-    for flag in caps:
-        st = next(st for st in first if st.id == flag.element_id)
-        after = [x for x in final if x.carried_road == st.carried_road and x.s_start < st.s_end and x.s_end > st.s_start]
-        out.extend(dataclasses.replace(flag, element_id=x.id) for x in after)
+    for st in final:
+        before = [x for x in first if x.carried_road == st.carried_road and x.s_start < st.s_end and x.s_end > st.s_start]
+        full = max((abs(math.tan(sp.skew_rad)) for x in before for sp in x.supports), default=0.0)
+        cut = [sp for sp in st.supports if full - abs(math.tan(sp.skew_rad)) > CAP_MIN]
+        if cut:
+            text = ", ".join(f"{sp.id} {full:.2f} -> {abs(math.tan(sp.skew_rad)):.2f}" for sp in cut)
+            out.append(Flag("FR-ST-4:skew_capped", st.id, "FR-ST-4", f"|tan skew| capped to what the sweep holds near the road end or steep toes: {text}"))
     return out
 
 
