@@ -273,7 +273,10 @@ def run_pipeline(
         hold = _tighter(hold, found)
         fits = [dataclasses.replace(f, road=r) for f, r in zip(fits, copy.deepcopy(start_roads), strict=True)]
         by_id = {f.road.id: f for f in fits}
-        extents, xflags = cover_crossed_roads(extents, crossings, lambda c, t, by_id=by_id: _crossed_footprint(by_id, c, t, rules), hold)
+        overhang = {st.carried_road: max(st.deck.overhang("left"), st.deck.overhang("right"), 0.0) for st in model.structures}
+        extents, xflags = cover_crossed_roads(
+            extents, crossings, lambda c, t, by_id=by_id, ov=overhang: _crossed_footprint(by_id, c, t, rules, ov.get(c.upper_road, 0.0)), hold
+        )
         flags.extend(xflags)
         model, layout_flags, completions = layout(fits, copy.deepcopy(start_barriers), extents, hold)
     if hold:
@@ -472,16 +475,17 @@ def _capped_flags(first, final) -> list[Flag]:
     return out
 
 
-def _crossed_footprint(by_id, c, t: float, rules) -> tuple[float, float]:
+def _crossed_footprint(by_id, c, t: float, rules, overhang: float = 0.0) -> tuple[float, float]:
     """Deck-end stations whose abutment block clears the crossed pavement by the least lateral clearance (D-166, D-170).
 
     The block reaches ``abutment_thickness`` from the deck end into the span, so the
-    support-line footprint of the pavement is widened by that much at each end.
+    support-line footprint of the pavement is widened by that much at each end. The block
+    spans the deck, ``overhang`` beyond each pavement edge (known once laid out, D-171).
     """
     upper, lower = by_id[c.upper_road], by_id[c.lower_road]
     least = rules.get("clearance.lateral.support", road_class=lower.road.road_class).low
     xs = upper.road.cross_section
-    across = (-xs.width_right(c.upper_s), xs.width_left(c.upper_s))
+    across = (-xs.width_right(c.upper_s) - overhang, xs.width_left(c.upper_s) + overhang)
     a, b = _footprint_on(upper, lower, c, least, t=t, across=across)
     thick = abutment_thickness(rules, era_of(None))
     return a - thick, b + thick

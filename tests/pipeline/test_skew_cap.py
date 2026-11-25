@@ -46,6 +46,21 @@ def test_d171_supports_carry_the_skew_the_solids_sweep(outcome):
             assert abs(line.t - math.tan(sp.skew_rad)) <= 0.02, (sp.id, line.t, math.tan(sp.skew_rad))
 
 
+def test_d171_relaid_deck_ends_clear_the_crossed_pavement_with_the_deck_overhang(result):
+    """An abutment spans the deck, overhangs included: at a skew other than the crossing's,
+    its corners reach farther along the road than the pavement's (Wright Co, I-94 WB squared
+    over Broadway Street: 0.44 m into the pavement)."""
+    from roader.pipeline import _crossed_footprint
+    from roader.rules import RuleBook
+
+    rules = RuleBook.load()
+    by_id = {f.road.id: f for f in result.fits}
+    c = next(c for c in result.model.crossings if abs(c.skew_rad) > 0.1)
+    a0, b0 = _crossed_footprint(by_id, c, 0.0, rules)
+    a1, b1 = _crossed_footprint(by_id, c, 0.0, rules, overhang=2.0)
+    assert a1 < a0 - 0.1 and b1 > b0 + 0.1
+
+
 def test_d171_no_support_stands_on_the_road_below(outcome):
     """AC-H1, AC-H3, FR-EX-1 on the capped bridge."""
     assert "FR-EX-1" not in outcome.gates or outcome.gates["FR-EX-1"].passed
