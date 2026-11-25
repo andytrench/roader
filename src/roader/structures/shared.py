@@ -142,7 +142,21 @@ def _joint_overhangs(a: Structure, ra: Road, side_a: str, b: Structure, rb: Road
         x = max(min(room - y, hi_a), lo_a)
         va.append((s, x))
         vb.append((sb, y))
-    return va, vb
+    return _window_min(va, _window(a, ra, side_a)), _window_min(vb, _window(b, rb, side_b))
+
+
+def _window(st: Structure, road: Road, side: str) -> float:
+    """Reach along the road over which one station's joint must hold: the sample spacing, plus how far a
+    skewed support line runs along the road across the facing half of the deck."""
+    t = max((abs(math.tan(sp.skew_rad)) for sp in st.supports), default=0.0)
+    half = max(k.value for k in _width(road, side).knots) + max(st.deck.overhang(side), 0.0)
+    return 2.0 * TWIN_STEP_M + t * half
+
+
+def _window_min(values: list[tuple[float, float]], reach: float) -> list[tuple[float, float]]:
+    """Each value the least within ``reach`` of its station, so the joint holds between samples, through
+    a steep width taper and along a skewed deck end (D-134)."""
+    return [(s, min(v for q, v in values if abs(q - s) <= reach)) for s, _ in values]
 
 
 def _profile(values: list[tuple[float, float]], prov) -> Piecewise:
