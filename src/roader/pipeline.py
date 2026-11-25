@@ -20,7 +20,6 @@ Not yet: inventory matching (FR-ST-1), observed piers, multiple collections
 
 from __future__ import annotations
 
-import contextlib
 import copy
 import dataclasses
 import math
@@ -190,86 +189,91 @@ def run_pipeline(
             barriers[f.road.id] = []
             flags.append(element_failed(f.road.id, "FR-RS-4", "no measured barriers on the road", exc))
 
-    measured_barriers = copy.deepcopy(barriers)
-
-    def infer_all(extents, hold) -> tuple[list, list[Flag]]:
-        out, sflags = [], []
-        for e in extents:
-            try:
-                res = infer_structure(e, by_id[e.road_id], crossings, by_id, ev, rules, drops[e.road_id], barriers[e.road_id], hold=hold.get(e.road_id))
-            except Exception as exc:  # noqa: BLE001 - one structure never aborts the unit (FR-EX-1, D-119)
-                sflags.append(element_failed(e.road_id, "FR-ST-2", f"no structure for the {e.method} span s={e.s_start:.1f}-{e.s_end:.1f}", exc))
-                continue
-            if e.method == "rule":
-                res.structure.prov.source = Source.RULE
-                res.structure.prov.rule_id = "clearance.lateral.support"
-                res.structure.prov.confidence = 0.3
-            out.append(res.structure)
-            sflags.extend(res.flags)
-            filled = parapet_fill(by_id[e.road_id].road, res.structure, barriers[e.road_id], rules)
-            barriers[e.road_id].extend(filled)
-            _fit_overhang(by_id[e.road_id].road, res.structure, barriers[e.road_id])
-        return out, sflags
-
-    structures, sflags = infer_all(extents, {})
-    # D-171: supports carry the skew the sweep can hold, read from the solids on a trial model.
-    hold = _held_skew(structures, fits, links, crossings, frame, unit, fit_points, rules, strip_factor)
-    caps = _skew_caps(structures, hold)
-    if caps:
-        barriers = copy.deepcopy(measured_barriers)
-        extents, xflags = cover_crossed_roads(extents, crossings, lambda c, t: _crossed_footprint(by_id, c, t, rules), hold)
-        flags.extend(xflags)
-        first = structures
-        structures, sflags = infer_all(extents, hold)
-        sflags.extend(_capped_flags(first, structures, caps))
-    flags.extend(sflags)
-    flags.extend(attach_shared(structures, shares, roads, barriers, crossings))
-
-    for f in fits:
-        _clip_parapets(barriers[f.road.id], [st for st in structures if st.carried_road == f.road.id])
-        _parapets_outside_pavement(f.road, barriers[f.road.id])
-        for st in structures:
-            if st.carried_road == f.road.id:
-                _fit_overhang(f.road, st, barriers[f.road.id])
-        f.road.cross_section.barriers = sorted(barriers[f.road.id], key=lambda b: (b.side, b.s0, b.id))
-    # A parent and its linked child share their taper boundary, off their decks (FR-XS-1, D-104).
-    flags.extend(bound_tapers(fits, junctions, _decks(structures)))
-    flags.extend(twin_joints(structures, roads, crossings))
-    flags.extend(classify_medians(fits, ev))
-
-    slopes = []
-    for f in fits:
-        try:
-            slopes.extend(side_slopes(f, structures, rules, strip_factor))
-        except Exception as exc:  # noqa: BLE001 - one road's earthwork never aborts the unit (FR-EX-1, D-119)
-            flags.append(element_failed(f.road.id, "FR-OC-3", "no side slopes on the road", exc))
-
     unit = copy.deepcopy(unit)
     for rec in unit.lidar:
         rec.density_pavement_pts_m2 = ev.density.median_pts_m2
         rec.strip_dz_p95_m = ev.strips.p95_m
 
-    model = RoadModel(
-        unit=unit,
-        frame=frame,
-        roads=sorted([f.road for f in fits], key=lambda r: r.id),
-        links=links,
-        crossings=sorted(crossings, key=lambda c: c.id),
-        structures=sorted(structures, key=lambda s: s.id),
-        side_slopes=sorted(slopes, key=lambda s: s.id),
-    )
-    for road in model.roads:
-        if any(st.carried_road == road.id for st in model.structures):
-            split_at_structures(road, model.structures)
-        label_under_deck(road, model)
-        road.prov = road_summary(road)
-    flags.extend(check_clearances(model, rules))
-    completions = complete_occluded(model, {f.road.id: (f.track.s, f.track.z) for f in fits})
-    flags.extend(completion_flags(completions))
-    # Stage 8 terrain after the clearance refit, so caps and soffits are final (FR-OC-3).
-    model.terrain = complete_terrain(fit_points, model, rules)
-    seat_supports(model, rules)
-    flags.extend(_buildable_fills(model))
+    def layout(fits, barriers, extents, hold) -> tuple[RoadModel, list[Flag], list]:
+        """Structures, earthwork and terrain for one layout; ``hold`` caps support skew (D-171). Mutates ``fits``."""
+        out: list[Flag] = []
+        by_id = {f.road.id: f for f in fits}
+        roads = {f.road.id: f.road for f in fits}
+        structures = []
+        for e in extents:
+            try:
+                res = infer_structure(e, by_id[e.road_id], crossings, by_id, ev, rules, drops[e.road_id], barriers[e.road_id], hold=hold.get(e.road_id))
+            except Exception as exc:  # noqa: BLE001 - one structure never aborts the unit (FR-EX-1, D-119)
+                out.append(element_failed(e.road_id, "FR-ST-2", f"no structure for the {e.method} span s={e.s_start:.1f}-{e.s_end:.1f}", exc))
+                continue
+            if e.method == "rule":
+                res.structure.prov.source = Source.RULE
+                res.structure.prov.rule_id = "clearance.lateral.support"
+                res.structure.prov.confidence = 0.3
+            structures.append(res.structure)
+            out.extend(res.flags)
+            filled = parapet_fill(by_id[e.road_id].road, res.structure, barriers[e.road_id], rules)
+            barriers[e.road_id].extend(filled)
+            _fit_overhang(by_id[e.road_id].road, res.structure, barriers[e.road_id])
+        out.extend(attach_shared(structures, shares, roads, barriers, crossings))
+
+        for f in fits:
+            _clip_parapets(barriers[f.road.id], [st for st in structures if st.carried_road == f.road.id])
+            _parapets_outside_pavement(f.road, barriers[f.road.id])
+            for st in structures:
+                if st.carried_road == f.road.id:
+                    _fit_overhang(f.road, st, barriers[f.road.id])
+            f.road.cross_section.barriers = sorted(barriers[f.road.id], key=lambda b: (b.side, b.s0, b.id))
+        # A parent and its linked child share their taper boundary, off their decks (FR-XS-1, D-104).
+        out.extend(bound_tapers(fits, junctions, _decks(structures)))
+        out.extend(twin_joints(structures, roads, crossings))
+        out.extend(classify_medians(fits, ev))
+
+        slopes = []
+        for f in fits:
+            try:
+                slopes.extend(side_slopes(f, structures, rules, strip_factor))
+            except Exception as exc:  # noqa: BLE001 - one road's earthwork never aborts the unit (FR-EX-1, D-119)
+                out.append(element_failed(f.road.id, "FR-OC-3", "no side slopes on the road", exc))
+
+        model = RoadModel(
+            unit=unit,
+            frame=frame,
+            roads=sorted([f.road for f in fits], key=lambda r: r.id),
+            links=links,
+            crossings=sorted(crossings, key=lambda c: c.id),
+            structures=sorted(structures, key=lambda s: s.id),
+            side_slopes=sorted(slopes, key=lambda s: s.id),
+        )
+        for road in model.roads:
+            if any(st.carried_road == road.id for st in model.structures):
+                split_at_structures(road, model.structures)
+            label_under_deck(road, model)
+            road.prov = road_summary(road)
+        out.extend(check_clearances(model, rules))
+        completions = complete_occluded(model, {f.road.id: (f.track.s, f.track.z) for f in fits})
+        out.extend(completion_flags(completions))
+        # Stage 8 terrain after the clearance refit, so caps and soffits are final (FR-OC-3).
+        model.terrain = complete_terrain(fit_points, model, rules)
+        seat_supports(model, rules)
+        out.extend(_buildable_fills(model))
+        return model, out, completions
+
+    start_roads = copy.deepcopy([f.road for f in fits])
+    start_barriers = copy.deepcopy(barriers)
+    model, layout_flags, completions = layout(fits, barriers, extents, {})
+    # D-171: supports carry the skew the sweep can hold, read from the solids on this layout.
+    hold = held_skew(model)
+    caps = _skew_caps(model.structures, hold)
+    if caps:
+        fits = [dataclasses.replace(f, road=r) for f, r in zip(fits, start_roads, strict=True)]
+        by_id = {f.road.id: f for f in fits}
+        extents, xflags = cover_crossed_roads(extents, crossings, lambda c, t: _crossed_footprint(by_id, c, t, rules), hold)
+        flags.extend(xflags)
+        first = model.structures
+        model, layout_flags, completions = layout(fits, start_barriers, extents, hold)
+        layout_flags.extend(_capped_flags(first, model.structures, caps))
+    flags.extend(layout_flags)
     # L6 areas lifted from the canonical roads, so they match the sweeps of the saved model (FR-SG-3, D-043, D-046).
     model.junctions, junction_flags = build_junctions(loads(dumps(dataclasses.replace(model, terrain=None))))
     flags.extend(junction_flags)
@@ -429,31 +433,6 @@ def _buildable_fills(model: RoadModel) -> list[Flag]:
         ss.kind, ss.ratio = "none", 0.0
         out.append(Flag("L4:fill_unbuildable", ss.id, "FR-OC-3", f"fill written as none: {reason}"))
     return out
-
-
-def _held_skew(structures, fits, links, crossings, frame, unit, fit_points, rules, strip_factor) -> dict:
-    """|tan skew| the solids hold along each road carrying a skewed structure, on a trial model (D-171).
-
-    The trial has the structures as first inferred, their side slopes and a terrain from
-    the same points; the unit's own roads and structures are left untouched.
-    """
-    if not any(sp.skew_rad != 0.0 for st in structures for sp in st.supports):
-        return {}
-    trial_fits = copy.deepcopy(fits)
-    trial_structures = copy.deepcopy(structures)
-    slopes = []
-    for f in trial_fits:
-        with contextlib.suppress(Exception):
-            slopes.extend(side_slopes(f, trial_structures, rules, strip_factor))
-    trial = RoadModel(unit=unit, frame=frame, roads=[f.road for f in trial_fits], links=links, crossings=crossings, structures=trial_structures, side_slopes=slopes)
-    for road in trial.roads:
-        if any(st.carried_road == road.id for st in trial.structures):
-            split_at_structures(road, trial.structures)
-    try:
-        trial.terrain = complete_terrain(fit_points, trial, rules)
-    except Exception:  # noqa: BLE001 - without a trial terrain the supports keep their skew
-        return {}
-    return held_skew(trial)
 
 
 def _skew_caps(structures, hold) -> list[Flag]:
