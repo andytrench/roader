@@ -637,7 +637,8 @@ def infer_structure(
             )
             if moved:
                 prov.flags.append(f"FR-ST-3:observed_moved_{moved:+.2f}m_off_lower_pavement")
-        sk = math.atan(capped(t, hold, s))
+        # FR-ST-4 skew of what this support crosses (D-107), no steeper than the sweep holds there (D-171).
+        sk = math.atan(capped(math.tan(sk), hold, s))
         supports.append(
             Support(
                 id=stable_id("sp", sid, label),
@@ -665,9 +666,9 @@ def infer_structure(
         st_prov.flags.append(f"FR-VC-4:sheet_break {extent.geom[0]:.1f}-{extent.geom[1]:.1f}; class17 {extent.class17[0]:.1f}-{extent.class17[1]:.1f}")
     if review:
         flags.append(Flag("FR-ST-6:review", sid, "FR-ST-6", f"max span {max_span:.0f} m at or above the review threshold"))
-    capped = sorted({f.split('_from_')[1] for _sk, fl in skews for f in fl})
-    if capped:
-        flags.append(Flag("FR-ST-4:skew_capped", sid, "FR-ST-4", f"crossing skew {', '.join(capped)} capped at {math.degrees(MAX_SUPPORT_SKEW_RAD):.0f} deg for the supports over it"))
+    capped_from = sorted({f.split('_from_')[1] for _sk, fl in skews for f in fl})
+    if capped_from:
+        flags.append(Flag("FR-ST-4:skew_capped", sid, "FR-ST-4", f"crossing skew {', '.join(capped_from)} capped at {math.degrees(MAX_SUPPORT_SKEW_RAD):.0f} deg for the supports over it"))
     structure = Structure(
         id=sid,
         kind="bridge",
