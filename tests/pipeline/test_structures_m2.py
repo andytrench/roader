@@ -160,6 +160,41 @@ def test_fr_cr_3_linked_decks_converging_past_a_fit_error_meet_at_a_joint(monkey
     _joint_check(model)
 
 
+def _clipped(model, linked: bool):
+    """West's deck moved to start at its road's start, as a road clipped at the unit boundary."""
+    from roader.model.schema import Link
+
+    west = model.structures[0]
+    shift = west.s_start
+    west.s_start, west.s_end = 0.0, west.s_end - shift
+    for sp in west.supports:
+        sp.station -= shift
+    if linked:
+        model.links.append(Link("lk_in", "rd_other", "end", west.carried_road, "start", "continue"))
+    return west
+
+
+def test_fr_st_3_deck_cut_at_the_unit_boundary_has_no_abutment_there():
+    """Bellevue sp_736f1a21f008: link 454826562's deck starts where the unit clips the road, and its
+    abutment stood on I-405 NB's pavement 6.5 m below. The deck runs on outside the unit (D-167)."""
+    from roader.structures import open_ends
+
+    model = twin_model()
+    west = _clipped(model, linked=False)
+    flags = open_ends(model.structures, {r.id: r for r in model.roads}, model.links)
+    assert [sp.station for sp in west.supports if sp.kind == "abutment"] == [pytest.approx(west.s_end)]
+    assert [f.element_id for f in flags if f.code == "FR-ST-3:open_end"] == [west.id]
+
+
+def test_fr_st_3_deck_at_a_continued_road_end_keeps_its_abutment():
+    from roader.structures import open_ends
+
+    model = twin_model()
+    west = _clipped(model, linked=True)
+    assert open_ends(model.structures, {r.id: r for r in model.roads}, model.links) == []
+    assert sum(sp.kind == "abutment" for sp in west.supports) == 2
+
+
 def test_fr_cr_3_deck_overhang_per_station_round_trips():
     """D-134: DeckSpec carries a per-station overhang per side; the scalar stays the fallback."""
     from roader.model.geometry import Knot, Piecewise

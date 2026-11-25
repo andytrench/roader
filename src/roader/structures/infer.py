@@ -30,7 +30,16 @@ from roader.conflate.structures import StructureExtent
 from roader.evidence import Evidence
 from roader.fit.road import RoadFit
 from roader.model.provenance import Provenance, Source
-from roader.model.schema import Barrier, Crossing, DeckSpec, Flag, Structure, Support
+from roader.model.schema import (
+    Barrier,
+    Crossing,
+    DeckSpec,
+    Flag,
+    Link,
+    Road,
+    Structure,
+    Support,
+)
 from roader.model.serialize import stable_id
 from roader.rules import RuleBook, era_of
 from roader.structures.held_skew import capped
@@ -47,6 +56,7 @@ FASCIA_BOTTOM_M = 4.0
 FASCIA_MIN_POINTS = 50
 FASCIA_COVERAGE = 0.3
 PIER_END_CLEAR_M = 5.0  # no pier closer than this to an abutment
+OPEN_END_M = 1.0  # a deck end this close to an end of its road that no link continues is cut by the unit boundary
 MIN_PIER_GAP_M = 8.0
 # FR-ST-4: supports follow the crossing up to this skew; sharper crossings (stack ramps nearly
 # parallel to the roads below) take longer spans in practice, and their skew ramps cannot meet.
@@ -675,3 +685,36 @@ def infer_structure(
     for c in on:
         c.structure_id = sid
     return StructureResult(structure, on, flags, [float(x) for x in spans])
+
+
+def open_ends(structures: list[Structure], roads: dict[str, Road], links: list[Link]) -> list[Flag]:
+    """FR-ST-3/D-167: a deck ending within OPEN_END_M of an end of its road that no link continues
+    is cut by the unit boundary; the bridge runs on outside the unit, so that end has no abutment."""
+    joined: set[tuple[str, str]] = set()
+    for lk in links:
+        for rid, end, s in ((lk.from_road, lk.from_end, lk.from_s), (lk.to_road, lk.to_end, lk.to_s)):
+            road = roads.get(rid)
+            if road is None:
+                continue
+            at = 0.0 if end == "start" else road.length
+            if s is None or abs(s - at) <= OPEN_END_M:
+                joined.add((rid, end))
+    flags: list[Flag] = []
+    for st in structures:
+        road = roads.get(st.carried_road)
+        if road is None:
+            continue
+        open_at = []
+        if st.s_start <= OPEN_END_M and (road.id, "start") not in joined:
+            open_at.append(st.s_start)
+        if st.s_end >= road.length - OPEN_END_M and (road.id, "end") not in joined:
+            open_at.append(st.s_end)
+        if not open_at:
+            continue
+        drop = [sp for sp in st.supports if sp.kind == "abutment" and any(abs(sp.station - s) <= OPEN_END_M for s in open_at)]
+        if not drop:
+            continue
+        st.supports = [sp for sp in st.supports if sp not in drop]
+        ends = ", ".join(f"s={s:.1f}" for s in open_at)
+        flags.append(Flag("FR-ST-3:open_end", st.id, "FR-ST-3", f"deck cut by the unit boundary at {ends} of {road.id}; abutment {', '.join(sp.id for sp in drop)} left out"))
+    return flags

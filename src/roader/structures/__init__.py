@@ -10,9 +10,15 @@ Public API:
     parapet_fill(road, structure, existing_barriers, rules) -> list[Barrier]
     twin_joints(structures, roads, crossings, links) -> list[Flag]
     attach_shared(structures, shares, roads, barriers, crossings) -> list[Flag]
+    open_ends(structures, roads, links) -> list[Flag]
 """
 
-from roader.structures.infer import StructureResult, infer_structure, parapet_fill
+from roader.structures.infer import (
+    StructureResult,
+    infer_structure,
+    open_ends,
+    parapet_fill,
+)
 from roader.structures.shared import attach_shared, twin_joints
 
-__all__ = ["StructureResult", "attach_shared", "infer_structure", "parapet_fill", "twin_joints"]
+__all__ = ["StructureResult", "attach_shared", "infer_structure", "open_ends", "parapet_fill", "twin_joints"]

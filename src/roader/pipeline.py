@@ -78,7 +78,7 @@ from roader.model.provenance import Provenance, Source
 from roader.model.schema import ELEMENT_FAILED, Flag, Frame, RoadModel, UnitRecord
 from roader.model.serialize import dumps, loads
 from roader.rules import RuleBook, era_of
-from roader.structures import attach_shared, infer_structure, parapet_fill, twin_joints
+from roader.structures import attach_shared, infer_structure, open_ends, parapet_fill, twin_joints
 from roader.structures.held_skew import CAP_MIN, capped, held_skew
 from roader.structures.infer import _footprint_on, abutment_thickness
 
@@ -229,6 +229,7 @@ def run_pipeline(
         # A parent and its linked child share their taper boundary, off their decks (FR-XS-1, D-104).
         out.extend(bound_tapers(fits, junctions, _decks(structures)))
         out.extend(twin_joints(structures, roads, crossings, links))
+        out.extend(open_ends(structures, roads, links))
         out.extend(classify_medians(fits, ev))
 
         slopes = []
