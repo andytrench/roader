@@ -315,6 +315,9 @@ class JunctionPlan:
             ia, ib = (_nearest(ring_xy, e) for e in ends)
             if ia is None or ib is None:  # an outline that already follows the skewed row (a deck end)
                 ia, ib = (_nearest(ring_xy, (pv.x[p], pv.y[p]), SKEW_SNAP_M) for p in (row[0], row[-1]))
+            if (ia is None or ib is None) and seam.skew != 0.0:
+                # The outline follows the deck's full end skew; near a road end the grid squares it off (D-118, D-173).
+                ia, ib = (_nearest(ring_xy, e, SKEW_SNAP_M) for e in _skewed_row_ends(road, seam))
             if ia is None or ib is None:
                 raise ValueError(f"junction {jn.id}: seam {seam.road_id}@{seam.s:.3f} is not on the outline")
             if (ib - ia) % n <= (ia - ib) % n:
@@ -449,6 +452,18 @@ class JunctionPlan:
             taken.setdefault(key, []).append((x, y))
             out.append((x, y))
         return out
+
+
+def _skewed_row_ends(road: Road, seam) -> list[tuple[float, float]]:
+    """Right and left ends of the seam row at the deck end's full skew, as the junction outline places them."""
+    xs = road.cross_section
+    out = []
+    for width, sign in ((xs.width_right, -1.0), (xs.width_left, 1.0)):
+        sv = seam.s
+        for _ in range(6):
+            sv = min(max(seam.s + seam.skew * sign * width(sv), 0.0), road.length)
+        out.append(road.alignment.offset_point(sv, sign * width(sv)))
+    return out
 
 
 def _nearest(ring, p, tol: float = OUTLINE_SNAP_M) -> int | None:

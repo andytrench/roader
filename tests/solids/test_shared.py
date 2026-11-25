@@ -615,3 +615,57 @@ def test_d154_a_ramp_riding_beside_a_road_after_its_diverge_shares_from_the_area
     assert all(polys[i].intersection(polys[j]).area < 1e-4 for i in range(len(polys)) for j in range(i + 1, len(polys)))
     assert junction_violations(area, roads)[0] == []
     _closed_ok(generate(model))
+
+
+def _end_beyond_a_deck(skew: float = 0.0) -> RoadModel:
+    """Ramp A ends 0.5 m past its deck end; ramp B starts 0.1 m before A's end and overlaps it (Lorain 19124514 / 19126770)."""
+    a = _road("a", [("line", 100.0, 0.0)], -100.0, 0.0, 0.0, 4.0, 4.0)
+    b = _road("b", [("line", 100.0, 0.0)], -0.1, 0.3, 0.02, 4.0, 4.0)
+    sid = stable_id("st", "scene", "a")
+    supports = [Support(stable_id("sp", sid, k), s, "abutment", skew, 0, 0.0, 1.2, 1.5, 95.0, RULE) for k, s in (("a1", 59.5), ("a2", 99.5))]
+    st = Structure(sid, "bridge", a.id, 59.5, 99.5, "multi_girder", None, [], DeckSpec(1.3, 0.22, 0.9, RULE), supports, TRUTH)
+    return _model([a, b], structures=[st])
+
+
+def test_d172_a_short_shared_piece_at_a_road_end_gets_its_own_region():
+    """FR-SG-3, FR-SV-7: A's part of the shared pavement (0.5 m between its deck end and its road end) was
+    under the 1 m seam margin, so A got no region and kept its pavement there, while B's region took the
+    whole overlap: road and area overlapped (Lorain rd_3160 / jn_b475)."""
+    model = _end_beyond_a_deck()
+    assert not [f for f in model.flags if f.code == "FR-SV-7:pavement_overlap"], [f.message for f in model.flags]
+    assert any(j.kind == "shared" for j in model.junctions)
+    _closed_ok(generate(model))
+
+
+def test_d172_areas_overlapping_along_a_short_link_meet_at_one_seam(monkeypatch):
+    """FR-SG-3, FR-SV-7, D-069, D-090: a link leaves P and joins Q 15 m away; its diverge and merge areas
+    overlap along it. Lorain: the merge could not be built (the link would lie wholly inside it) and the
+    split left a seam row inside the other area, so the areas overlapped by 21 m2 (jn_9813 / jn_d6b1)."""
+    import roader.complete.junctions as J
+
+    regrow = J._regrow
+    monkeypatch.setattr(J, "_regrow", lambda roads, iv: None if len(iv) > 2 else regrow(roads, iv))
+    monkeypatch.setattr(J, "_merge", lambda groups: groups)
+    monkeypatch.setattr(J, "_split_pair", lambda *args, **kwargs: ([], "no split"))
+    gap, radius = 15.0, 200.0
+    turn = math.acos(1.0 - (gap - 4.0) / (2.0 * radius))
+    p = _road("p", [("line", 300.0, 0.0)], -150.0, 0.0, 0.0, 3.5, 3.5, kind="mainline")
+    q = _road("q", [("line", 300.0, 0.0)], -150.0, -gap, 0.0, 3.5, 3.5, kind="mainline")
+    link = _road("l", [("arc", radius * turn, -1.0 / radius), ("arc", radius * turn, 1.0 / radius)], -20.0, -2.0, 0.0, 3.5, 3.5)
+    model = _model([p, q, link])
+    assert sorted(j.kind for j in model.junctions) == ["diverge", "merge"], [f.message for f in model.flags]
+    assert not [f for f in model.flags if f.code in ("FR-SG-3:overlap", "FR-SV-7:pavement_overlap")]
+    at = [round(s.s, 6) for j in model.junctions for s in j.seams if s.road_id == link.id]
+    assert len(at) == 2 and at[0] == at[1]
+    _closed_ok(generate(model))
+
+
+def test_d173_a_region_at_a_skewed_deck_end_near_the_road_end_meets_the_squared_grid_row():
+    """FR-SG-3, D-073, D-118: the region's seam follows the deck end's full skew (-0.066 rad, Lorain
+    st_7ab3), but 0.5 m from the road end the grid squares the row off; the area was left out."""
+    model = _end_beyond_a_deck(skew=-0.066)
+    assert any(j.kind == "shared" and j.seams for j in model.junctions), [f.message for f in model.flags]
+    failures = []
+    meshes = generate(model, failures=failures)
+    assert not [f for f in failures if f.code == "FR-EX-1:element_failed"], [f.message for f in failures]
+    _closed_ok(meshes)

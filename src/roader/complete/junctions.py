@@ -69,6 +69,7 @@ from roader.solids.stations import RAMP_FACTOR, RAMP_MIN_M, support_block
 
 GORE_GAP_M = 1.0  # a seam's cross-section line stays this clear of other participants' pavement
 SEAM_MARGIN_M = 1.0  # added beyond the first clear station
+SHORT_PIECE_M = 0.05  # a shared piece at a road end shorter than this gets no region (D-172)
 SEARCH_STEP_M = 0.5
 MAX_REACH_M = 200.0  # roads still overlapping this far from the node are a fitting problem, not a junction
 LOCAL_REACH_M = MAX_REACH_M + 100.0  # footprint of another participant considered around its anchor
@@ -640,7 +641,7 @@ def _build_junctions(model: RoadModel) -> tuple[list[JunctionArea], list[Flag]]:
     groups = [(ns, (_regrow(roads, iv) or iv) if len(ns) > 1 else iv) for ns, iv in _merge(groups)]
     areas, group_of, settle_flags = _settle(model, roads, groups)
     flags.extend(settle_flags)
-    areas = _split_overlaps(areas, roads, group_of, flags)
+    areas = _split_overlaps(model, areas, roads, group_of, flags)
     zone_map: dict[str, list[tuple[str, tuple[float, float]]]] = {}
     for area in areas:
         for rid, iv in group_of[area.id][1].items():
@@ -899,9 +900,45 @@ def _split_pair(ai, aj, pi, pj, pieces, fp_i, fp_j, roads) -> tuple[list[Junctio
     return fixed, problem
 
 
-def _split_overlaps(areas: list[JunctionArea], roads: dict[str, Road], group_of, flags: list[Flag]) -> list[JunctionArea]:
+def _abut_pair(model, roads, ai: JunctionArea, aj: JunctionArea, group_of, flags: list[Flag]) -> tuple[list[JunctionArea], str]:
+    """Two areas whose intervals on a shared road overlap meet at one seam midway through the overlap (D-172).
+
+    Each keeps its other intervals; both are rebuilt and must no longer overlap.
+    """
+    (ni, ivi), (nj, ivj) = group_of[ai.id], group_of[aj.id]
+    ivi, ivj = dict(ivi), dict(ivj)
+    cut = False
+    for r in sorted(set(ivi) & set(ivj)):
+        (lo_i, hi_i), (lo_j, hi_j) = ivi[r], ivj[r]
+        lo, hi = max(lo_i, lo_j), min(hi_i, hi_j)
+        if hi <= lo:
+            continue
+        if (lo_i, hi_i) == (lo, hi) or (lo_j, hi_j) == (lo, hi):
+            return [], f"one interval on {r} lies within the other"
+        m = 0.5 * (lo + hi)
+        if lo_i < lo_j:
+            ivi[r], ivj[r] = (lo_i, m), (m, hi_j)
+        else:
+            ivi[r], ivj[r] = (m, hi_i), (lo_j, m)
+        cut = True
+    if not cut:
+        return [], "no shared road to meet on"
+    new_i, problem = _safe_junction(model, roads, ni, ivi, flags)
+    if new_i is None:
+        return [], f"{ai.id} at the meeting seam: {problem}"
+    new_j, problem = _safe_junction(model, roads, nj, ivj, flags)
+    if new_j is None:
+        return [], f"{aj.id} at the meeting seam: {problem}"
+    if Polygon(new_i.outline, new_i.holes).intersection(Polygon(new_j.outline, new_j.holes)).area > 1e-6:
+        return [], "they still overlap after meeting at one seam"
+    group_of[new_i.id], group_of[new_j.id] = (ni, ivi), (nj, ivj)
+    return [new_i, new_j], ""
+
+
+def _split_overlaps(model, areas: list[JunctionArea], roads: dict[str, Road], group_of, flags: list[Flag]) -> list[JunctionArea]:
     """Areas whose merge cannot be built (twin carriageways at a median) split their overlap: midway,
-    else wholly to whichever keeps every seam row whole (D-090). Pairs that cannot be split stay flagged."""
+    else wholly to whichever keeps every seam row whole (D-090); else, when they overlap along a road
+    they both take, they meet at one seam on it (D-172). Pairs that cannot be split stay flagged."""
     out = list(areas)
     failed: set[frozenset[str]] = set()
     for _round in range(MAX_ROUNDS):
@@ -920,14 +957,28 @@ def _split_overlaps(areas: list[JunctionArea], roads: dict[str, Road], group_of,
         except Exception as exc:  # noqa: BLE001 - one split never aborts the unit (FR-EX-1, D-150)
             flags.extend(_failed([*ai.road_ids, *aj.road_ids], f"split of junction areas {ai.id} and {aj.id}", exc))
             fixed, problem = [], f"splitting raised {type(exc).__name__}"
+        abutted = False
         if problem:
+            try:
+                fixed, again = _abut_pair(model, roads, ai, aj, group_of, flags)
+            except Exception as exc:  # noqa: BLE001 - one split never aborts the unit (FR-EX-1, D-150)
+                flags.extend(_failed([*ai.road_ids, *aj.road_ids], f"meeting of junction areas {ai.id} and {aj.id}", exc))
+                fixed, again = [], f"meeting raised {type(exc).__name__}"
+            abutted = not again
+            if again:
+                problem = f"{problem}; {again}"
+        if problem and not abutted:
             failed.add(frozenset((ai.id, aj.id)))
             flags.append(Flag("FR-SG-3:overlap", aj.id, "FR-SG-3",
                               f"junction area {aj.id} overlaps {ai.id} and the overlap cannot be split ({problem})"))
             continue
         for k, a in zip((i, j), fixed, strict=True):
-            group_of[a.id] = group_of[out[k].id]
+            if not abutted:
+                group_of[a.id] = group_of[out[k].id]
             out[k] = a
+        if abutted:
+            flags.append(Flag("FR-SG-3:areas_meet", ai.id, "FR-SG-3", f"junction areas {ai.id} and {aj.id} meet at one seam on the road they share"))
+            continue
         flags.append(Flag("FR-SG-3:shared_split", ai.id, "FR-SG-3", f"junction areas {ai.id} and {aj.id} split their overlap"))
     return out
 
@@ -1310,7 +1361,9 @@ def _shared_group(model, roads, group: list[_Stretch], zone_map, covered, by_id,
             # A deck or a span the road rides on another road splits the interval; its ends there
             # are a skewed deck-end seam or no seam at all.
             for p0, p1 in _pieces(r, lo, hi):
-                if p1 - p0 > SEAM_MARGIN_M:
+                # A piece reaching the road's end has one seam at most, so a short one still gets its region (D-172).
+                at_end = p0 <= 1e-6 or p1 >= roads[r].length - 1e-6
+                if p1 - p0 > SEAM_MARGIN_M or (at_end and p1 - p0 > SHORT_PIECE_M):
                     keys_iv.append((r, (p0, p1)))
     # Pieces come from the very footprints the regions are cut from, so the split leaves no sliver.
     fps = {(r, iv): _skewed_footprint(roads[r], *iv) for r, iv in keys_iv}
