@@ -148,8 +148,7 @@ def complete_terrain(points: PointSet, model: RoadModel, rules: RuleBook, cell: 
         road = model.road(st.carried_road)
         s, u = proj[road.id]
         xs = road.cross_section
-        pad = st.deck.overhang_m + 1.0
-        deck = (s >= st.s_start - 0.5) & (s <= st.s_end + 0.5) & (u <= _pw(xs.width_left, s) + pad) & (u >= -_pw(xs.width_right, s) - pad)
+        deck = deck_nodes(road, st, s, u, pad=st.deck.overhang_m + 1.0, margin=0.5)
         exclude |= deck
         code[deck] = UNDER_STRUCTURE
     for road in model.roads:
@@ -202,7 +201,7 @@ def complete_terrain(points: PointSet, model: RoadModel, rules: RuleBook, cell: 
         s, u = proj[road.id]
         xs = road.cross_section
         pad = st.deck.overhang_m + 1.5 * cell
-        idx = np.flatnonzero((s >= st.s_start - cell) & (s <= st.s_end + cell) & (u <= _pw(xs.width_left, s) + pad) & (u >= -_pw(xs.width_right, s) - pad))
+        idx = np.flatnonzero(deck_nodes(road, st, s, u, pad=pad, margin=cell))
         if idx.size == 0:
             continue
         sc = np.clip(s[idx], st.s_start, st.s_end)
@@ -244,6 +243,18 @@ def complete_terrain(points: PointSet, model: RoadModel, rules: RuleBook, cell: 
         prov,
         [int(c) for c in code],
     )
+
+
+def deck_nodes(road, st, s: np.ndarray, u: np.ndarray, pad: float, margin: float) -> np.ndarray:
+    """Nodes under a deck: across, its pavement plus ``pad``; along, its end stations plus ``margin``,
+    and on past each end along that end's skewed support line (FR-OC-3, FR-ST-4)."""
+    xs = road.cross_section
+    sups = sorted(st.supports, key=lambda sp: (sp.station, sp.id))
+    ta = math.tan(min(sups, key=lambda sp: abs(sp.station - st.s_start)).skew_rad) if sups else 0.0
+    tb = math.tan(min(sups, key=lambda sp: abs(sp.station - st.s_end)).skew_rad) if sups else 0.0
+    lo = st.s_start + np.minimum(ta * u, 0.0) - margin
+    hi = st.s_end + np.maximum(tb * u, 0.0) + margin
+    return (s >= lo) & (s <= hi) & (u <= _pw(xs.width_left, s) + pad) & (u >= -_pw(xs.width_right, s) - pad)
 
 
 def _smooth(z: np.ndarray) -> np.ndarray:

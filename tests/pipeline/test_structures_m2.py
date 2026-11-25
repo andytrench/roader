@@ -208,6 +208,24 @@ def test_fr_st_3_deck_at_a_continued_road_end_keeps_its_abutment():
     assert sum(sp.kind == "abutment" for sp in west.supports) == 2
 
 
+def test_fr_oc_3_ground_under_a_skewed_deck_end_is_lowered():
+    """New Orleans st_9e3cc02b2e39: its end row skewed -0.84 reached 2.9 m past the end station, beyond
+    the ground lowered under the deck, and the deck stood in the terrain (FR-OC-3, AC-H1)."""
+    from roader.complete.terrain import deck_nodes
+
+    model = twin_model()
+    st = model.structures[0]
+    road = model.road(st.carried_road)
+    t = math.tan(st.supports[-1].skew_rad)
+    u = np.array([-6.5, 0.0, 6.5])
+    beyond = st.s_end + np.maximum(t * u, 0.0) - 0.1  # just inside the skewed end row at each offset
+    assert deck_nodes(road, st, beyond, u, pad=1.0, margin=0.0).all()
+    assert not deck_nodes(road, st, st.s_end + np.abs(t * u) + 0.5, u, pad=1.0, margin=0.0).any()
+    t0 = math.tan(st.supports[0].skew_rad)
+    before = st.s_start + np.minimum(t0 * u, 0.0) + 0.1
+    assert deck_nodes(road, st, before, u, pad=1.0, margin=0.0).all()
+
+
 def test_fr_cr_3_deck_overhang_per_station_round_trips():
     """D-134: DeckSpec carries a per-station overhang per side; the scalar stays the fallback."""
     from roader.model.geometry import Knot, Piecewise
