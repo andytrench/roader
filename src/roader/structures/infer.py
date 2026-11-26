@@ -528,7 +528,7 @@ def infer_structure(
     era = era_of(year)
     sid = stable_id("st", road.id, round(extent.s_start, 0))
     on = sorted([c for c in crossings if c.upper_road == road.id and extent.s_start - 1.0 <= c.upper_s <= extent.s_end + 1.0], key=lambda c: c.upper_s)
-    skew, _ = support_skew([c.skew_rad for c in on])  # pier placement works on one support line
+    skew, skew_flags_all = support_skew([c.skew_rad for c in on])  # one support line for the deck (D-171)
     lateral, _lp = rules.fill("clearance.lateral.support", road_class=fits[on[0].lower_road].road.road_class if on else "*")
     col_w, col_prov = rules.fill("column.width", era=era)
 
@@ -569,8 +569,7 @@ def infer_structure(
             flags.append(Flag("FR-ST-3:observed_over_lane", sid, "FR-ST-3", f"{p.n_returns} pier-like returns at s={p.station:.1f} stand on a lower pavement with no clear place within {PIER_SNAP_M} m; not used"))
             continue
         observed[at] = (p, at - p.station)
-    clear = [_footprint_on(upper, fits[c.lower_road], c, lateral, t=capped(t, hold, c.upper_s), across=across) for c in on]
-    zones = _merged(clear)
+    zones = _merged([_footprint_on(upper, fits[c.lower_road], c, lateral, t=capped(t, hold, c.upper_s), across=across) for c in on])
     piers = sorted(observed)
     inner = (extent.s_start + PIER_END_CLEAR_M, extent.s_end - PIER_END_CLEAR_M)
     for (a0, a1), (b0, b1) in itertools.pairwise(zones):
@@ -614,7 +613,7 @@ def infer_structure(
     deck_width = float(
         road.cross_section.width_left((extent.s_start + extent.s_end) / 2) + road.cross_section.width_right((extent.s_start + extent.s_end) / 2) + 2 * overhang
     )
-    skews = support_skews(stations, [(c.skew_rad, z) for c, z in zip(on, clear, strict=True)])
+    skews = [(skew, skew_flags_all)] * len(stations)
     supports = []
     for n, s in enumerate(stations):
         sk, skew_flags = skews[n]
@@ -637,8 +636,7 @@ def infer_structure(
             )
             if moved:
                 prov.flags.append(f"FR-ST-3:observed_moved_{moved:+.2f}m_off_lower_pavement")
-        # FR-ST-4 skew of what this support crosses (D-107), no steeper than the sweep holds there (D-171).
-        sk = math.atan(capped(math.tan(sk), hold, s))
+        sk = math.atan(capped(t, hold, s))  # the deck's support line, no steeper than the sweep holds here (D-171)
         supports.append(
             Support(
                 id=stable_id("sp", sid, label),
